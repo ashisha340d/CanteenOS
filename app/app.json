@@ -6,7 +6,9 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
-    "platforms": [  "web","android"
+    "platforms": [
+      "web",
+      "android"
     ],
     "splash": {
       "backgroundColor": "#0F172A"
@@ -28,7 +30,8 @@
         {
           "photosPermission": "MenuBoard needs access to your photos to attach images to orders."
         }
-      ]
+      ],
+      "expo-asset"
     ],
     "extra": {
       "apiBaseUrl": "http://10.0.2.2:4000/api/v1",
