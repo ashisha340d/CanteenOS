@@ -1,5 +1,5 @@
 import { MEDIA } from '@menuboard/shared';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 
 const CACHE_DIR = `${FileSystem.cacheDirectory}menuboard/images/`;
@@ -61,7 +61,7 @@ export async function compressImageForUpload(
     to: outputUri,
   });
 
-  const info = await FileSystem.getInfoAsync(outputUri, { size: true });
+  const info = await FileSystem.getInfoAsync(outputUri);
   const sizeBytes = info.exists && 'size' in info ? info.size : 0;
 
   return {

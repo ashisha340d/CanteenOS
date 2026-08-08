@@ -33,6 +33,9 @@
       ],
       "expo-asset"
     ],
+    "experiments": {
+      "reactCompiler": true
+    },
     "extra": {
       "apiBaseUrl": "http://10.0.2.2:4000/api/v1",
       "apiBaseUrlWeb": "http://localhost:4000/api/v1"

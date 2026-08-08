@@ -1,4 +1,4 @@
-import React, { forwardRef } from 'react';
+import React from 'react';
 import { StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
 import { colors, radii, spacing, typography, fonts } from '../theme/tokens';
 
@@ -6,13 +6,11 @@ interface Props extends TextInputProps {
   label: string;
   error?: string | null;
   helper?: string;
+  ref?: React.Ref<TextInput>;
 }
 
 /** Forwards its ref to the inner `TextInput` so a screen can move focus between fields. */
-export const FormInput = forwardRef<TextInput, Props>(function FormInput(
-  { label, error, helper, style, ...rest },
-  ref,
-): React.JSX.Element {
+export function FormInput({ label, error, helper, style, ref, ...rest }: Props): React.JSX.Element {
   return (
     <View style={styles.container}>
       <Text style={styles.label}>{label}</Text>
@@ -25,7 +23,7 @@ export const FormInput = forwardRef<TextInput, Props>(function FormInput(
       {error ? <Text style={styles.error}>{error}</Text> : helper ? <Text style={styles.helper}>{helper}</Text> : null}
     </View>
   );
-});
+}
 
 const styles = StyleSheet.create({
   container: { marginBottom: spacing[4] },

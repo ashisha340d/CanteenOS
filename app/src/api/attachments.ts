@@ -1,4 +1,4 @@
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
 import type { ApiResponse, AttachmentUploadResult } from '@menuboard/shared';
 import { ClientType, HEADERS } from '@menuboard/shared';

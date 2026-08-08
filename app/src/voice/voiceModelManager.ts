@@ -1,4 +1,4 @@
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
 import type { VoiceModelManifestDto } from '@menuboard/shared';
 import { voiceModelApi } from '../api/voiceModel';
@@ -87,7 +87,7 @@ export const voiceModelManager = {
 
   /** Bytes the pack occupies on disk, for the Settings screen. */
   async getStorageUsedBytes(): Promise<number> {
-    const info = await FileSystem.getInfoAsync(MODEL_FILE, { size: true });
+    const info = await FileSystem.getInfoAsync(MODEL_FILE);
     return info.exists && 'size' in info ? info.size : 0;
   },
 

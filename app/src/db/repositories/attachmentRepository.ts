@@ -1,7 +1,7 @@
 import type { AttachmentDto, AttachmentKind, AttachmentOwnerType } from '@menuboard/shared';
 import { SyncOp } from '@menuboard/shared';
 import type * as SQLite from 'expo-sqlite';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { getDb } from '../client';
 import type { AttachmentRow } from '../models';
 import { attachmentsApi } from '../../api/attachments';

@@ -1,6 +1,6 @@
 import { Platform, Vibration } from 'react-native';
 import { Audio } from 'expo-av';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { create } from 'zustand';
 import { AlertSoundSlot, AlertType, type OrderDto } from '@menuboard/shared';
 import { API_BASE_URL, apiClient } from '../api/client';
