@@ -1,0 +1,42 @@
+{
+  "name": "menuboard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MenuBoard - operational collaboration platform for food service coordination",
+  "workspaces": [
+    "shared",
+    "backend",
+    "admin"
+  ],
+  "engines": {
+    "node": ">=20.11.0",
+    "npm": ">=10.0.0"
+  },
+  "scripts": {
+    "build:shared": "npm run build --workspace @menuboard/shared",
+    "build:backend": "npm run build --workspace @menuboard/backend",
+    "build:admin": "npm run build --workspace @menuboard/admin",
+    "build": "npm run build:shared && npm run build:backend && npm run build:admin",
+    "dev:backend": "npm run dev --workspace @menuboard/backend",
+    "dev:admin": "npm run dev --workspace @menuboard/admin",
+    "predev": "node scripts/free-ports.js",
+    "dev": "concurrently -n backend,admin -c blue,magenta \"npm:dev:backend\" \"npm:dev:admin\"",
+    "start:backend": "npm run start --workspace @menuboard/backend",
+    "start:admin": "npm run preview --workspace @menuboard/admin -- --host",
+    "start": "concurrently -n backend,admin -c blue,magenta \"npm:start:backend\" \"npm:start:admin\"",
+    "migrate": "npm run migrate --workspace @menuboard/backend",
+    "migrate:status": "npm run migrate:status --workspace @menuboard/backend",
+    "seed": "npm run seed --workspace @menuboard/backend",
+    "smoke": "npm run smoke --workspace @menuboard/backend",
+    "smoke:socket": "npm run smoke:socket --workspace @menuboard/backend",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "concurrently": "^10.0.4",
+    "typescript": "^5.5.4",
+    "vitest": "^2.1.9"
+  }
+}

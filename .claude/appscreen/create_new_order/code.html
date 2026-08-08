@@ -1,0 +1,317 @@
+<!DOCTYPE html><html class="light" lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Add New Order - Command Center</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<style type="text/tailwindcss">
+        @layer utilities {
+            .no-scrollbar::-webkit-scrollbar {
+                display: none;
+            }
+            .no-scrollbar {
+                -ms-overflow-style: none;
+                scrollbar-width: none;
+            }
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "inverse-on-surface": "#eaf1ff",
+                        "outline": "#757683",
+                        "surface-variant": "#d9e3f6",
+                        "background": "#f8f9ff",
+                        "on-secondary-fixed-variant": "#005236",
+                        "on-background": "#121c2a",
+                        "primary": "#102b88",
+                        "surface-container-lowest": "#ffffff",
+                        "tertiary-fixed": "#ffddb8",
+                        "secondary": "#006c49",
+                        "on-secondary-container": "#00714d",
+                        "tertiary-fixed-dim": "#ffb95f",
+                        "on-tertiary-fixed-variant": "#653e00",
+                        "on-primary-fixed": "#001356",
+                        "on-surface": "#121c2a",
+                        "on-secondary": "#ffffff",
+                        "surface-container-low": "#eff4ff",
+                        "on-tertiary-container": "#ffac34",
+                        "surface-tint": "#4257b3",
+                        "secondary-fixed": "#6ffbbe",
+                        "secondary-fixed-dim": "#4edea3",
+                        "primary-fixed": "#dde1ff",
+                        "error-container": "#ffdad6",
+                        "on-error-container": "#93000a",
+                        "surface-container-highest": "#d9e3f6",
+                        "on-primary-fixed-variant": "#283e9a",
+                        "on-surface-variant": "#454652",
+                        "surface-dim": "#d0dbed",
+                        "error": "#ba1a1a",
+                        "surface-bright": "#f8f9ff",
+                        "on-primary-container": "#acb9ff",
+                        "on-tertiary": "#ffffff",
+                        "surface": "#f8f9ff",
+                        "on-secondary-fixed": "#002113",
+                        "primary-container": "#2e44a0",
+                        "on-primary": "#ffffff",
+                        "on-tertiary-fixed": "#2a1700",
+                        "inverse-surface": "#27313f",
+                        "outline-variant": "#c5c5d4",
+                        "tertiary-container": "#6d4300",
+                        "on-error": "#ffffff",
+                        "tertiary": "#4e2f00",
+                        "surface-container": "#e6eeff",
+                        "surface-container-high": "#dee9fc",
+                        "primary-fixed-dim": "#b9c3ff",
+                        "inverse-primary": "#b9c3ff",
+                        "secondary-container": "#6cf8bb"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "stack-md": "16px",
+                        "stack-lg": "24px",
+                        "gutter": "16px",
+                        "margin-desktop": "24px",
+                        "margin-mobile": "12px",
+                        "unit": "4px",
+                        "stack-sm": "8px"
+                    },
+                    "fontFamily": {
+                        "data-mono": ["JetBrains Mono", "monospace"],
+                        "body-md": ["Inter", "sans-serif"],
+                        "headline-md": ["Inter", "sans-serif"],
+                        "headline-lg": ["Inter", "sans-serif"],
+                        "body-sm": ["Inter", "sans-serif"],
+                        "label-caps": ["Inter", "sans-serif"]
+                    },
+                    "fontSize": {
+                        "data-mono": ["13px", { "lineHeight": "18px", "letterSpacing": "-0.02em", "fontWeight": "500" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "headline-md": ["18px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "headline-lg": ["24px", { "lineHeight": "32px", "fontWeight": "700" }],
+                        "body-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+                        "label-caps": ["11px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700" }]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen antialiased flex flex-col pt-16 pb-[104px] md:pb-0 md:pl-80">
+<!-- TopAppBar -->
+<header class="bg-surface text-primary font-headline-md fixed top-0 left-0 w-full z-50 flex justify-between items-center px-margin-mobile md:px-margin-desktop h-16 border-b border-outline-variant flat no shadows">
+<div class="flex items-center gap-stack-md">
+<span class="material-symbols-outlined hover:bg-surface-container transition-colors p-2 rounded-full cursor-pointer md:hidden" data-icon="menu">menu</span>
+<div class="font-headline-lg text-primary font-bold">VSK Order</div>
+</div>
+<div class="flex items-center gap-stack-md">
+<div class="w-8 h-8 rounded-full bg-surface-container-high overflow-hidden border border-outline-variant">
+<img alt="Sanjay Bhaiya Profile" class="w-full h-full object-cover" data-alt="A professional headshot of an administrator in a well-lit, modern corporate office environment. The lighting is soft and natural, emphasizing a clean, modern aesthetic with subtle indigo and white tones in the background, matching the corporate UI design system." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAfjwvbBkmwoUTcBf832Xo1QK9VOwS5lQJrxRd-0NARwPyI2uPz10HHeoJyGToCrKZUojVvNCrXO7kw5VNjZTVUxYZjx92fbuoBBb7OGo3k9TUpOYWJHF1-fTL-aGC4msqBpU20yw4ehUJJJ7F2MqYJlsCWTDG5ReC-3fCuK-kXYm5ffNlr7I_IAjYir7Av8x9qj2XpZ1P9LyTPL78gprkBhxm2LfjgL2X8miXtWzUrjn3jNxK5NfiS">
+</div>
+<span class="material-symbols-outlined text-on-surface-variant hover:bg-surface-container transition-colors p-2 rounded-full cursor-pointer active:scale-95 transition-transform" data-icon="settings">settings</span>
+</div>
+</header>
+<!-- NavigationDrawer (Desktop) -->
+<aside class="bg-surface-container-low text-primary font-body-md h-screen w-80 border-r border-outline-variant flat no shadows hidden lg:flex flex-col fixed left-0 top-0 h-full z-40 pt-16">
+<div class="p-stack-lg border-b border-outline-variant flex flex-col gap-stack-sm">
+<div class="flex items-center gap-stack-md">
+<div class="w-12 h-12 rounded-full bg-surface-container-high overflow-hidden border border-outline-variant">
+<img alt="Sanjay Bhaiya" class="w-full h-full object-cover" data-alt="A professional headshot of an administrator in a well-lit, modern corporate office environment. The lighting is soft and natural, emphasizing a clean, modern aesthetic with subtle indigo and white tones in the background, matching the corporate UI design system." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAXTO5f3DbfMaR1-ZirjUafXuJjK7nlofKfbpQ79C1U2qEIUp5r-t1bZ4DlAxsqa2fr2WUf9iPcR6i20C9Dpxn6RjOQeF5E1d2l0o1uaTO54cYmNJ-vD9bP5n8niapmAManmsGQGX1niRl-CkfuBX-WmdjRf_Wb6ZdnDgm6Wl2yzvMNs_uQDoHZzuNmvlUwxZzdI0682KnFXgsw3B7Ju3wcculnx2YQd6CpYThLIKPsZGRx_sYuqI4F">
+</div>
+<div>
+<div class="font-headline-md text-primary">Sanjay Bhaiya</div>
+<div class="font-body-sm text-on-surface-variant">Administrator</div>
+</div>
+</div>
+<div class="font-data-mono text-outline mt-2">6 Active Boards</div>
+</div>
+<nav class="flex-1 overflow-y-auto py-stack-md no-scrollbar">
+<ul class="flex flex-col gap-unit">
+<li class="">
+<a class="flex items-center gap-stack-md px-stack-md py-3 text-on-surface-variant mx-2 hover:bg-surface-container-highest transition-all duration-200 rounded-full" href="#">
+<span class="material-symbols-outlined" data-icon="wb_sunny">wb_sunny</span>
+                        Morning Picnic
+                    </a>
+</li>
+<li class="">
+<a class="flex items-center gap-stack-md px-stack-md py-3 text-on-surface-variant mx-2 hover:bg-surface-container-highest transition-all duration-200 rounded-full" href="#">
+<span class="material-symbols-outlined" data-icon="business_center">business_center</span>
+                        Corporate Lunch
+                    </a>
+</li>
+<li class="">
+<a class="flex items-center gap-stack-md px-stack-md py-3 text-on-surface-variant mx-2 hover:bg-surface-container-highest transition-all duration-200 rounded-full" href="#">
+<span class="material-symbols-outlined" data-icon="celebration">celebration</span>
+                        Wedding Galore
+                    </a>
+</li>
+<li class="">
+<a class="flex items-center gap-stack-md px-stack-md py-3 text-on-surface-variant mx-2 hover:bg-surface-container-highest transition-all duration-200 rounded-full" href="#">
+<span class="material-symbols-outlined" data-icon="groups">groups</span>
+                        Staff Party
+                    </a>
+</li>
+<li class="mt-stack-lg border-t border-outline-variant pt-stack-sm mx-4">
+<a class="flex items-center gap-stack-md px-stack-md py-3 text-on-surface-variant hover:bg-surface-container-highest transition-all duration-200 rounded-full" href="#">
+<span class="material-symbols-outlined" data-icon="settings_applications">settings_applications</span>
+                        Board Settings
+                    </a>
+</li>
+</ul>
+</nav>
+</aside>
+<!-- Main Content Canvas (Add Order Form) -->
+<main class="flex-1 w-full max-w-4xl mx-auto p-margin-mobile md:p-margin-desktop">
+<div class="mb-stack-lg flex items-center justify-between">
+<div>
+<h1 class="font-headline-lg text-primary">Pending Requirements</h1>
+
+</div>
+<button class="md:hidden flex items-center justify-center p-2 text-on-surface-variant hover:bg-surface-container-highest rounded-full transition-colors" type="button">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<div class="space-y-stack-md">
+    <!-- Order Card 1 -->
+    <div class="bg-surface-container-lowest p-stack-md rounded-xl border border-outline-variant shadow-sm">
+        <div class="flex justify-between items-start mb-stack-sm">
+            <div>
+                <h3 class="font-headline-md text-primary">2:00 AM - Morning Picnic</h3>
+                <div class="flex items-center gap-2 text-on-surface-variant font-body-sm mt-1">
+                    <span class="material-symbols-outlined text-[16px]">calendar_today</span>
+                    <span class="">Oct 24, 2023</span>
+                    
+                    
+                    
+                </div>
+            </div>
+            <span class="bg-secondary-container text-on-secondary-container font-label-caps px-3 py-1 rounded-full text-[10px]">PENDING</span>
+        </div>
+        <div class="flex items-center gap-2 text-on-surface-variant font-body-sm mb-stack-md">
+            <span class="material-symbols-outlined text-[16px]">group</span>
+            <span class="">45 Pax</span>
+        </div>
+        <div class="bg-surface-container-low p-stack-sm rounded-lg">
+            <div class="font-label-caps text-outline mb-2 border-b border-outline-variant pb-1">Menu Requirements</div>
+            <ul class="space-y-1">
+                <li class="flex justify-between text-body-md">
+                    <span class="">Vegetarian Wraps</span>
+                    <span class="font-data-mono">x45</span>
+                </li>
+                <li class="flex justify-between text-body-md">
+                    <span class="">Fresh Fruit Platter</span>
+                    <span class="font-data-mono">x5</span>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Order Card 2 -->
+    <div class="bg-surface-container-lowest p-stack-md rounded-xl border border-outline-variant shadow-sm">
+        <div class="flex justify-between items-start mb-stack-sm">
+            <div>
+                <h3 class="font-headline-md text-primary"><span style="font-size: inherit; font-weight: inherit;" class="">12:30 PM&nbsp;</span>Picnic</h3>
+                <div class="flex items-center gap-2 text-on-surface-variant font-body-sm mt-1">
+                    <span class="material-symbols-outlined text-[16px]">calendar_today</span>
+                    <span class="">Oct 25, 2023</span>
+                    
+                    
+                    
+                </div>
+            </div>
+            <span class="bg-secondary-container text-on-secondary-container font-label-caps px-3 py-1 rounded-full text-[10px]">PENDING</span>
+        </div>
+        <div class="flex items-center gap-2 text-on-surface-variant font-body-sm mb-stack-md">
+            <span class="material-symbols-outlined text-[16px]">group</span>
+            <span class="">120 Pax</span>
+        </div>
+        <div class="bg-surface-container-low p-stack-sm rounded-lg">
+            <div class="font-label-caps text-outline mb-2 border-b border-outline-variant pb-1">Menu Requirements</div>
+            <ul class="space-y-1">
+                <li class="flex justify-between text-body-md">
+                    <span class="">Samosa &amp; Chutney</span>
+                    <span class="font-data-mono">x240</span>
+                </li>
+                <li class="flex justify-between text-body-md">
+                    <span class="">Masala Chai</span>
+                    <span class="font-data-mono">x120</span>
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>
+</main>
+<!-- BottomNavBar (Mobile) -->
+<nav class="bg-surface text-primary font-label-caps fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-margin-mobile pb-6 pt-2 border-t border-outline-variant flat no shadows md:hidden">
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-4 py-1 hover:text-primary active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="dashboard">dashboard</span>
+            Boards
+        </a>
+<a class="flex flex-col items-center justify-center bg-secondary-container text-on-secondary-container rounded-full px-4 py-1 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="receipt_long" data-weight="fill" style="font-variation-settings: &quot;FILL&quot; 1;">receipt_long</span>
+            Orders
+        </a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-4 py-1 hover:text-primary active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="group">group</span>
+            Users
+        </a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-4 py-1 hover:text-primary active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="inventory_2">inventory_2</span>
+            Archive
+        </a>
+</nav>
+<script>
+        // Simple JS for interaction demonstration (Add Row)
+        document.querySelector('.pt-2 button').addEventListener('click', function() {
+            const container = document.getElementById('menu-items-container');
+            const newRow = document.createElement('div');
+            newRow.className = 'flex gap-stack-sm items-start opacity-0 transition-opacity duration-300';
+            newRow.innerHTML = `
+                <div class="flex-1">
+                    <input type="text" placeholder="Item Name" class="w-full bg-surface-container-lowest border-outline-variant rounded-lg px-3 py-2 text-on-surface font-body-md focus:border-primary focus:ring-1 focus:ring-primary transition-colors">
+                </div>
+                <div class="w-24">
+                    <input type="number" min="1" placeholder="Qty" class="w-full bg-surface-container-lowest border-outline-variant rounded-lg px-3 py-2 text-on-surface font-data-mono text-center focus:border-primary focus:ring-1 focus:ring-primary transition-colors">
+                </div>
+                <button type="button" class="p-2 text-outline hover:text-error hover:bg-error-container rounded-lg transition-colors border border-transparent delete-btn">
+                    <span class="material-symbols-outlined text-[20px]">delete</span>
+                </button>
+            `;
+            container.appendChild(newRow);
+            
+            // Trigger reflow for animation
+            void newRow.offsetWidth;
+            newRow.classList.remove('opacity-0');
+
+            // Attach delete listener to new button
+            newRow.querySelector('.delete-btn').addEventListener('click', function() {
+                newRow.remove();
+            });
+        });
+
+        // Attach delete listeners to existing buttons
+        document.querySelectorAll('.delete-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                this.closest('.flex').remove();
+            });
+        });
+    </script>
+
+
+
+
+
+
+
+
+</body></html>

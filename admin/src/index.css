@@ -1,0 +1,400 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+@import '@fontsource-variable/geist';
+
+/*
+ * Three skins, one token set.
+ *
+ * Every colour in the portal resolves to a CSS custom property declared below — components
+ * never hard-code a hex. `light` is the default, `.dark` overrides it, and `.contrast`
+ * (applied *alongside* `.dark`, so `dark:` utilities still fire) overrides it again for the
+ * high-contrast skin. Because `.contrast` is declared last at equal specificity it wins.
+ *
+ * The palette is a direct port of the previous MUI token file: the electric-indigo accent,
+ * the six status tones, and the high-contrast amber skin for bright kitchens are all
+ * preserved. What changed is the delivery mechanism, not the design.
+ */
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: 'Geist Variable', 'Segoe UI Variable Display', 'Segoe UI', Roboto, system-ui, sans-serif;
+  --font-heading: var(--font-sans);
+  --font-mono: 'Geist Mono Variable', ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /* Six status tones, deliberately not one per status — statuses map onto meaning
+     (waiting, moving, done, stopped) so the UI never becomes a rainbow of near hues. */
+  --color-tone-neutral: var(--tone-neutral);
+  --color-tone-neutral-bg: var(--tone-neutral-bg);
+  --color-tone-neutral-border: var(--tone-neutral-border);
+  --color-tone-neutral-solid: var(--tone-neutral-solid);
+  --color-tone-info: var(--tone-info);
+  --color-tone-info-bg: var(--tone-info-bg);
+  --color-tone-info-border: var(--tone-info-border);
+  --color-tone-info-solid: var(--tone-info-solid);
+  --color-tone-progress: var(--tone-progress);
+  --color-tone-progress-bg: var(--tone-progress-bg);
+  --color-tone-progress-border: var(--tone-progress-border);
+  --color-tone-progress-solid: var(--tone-progress-solid);
+  --color-tone-success: var(--tone-success);
+  --color-tone-success-bg: var(--tone-success-bg);
+  --color-tone-success-border: var(--tone-success-border);
+  --color-tone-success-solid: var(--tone-success-solid);
+  --color-tone-danger: var(--tone-danger);
+  --color-tone-danger-bg: var(--tone-danger-bg);
+  --color-tone-danger-border: var(--tone-danger-border);
+  --color-tone-danger-solid: var(--tone-danger-solid);
+  --color-tone-muted: var(--tone-muted);
+  --color-tone-muted-bg: var(--tone-muted-bg);
+  --color-tone-muted-border: var(--tone-muted-border);
+  --color-tone-muted-solid: var(--tone-muted-solid);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* Layout constants carried over from the old token file. */
+  --spacing-topbar: 3.5rem;
+  --spacing-mobilenav: 3.75rem;
+}
+
+/* ------------------------------------------------------------------ light (default) */
+
+:root {
+  --radius: 0.75rem;
+
+  --background: #f5f5f9;
+  --foreground: #16171f;
+  --card: #ffffff;
+  --card-foreground: #16171f;
+  --popover: #ffffff;
+  --popover-foreground: #16171f;
+
+  --primary: #5b4ff5;
+  --primary-foreground: #ffffff;
+  --secondary: #edeef4;
+  --secondary-foreground: #16171f;
+  --muted: #eef0f5;
+  --muted-foreground: #62667a;
+  --accent: #ece9ff;
+  --accent-foreground: #4038d6;
+  --destructive: #dc3545;
+  --destructive-foreground: #ffffff;
+
+  --border: rgba(16, 17, 26, 0.09);
+  --border-strong: rgba(16, 17, 26, 0.16);
+  --input: rgba(16, 17, 26, 0.16);
+  --ring: #5b4ff5;
+
+  --sidebar: #eeeef4;
+  --sidebar-foreground: #16171f;
+  --sidebar-primary: #5b4ff5;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: rgba(91, 79, 245, 0.12);
+  --sidebar-accent-foreground: #4038d6;
+  --sidebar-border: rgba(16, 17, 26, 0.08);
+  --sidebar-ring: #5b4ff5;
+
+  --chart-1: #5b4ff5;
+  --chart-2: #2570da;
+  --chart-3: #0e9f6e;
+  --chart-4: #d08511;
+  --chart-5: #dc3545;
+
+  --tone-neutral: #475069;
+  --tone-neutral-bg: rgba(71, 80, 105, 0.1);
+  --tone-neutral-border: rgba(71, 80, 105, 0.2);
+  --tone-neutral-solid: #5b6580;
+  --tone-info: #1b5fbf;
+  --tone-info-bg: rgba(27, 95, 191, 0.1);
+  --tone-info-border: rgba(27, 95, 191, 0.22);
+  --tone-info-solid: #2570da;
+  --tone-progress: #96590a;
+  --tone-progress-bg: rgba(180, 108, 12, 0.12);
+  --tone-progress-border: rgba(180, 108, 12, 0.24);
+  --tone-progress-solid: #d08511;
+  --tone-success: #0a7048;
+  --tone-success-bg: rgba(11, 132, 85, 0.11);
+  --tone-success-border: rgba(11, 132, 85, 0.22);
+  --tone-success-solid: #0e9f6e;
+  --tone-danger: #b02a37;
+  --tone-danger-bg: rgba(197, 48, 62, 0.1);
+  --tone-danger-border: rgba(197, 48, 62, 0.22);
+  --tone-danger-solid: #dc3545;
+  --tone-muted: #75798a;
+  --tone-muted-bg: rgba(117, 121, 138, 0.09);
+  --tone-muted-border: rgba(117, 121, 138, 0.18);
+  --tone-muted-solid: #9296a6;
+}
+
+/* -------------------------------------------------------------------------- dark */
+
+.dark {
+  --background: #0b0b12;
+  --foreground: #f4f4f8;
+  --card: #15151f;
+  --card-foreground: #f4f4f8;
+  --popover: #1b1b27;
+  --popover-foreground: #f4f4f8;
+
+  --primary: #948dff;
+  --primary-foreground: #0b0b12;
+  --secondary: #1e1e2a;
+  --secondary-foreground: #f4f4f8;
+  --muted: #1a1a25;
+  --muted-foreground: #a4a7bd;
+  --accent: #23233a;
+  --accent-foreground: #b5b0ff;
+  --destructive: #ff7a83;
+  --destructive-foreground: #0b0b12;
+
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.2);
+  --input: rgba(255, 255, 255, 0.2);
+  --ring: #948dff;
+
+  --sidebar: #0e0e17;
+  --sidebar-foreground: #f4f4f8;
+  --sidebar-primary: #948dff;
+  --sidebar-primary-foreground: #0b0b12;
+  --sidebar-accent: rgba(148, 141, 255, 0.16);
+  --sidebar-accent-foreground: #b5b0ff;
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+  --sidebar-ring: #948dff;
+
+  --chart-1: #948dff;
+  --chart-2: #5d9cff;
+  --chart-3: #40c891;
+  --chart-4: #f0af4e;
+  --chart-5: #ff7a83;
+
+  --tone-neutral: #b4bbd0;
+  --tone-neutral-bg: rgba(148, 158, 186, 0.13);
+  --tone-neutral-border: rgba(148, 158, 186, 0.25);
+  --tone-neutral-solid: #8b93ab;
+  --tone-info: #8ab8ff;
+  --tone-info-bg: rgba(93, 156, 255, 0.14);
+  --tone-info-border: rgba(93, 156, 255, 0.28);
+  --tone-info-solid: #5d9cff;
+  --tone-progress: #f5c069;
+  --tone-progress-bg: rgba(240, 175, 78, 0.14);
+  --tone-progress-border: rgba(240, 175, 78, 0.28);
+  --tone-progress-solid: #f0af4e;
+  --tone-success: #5fd9a4;
+  --tone-success-bg: rgba(64, 200, 145, 0.14);
+  --tone-success-border: rgba(64, 200, 145, 0.28);
+  --tone-success-solid: #40c891;
+  --tone-danger: #ff9098;
+  --tone-danger-bg: rgba(255, 106, 117, 0.14);
+  --tone-danger-border: rgba(255, 106, 117, 0.28);
+  --tone-danger-solid: #ff6a75;
+  --tone-muted: #8c90a2;
+  --tone-muted-bg: rgba(140, 144, 162, 0.12);
+  --tone-muted-border: rgba(140, 144, 162, 0.22);
+  --tone-muted-solid: #787c8d;
+}
+
+/* --------------------------------------------------- high contrast ("brand") skin */
+
+/*
+ * Not a brand-colour exercise: this skin exists for bright kitchens and screens viewed at an
+ * angle, so contrast is pushed past WCAG AAA and the accent is the most legible hue at
+ * distance. Applied together with `.dark` so component-level `dark:` utilities still apply.
+ */
+.contrast {
+  --background: #000000;
+  --foreground: #ffffff;
+  --card: #0b0b0d;
+  --card-foreground: #ffffff;
+  --popover: #18181d;
+  --popover-foreground: #ffffff;
+
+  --primary: #ffc53d;
+  --primary-foreground: #000000;
+  --secondary: #1a1a1f;
+  --secondary-foreground: #ffffff;
+  --muted: #1a1a1f;
+  --muted-foreground: #d6d8e0;
+  --accent: #1a1a1f;
+  --accent-foreground: #ffffff;
+  --destructive: #ff6e78;
+  --destructive-foreground: #000000;
+
+  --border: rgba(255, 255, 255, 0.26);
+  --border-strong: rgba(255, 255, 255, 0.52);
+  --input: rgba(255, 255, 255, 0.52);
+  --ring: #ffc53d;
+
+  --sidebar: #000000;
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #ffc53d;
+  --sidebar-primary-foreground: #000000;
+  --sidebar-accent: rgba(255, 197, 61, 0.18);
+  --sidebar-accent-foreground: #ffc53d;
+  --sidebar-border: rgba(255, 255, 255, 0.26);
+  --sidebar-ring: #ffc53d;
+
+  --chart-1: #ffc53d;
+  --chart-2: #5aaaff;
+  --chart-3: #3ce696;
+  --chart-4: #ff9a4d;
+  --chart-5: #ff6e78;
+
+  --tone-neutral: #ffffff;
+  --tone-neutral-bg: rgba(255, 255, 255, 0.14);
+  --tone-neutral-border: rgba(255, 255, 255, 0.45);
+  --tone-neutral-solid: #ffffff;
+  --tone-info: #9ccbff;
+  --tone-info-bg: rgba(90, 170, 255, 0.2);
+  --tone-info-border: rgba(156, 203, 255, 0.6);
+  --tone-info-solid: #5aaaff;
+  --tone-progress: #ffd466;
+  --tone-progress-bg: rgba(255, 197, 61, 0.22);
+  --tone-progress-border: rgba(255, 212, 102, 0.65);
+  --tone-progress-solid: #ffc53d;
+  --tone-success: #6bf0ae;
+  --tone-success-bg: rgba(60, 230, 150, 0.2);
+  --tone-success-border: rgba(107, 240, 174, 0.6);
+  --tone-success-solid: #3ce696;
+  --tone-danger: #ff9aa2;
+  --tone-danger-bg: rgba(255, 110, 120, 0.22);
+  --tone-danger-border: rgba(255, 154, 162, 0.62);
+  --tone-danger-solid: #ff6e78;
+  --tone-muted: #c9ccd6;
+  --tone-muted-bg: rgba(201, 204, 214, 0.14);
+  --tone-muted-border: rgba(201, 204, 214, 0.4);
+  --tone-muted-solid: #c9ccd6;
+}
+
+/* ------------------------------------------------------------- text-size preference */
+
+/*
+ * `100%` is whatever the browser/device font-size preference resolves to, so scaling from it
+ * respects that preference instead of overriding it. Everything downstream is expressed in
+ * rem (Tailwind's type *and* spacing scales both are), so one variable rescales the whole
+ * interface coherently rather than needing per-page font-size overrides.
+ */
+html {
+  font-size: calc(100% * var(--text-scale, 1));
+}
+
+html[data-text-size='compact'] {
+  --text-scale: 0.9;
+}
+
+html[data-text-size='default'] {
+  --text-scale: 1;
+}
+
+html[data-text-size='large'] {
+  --text-scale: 1.125;
+}
+
+/* ------------------------------------------------------------------------- base */
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  html {
+    @apply font-sans;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* No spin buttons on number inputs (docs/AGENTS.md Modal/Form Standard). */
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  input[type='number'] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+
+  /* Honour the OS "reduce motion" setting everywhere, including third-party animations. */
+  @media (prefers-reduced-motion: reduce) {
+
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer utilities {
+
+  /* Touch targets: 44px is the smallest reliably tappable size, expressed in rem so it
+     tracks the text-size preference rather than fighting it. */
+  .touch-target {
+    min-height: 2.75rem;
+    min-width: 2.75rem;
+  }
+
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+}

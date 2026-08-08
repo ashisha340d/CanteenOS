@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "MenuBoard",
+    "slug": "menuboard-app",
+    "scheme": "menuboard",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "platforms": [  "web","android"
+    ],
+    "splash": {
+      "backgroundColor": "#0F172A"
+    },
+    "android": {
+      "package": "com.menuboard.app",
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "MenuBoard needs access to your photos to attach images to orders."
+        }
+      ]
+    ],
+    "extra": {
+      "apiBaseUrl": "http://10.0.2.2:4000/api/v1",
+      "apiBaseUrlWeb": "http://localhost:4000/api/v1"
+    }
+  }
+}

@@ -1,0 +1,435 @@
+/**
+ * Verbatim from docs/sqlite-schema.sql (Phase 4 immutable contract). Do not add, remove or
+ * rename a column/table here without updating that document first — this file exists only
+ * to let the migration runner apply the schema through expo-sqlite; it is not a redesign.
+ */
+export const SCHEMA_VERSION = 11;
+
+export const CREATE_SCHEMA_STATEMENTS: readonly string[] = [
+  `CREATE TABLE IF NOT EXISTS users (
+    id                TEXT PRIMARY KEY NOT NULL,
+    employee_code     TEXT,
+    name              TEXT NOT NULL,
+    username          TEXT NOT NULL,
+    phone             TEXT,
+    email             TEXT,
+    role              TEXT NOT NULL,
+    status            TEXT NOT NULL DEFAULT 'ACTIVE',
+    avatar_path       TEXT,
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL,
+    deleted_at        TEXT,
+    revision          INTEGER NOT NULL DEFAULT 1,
+    server_sync_seq   INTEGER NOT NULL DEFAULT 0,
+    sync_state        TEXT NOT NULL DEFAULT 'SYNCED'
+  );`,
+  `CREATE INDEX IF NOT EXISTS ix_users_name ON users (name);`,
+
+  // v9: the real-world site a board operates at (Barsana, Mangarh, ...). A read-only synced
+  // cache, same as activity_types — the device never originates a station.
+  `CREATE TABLE IF NOT EXISTS stations (
+    id                TEXT PRIMARY KEY NOT NULL,
+    name              TEXT NOT NULL,
+    code              TEXT,
+    description       TEXT,
+    status            TEXT NOT NULL DEFAULT 'ACTIVE',
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL,
+    deleted_at        TEXT,
+    revision          INTEGER NOT NULL DEFAULT 1,
+    server_sync_seq   INTEGER NOT NULL DEFAULT 0
+  );`,
+  `CREATE INDEX IF NOT EXISTS ix_stations_status ON stations (status, deleted_at);`,
+
+  `CREATE TABLE IF NOT EXISTS boards (
+    id                TEXT PRIMARY KEY NOT NULL,
+    station_id        TEXT NOT NULL REFERENCES stations (id),
+    name              TEXT NOT NULL,
+    description       TEXT,
+    color             TEXT,
+    photo_path        TEXT,
+    status            TEXT NOT NULL DEFAULT 'ACTIVE',
+    created_by        TEXT NOT NULL,
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL,
+    deleted_at        TEXT,
+    revision          INTEGER NOT NULL DEFAULT 1,
+    server_sync_seq   INTEGER NOT NULL DEFAULT 0,
+    sync_state        TEXT NOT NULL DEFAULT 'SYNCED',
+    sync_error        TEXT
+  );`,
+  `CREATE INDEX IF NOT EXISTS ix_boards_status ON boards (status, deleted_at);`,
+  `CREATE INDEX IF NOT EXISTS ix_boards_station ON boards (station_id, status);`,
+
+  `CREATE TABLE IF NOT EXISTS board_members (
+    id                TEXT PRIMARY KEY NOT NULL,
+    board_id          TEXT NOT NULL REFERENCES boards (id) ON DELETE CASCADE,
+    user_id           TEXT NOT NULL,
+    board_role        TEXT NOT NULL DEFAULT 'MEMBER',
+    status            TEXT NOT NULL DEFAULT 'ACTIVE',
+    joined_at         TEXT,
+    invited_by        TEXT,
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL,
+    deleted_at        TEXT,
+    revision          INTEGER NOT NULL DEFAULT 1,
+    server_sync_seq   INTEGER NOT NULL DEFAULT 0,
+    sync_state        TEXT NOT NULL DEFAULT 'SYNCED'
+  );`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS uq_board_members_board_user ON board_members (board_id, user_id);`,
+  `CREATE INDEX IF NOT EXISTS ix_board_members_user ON board_members (user_id, status);`,
+
+  `CREATE TABLE IF NOT EXISTS activity_types (
+    id                TEXT PRIMARY KEY NOT NULL,
+    name              TEXT NOT NULL,
+    description       TEXT,
+    icon              TEXT,
+    status            TEXT NOT NULL DEFAULT 'ACTIVE',
+    sort_order        INTEGER NOT NULL DEFAULT 0,
+    is_system         INTEGER NOT NULL DEFAULT 0,
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL,
+    deleted_at        TEXT,
+    revision          INTEGER NOT NULL DEFAULT 1,
+    server_sync_seq   INTEGER NOT NULL DEFAULT 0
+  );`,
+  `CREATE INDEX IF NOT EXISTS ix_activity_types_status ON activity_types (status, sort_order);`,
+
+  `CREATE TABLE IF NOT EXISTS menu_categories (
+    id                TEXT PRIMARY KEY NOT NULL,
+    name              TEXT NOT NULL,
+    name_hi           TEXT,
+    description       TEXT,
+    image_path        TEXT,
+    status            TEXT NOT NULL DEFAULT 'ACTIVE',
+    sort_order        INTEGER NOT NULL DEFAULT 0,
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL,
+    deleted_at        TEXT,
+    revision          INTEGER NOT NULL DEFAULT 1,
+    server_sync_seq   INTEGER NOT NULL DEFAULT 0
+  );`,
+  `CREATE INDEX IF NOT EXISTS ix_menu_categories_status ON menu_categories (status, sort_order);`,
+
+  `CREATE TABLE IF NOT EXISTS menu_items (
+    id                TEXT PRIMARY KEY NOT NULL,
+    category_id       TEXT NOT NULL,
+    name              TEXT NOT NULL,
+    name_hi           TEXT,
+    unit              TEXT NOT NULL DEFAULT 'NOS',
+    unit_hi           TEXT,
+    image_path        TEXT,
+    status            TEXT NOT NULL DEFAULT 'ACTIVE',
+    sort_order        INTEGER NOT NULL DEFAULT 0,
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL,
+    deleted_at        TEXT,
+    revision          INTEGER NOT NULL DEFAULT 1,
+    server_sync_seq   INTEGER NOT NULL DEFAULT 0
+  );`,
+  `CREATE INDEX IF NOT EXISTS ix_menu_items_category ON menu_items (category_id, status, sort_order);`,
+  `CREATE INDEX IF NOT EXISTS ix_menu_items_name ON menu_items (name);`,
+
+  `CREATE TABLE IF NOT EXISTS orders (
+    id                TEXT PRIMARY KEY NOT NULL,
+    order_number      TEXT NOT NULL,
+    board_id          TEXT NOT NULL REFERENCES boards (id) ON DELETE CASCADE,
+    activity_type_id  TEXT,
+    custom_activity   TEXT,
+    venue             TEXT NOT NULL,
+    pax               INTEGER NOT NULL DEFAULT 0,
+    required_date     TEXT NOT NULL,
+    required_time     TEXT NOT NULL,
+    priority          TEXT NOT NULL DEFAULT 'NORMAL',
+    status            TEXT NOT NULL DEFAULT 'PENDING',
+    completed_at      TEXT,
+    completed_by      TEXT,
+    shopping_generated_at TEXT,
+    billed_at         TEXT,
+    billing_export_id TEXT,
+    done_at           TEXT,
+    done_by           TEXT,
+    created_by        TEXT NOT NULL,
+    assigned_to       TEXT,
+    assigned_at       TEXT,
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL,
+    deleted_at        TEXT,
+    revision          INTEGER NOT NULL DEFAULT 1,
+    server_sync_seq   INTEGER NOT NULL DEFAULT 0,
+    sync_state        TEXT NOT NULL DEFAULT 'SYNCED',
+    sync_error        TEXT
+  );`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS uq_orders_order_number ON orders (order_number);`,
+  `CREATE INDEX IF NOT EXISTS ix_orders_board_date ON orders (board_id, required_date, required_time);`,
+  `CREATE INDEX IF NOT EXISTS ix_orders_board_status ON orders (board_id, status);`,
+  `CREATE INDEX IF NOT EXISTS ix_orders_sync_state ON orders (sync_state);`,
+  `CREATE INDEX IF NOT EXISTS ix_orders_assigned ON orders (assigned_to, status);`,
+
+  // A line names its dish by menu_item_id (catalogued) or custom_item_name (typed on the
+  // spot), never both — mirrors ck_order_items_dish in backend migration 008.
+  `CREATE TABLE IF NOT EXISTS order_items (
+    id                  TEXT PRIMARY KEY NOT NULL,
+    order_id            TEXT NOT NULL REFERENCES orders (id) ON DELETE CASCADE,
+    menu_item_id        TEXT,
+    custom_item_name    TEXT,
+    quantity            REAL NOT NULL DEFAULT 0,
+    unit                TEXT NOT NULL DEFAULT 'NOS',
+    notes               TEXT,
+    mentioned_user_ids  TEXT,
+    sort_order          INTEGER NOT NULL DEFAULT 0,
+    cancelled_at        TEXT,
+    cancelled_by        TEXT,
+    replaced_by_item_id TEXT,
+    created_at          TEXT NOT NULL,
+    updated_at          TEXT NOT NULL,
+    deleted_at          TEXT,
+    revision            INTEGER NOT NULL DEFAULT 1,
+    server_sync_seq     INTEGER NOT NULL DEFAULT 0,
+    sync_state          TEXT NOT NULL DEFAULT 'SYNCED'
+  );`,
+  `CREATE INDEX IF NOT EXISTS ix_order_items_order ON order_items (order_id, sort_order);`,
+
+  `CREATE TABLE IF NOT EXISTS attachments (
+    id                TEXT PRIMARY KEY NOT NULL,
+    owner_type        TEXT NOT NULL,
+    owner_id          TEXT,
+    kind              TEXT NOT NULL,
+    file_name         TEXT NOT NULL,
+    storage_path      TEXT,
+    local_path        TEXT,
+    mime_type         TEXT NOT NULL,
+    size_bytes        INTEGER NOT NULL DEFAULT 0,
+    duration_ms       INTEGER,
+    width             INTEGER,
+    height            INTEGER,
+    checksum          TEXT,
+    uploaded_by       TEXT NOT NULL,
+    upload_state      TEXT NOT NULL DEFAULT 'PENDING',
+    upload_attempts   INTEGER NOT NULL DEFAULT 0,
+    cached_at         TEXT,
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL,
+    deleted_at        TEXT,
+    revision          INTEGER NOT NULL DEFAULT 1,
+    server_sync_seq   INTEGER NOT NULL DEFAULT 0,
+    sync_state        TEXT NOT NULL DEFAULT 'SYNCED'
+  );`,
+  `CREATE INDEX IF NOT EXISTS ix_attachments_owner ON attachments (owner_type, owner_id);`,
+  `CREATE INDEX IF NOT EXISTS ix_attachments_upload_state ON attachments (upload_state);`,
+
+  `CREATE TABLE IF NOT EXISTS thread_messages (
+    id                  TEXT PRIMARY KEY NOT NULL,
+    board_id            TEXT NOT NULL REFERENCES boards (id) ON DELETE CASCADE,
+    order_id            TEXT REFERENCES orders (id) ON DELETE CASCADE,
+    parent_message_id   TEXT,
+    author_id           TEXT,
+    message_type        TEXT NOT NULL DEFAULT 'USER',
+    body                TEXT,
+    mentioned_user_ids  TEXT,
+    system_event        TEXT,
+    system_meta         TEXT,
+    created_at          TEXT NOT NULL,
+    updated_at          TEXT NOT NULL,
+    deleted_at          TEXT,
+    revision            INTEGER NOT NULL DEFAULT 1,
+    server_sync_seq     INTEGER NOT NULL DEFAULT 0,
+    sync_state          TEXT NOT NULL DEFAULT 'SYNCED',
+    sync_error          TEXT
+  );`,
+  `CREATE INDEX IF NOT EXISTS ix_thread_messages_board ON thread_messages (board_id, created_at);`,
+  `CREATE INDEX IF NOT EXISTS ix_thread_messages_order ON thread_messages (order_id, created_at);`,
+  `CREATE INDEX IF NOT EXISTS ix_thread_messages_parent ON thread_messages (parent_message_id);`,
+
+  `CREATE TABLE IF NOT EXISTS acknowledgements (
+    id                TEXT PRIMARY KEY NOT NULL,
+    order_id          TEXT NOT NULL REFERENCES orders (id) ON DELETE CASCADE,
+    user_id           TEXT NOT NULL,
+    acknowledged_at   TEXT NOT NULL,
+    note              TEXT,
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL,
+    deleted_at        TEXT,
+    revision          INTEGER NOT NULL DEFAULT 1,
+    server_sync_seq   INTEGER NOT NULL DEFAULT 0,
+    sync_state        TEXT NOT NULL DEFAULT 'SYNCED'
+  );`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS uq_acknowledgements_order_user ON acknowledgements (order_id, user_id);`,
+
+  `CREATE TABLE IF NOT EXISTS notifications (
+    id                TEXT PRIMARY KEY NOT NULL,
+    user_id           TEXT NOT NULL,
+    type              TEXT NOT NULL,
+    title             TEXT NOT NULL,
+    body              TEXT,
+    board_id          TEXT,
+    order_id          TEXT,
+    actor_id          TEXT,
+    data              TEXT,
+    read_at           TEXT,
+    created_at        TEXT NOT NULL,
+    deleted_at        TEXT,
+    server_sync_seq   INTEGER NOT NULL DEFAULT 0
+  );`,
+  `CREATE INDEX IF NOT EXISTS ix_notifications_unread ON notifications (user_id, read_at, created_at);`,
+
+  `CREATE TABLE IF NOT EXISTS sync_queue (
+    id             TEXT PRIMARY KEY NOT NULL,
+    entity         TEXT NOT NULL,
+    entity_id      TEXT NOT NULL,
+    op             TEXT NOT NULL,
+    payload        TEXT,
+    base_revision  INTEGER,
+    attempts       INTEGER NOT NULL DEFAULT 0,
+    last_attempt_at TEXT,
+    next_attempt_at TEXT,
+    last_error     TEXT,
+    status         TEXT NOT NULL DEFAULT 'PENDING',
+    created_at     TEXT NOT NULL,
+    sequence       INTEGER NOT NULL
+  );`,
+  `CREATE INDEX IF NOT EXISTS ix_sync_queue_dispatch ON sync_queue (status, next_attempt_at, sequence);`,
+  `CREATE INDEX IF NOT EXISTS ix_sync_queue_entity ON sync_queue (entity, entity_id);`,
+
+  // Recipe-only ingredient master. Narrow on purpose (see shared/src/dto/domain.ts's
+  // IngredientDto doc-comment) — no purchase unit, pack size, price, GST, HSN or brand
+  // fields, since procurement is out of MenuBoard's scope.
+  `CREATE TABLE IF NOT EXISTS ingredients (
+    id                TEXT PRIMARY KEY NOT NULL,
+    category_id       TEXT,
+    name              TEXT NOT NULL,
+    name_hi           TEXT,
+    unit              TEXT NOT NULL DEFAULT 'GM',
+    status            TEXT NOT NULL DEFAULT 'ACTIVE',
+    sort_order        INTEGER NOT NULL DEFAULT 0,
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL,
+    deleted_at        TEXT,
+    revision          INTEGER NOT NULL DEFAULT 1,
+    server_sync_seq   INTEGER NOT NULL DEFAULT 0
+  );`,
+  `CREATE INDEX IF NOT EXISTS ix_ingredients_status ON ingredients (status, sort_order);`,
+
+  // Recipes are cached locally so the long-press "view recipe" works in a kitchen with no
+  // signal — the same reason the rest of the master data is mirrored here. A menu item may
+  // have several authored variants; exactly one has is_default = 1, matching
+  // shared/src/dto/domain.ts's RecipeDto doc-comment.
+  `CREATE TABLE IF NOT EXISTS recipes (
+    id                TEXT PRIMARY KEY NOT NULL,
+    menu_item_id      TEXT NOT NULL,
+    base_pax          INTEGER NOT NULL DEFAULT 1,
+    is_default        INTEGER NOT NULL DEFAULT 1,
+    prep_time_min     INTEGER,
+    cook_time_min     INTEGER,
+    team_size         INTEGER,
+    difficulty        TEXT,
+    description_en    TEXT,
+    description_hi    TEXT,
+    method_en         TEXT,
+    method_hi         TEXT,
+    yield_note        TEXT,
+    chef_notes        TEXT,
+    status            TEXT NOT NULL DEFAULT 'ACTIVE',
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL,
+    deleted_at        TEXT,
+    revision          INTEGER NOT NULL DEFAULT 1,
+    server_sync_seq   INTEGER NOT NULL DEFAULT 0
+  );`,
+  `CREATE INDEX IF NOT EXISTS ix_recipes_menu_item_default ON recipes (menu_item_id, is_default);`,
+
+  `CREATE TABLE IF NOT EXISTS recipe_ingredients (
+    id                TEXT PRIMARY KEY NOT NULL,
+    recipe_id         TEXT NOT NULL REFERENCES recipes (id) ON DELETE CASCADE,
+    ingredient_id     TEXT NOT NULL REFERENCES ingredients (id),
+    quantity          REAL NOT NULL DEFAULT 0,
+    unit              TEXT NOT NULL DEFAULT 'GM',
+    scaling           TEXT NOT NULL DEFAULT 'LINEAR',
+    notes             TEXT,
+    sort_order        INTEGER NOT NULL DEFAULT 0,
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL,
+    deleted_at        TEXT,
+    revision          INTEGER NOT NULL DEFAULT 1,
+    server_sync_seq   INTEGER NOT NULL DEFAULT 0
+  );`,
+  `CREATE INDEX IF NOT EXISTS ix_recipe_ingredients_recipe ON recipe_ingredients (recipe_id, sort_order);`,
+
+  `CREATE TABLE IF NOT EXISTS recipe_steps (
+    id                TEXT PRIMARY KEY NOT NULL,
+    recipe_id         TEXT NOT NULL REFERENCES recipes (id) ON DELETE CASCADE,
+    step_no           INTEGER NOT NULL DEFAULT 1,
+    text_en           TEXT,
+    text_hi           TEXT,
+    duration_min      INTEGER,
+    image_path        TEXT,
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL,
+    deleted_at        TEXT,
+    revision          INTEGER NOT NULL DEFAULT 1,
+    server_sync_seq   INTEGER NOT NULL DEFAULT 0
+  );`,
+  `CREATE INDEX IF NOT EXISTS ix_recipe_steps_recipe ON recipe_steps (recipe_id, step_no);`,
+
+  `CREATE TABLE IF NOT EXISTS shopping_lists (
+    id                TEXT PRIMARY KEY NOT NULL,
+    board_id          TEXT NOT NULL REFERENCES boards (id) ON DELETE CASCADE,
+    title             TEXT NOT NULL,
+    status            TEXT NOT NULL DEFAULT 'OPEN',
+    order_ids         TEXT,
+    notes             TEXT,
+    generated_by      TEXT NOT NULL,
+    generated_at      TEXT NOT NULL,
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL,
+    deleted_at        TEXT,
+    revision          INTEGER NOT NULL DEFAULT 1,
+    server_sync_seq   INTEGER NOT NULL DEFAULT 0,
+    sync_state        TEXT NOT NULL DEFAULT 'SYNCED'
+  );`,
+  `CREATE INDEX IF NOT EXISTS ix_shopping_lists_board ON shopping_lists (board_id, generated_at);`,
+
+  `CREATE TABLE IF NOT EXISTS shopping_list_items (
+    id                TEXT PRIMARY KEY NOT NULL,
+    shopping_list_id  TEXT NOT NULL REFERENCES shopping_lists (id) ON DELETE CASCADE,
+    ingredient_name   TEXT NOT NULL,
+    quantity          REAL NOT NULL DEFAULT 0,
+    unit              TEXT NOT NULL DEFAULT 'GM',
+    purchased         INTEGER NOT NULL DEFAULT 0,
+    notes             TEXT,
+    sort_order        INTEGER NOT NULL DEFAULT 0,
+    source_order_ids  TEXT,
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL,
+    deleted_at        TEXT,
+    revision          INTEGER NOT NULL DEFAULT 1,
+    server_sync_seq   INTEGER NOT NULL DEFAULT 0,
+    sync_state        TEXT NOT NULL DEFAULT 'SYNCED'
+  );`,
+  `CREATE INDEX IF NOT EXISTS ix_shopping_list_items_list ON shopping_list_items (shopping_list_id, sort_order);`,
+
+  // Organisation-wide and tiny. Mirrored so a device knows how to buzz while offline.
+  `CREATE TABLE IF NOT EXISTS alert_settings (
+    id                    TEXT PRIMARY KEY NOT NULL,
+    alert_type            TEXT NOT NULL,
+    enabled               INTEGER NOT NULL DEFAULT 1,
+    lead_minutes          INTEGER NOT NULL DEFAULT 0,
+    sound                 TEXT NOT NULL DEFAULT 'NORMAL',
+    repeat_until_ack      INTEGER NOT NULL DEFAULT 1,
+    repeat_every_seconds  INTEGER NOT NULL DEFAULT 60,
+    target_roles          TEXT,
+    updated_by            TEXT,
+    created_at            TEXT NOT NULL,
+    updated_at            TEXT NOT NULL,
+    deleted_at            TEXT,
+    revision              INTEGER NOT NULL DEFAULT 1,
+    server_sync_seq       INTEGER NOT NULL DEFAULT 0
+  );`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS uq_alert_settings_type ON alert_settings (alert_type);`,
+
+  `CREATE TABLE IF NOT EXISTS settings (
+    setting_key  TEXT PRIMARY KEY NOT NULL,
+    value        TEXT NOT NULL,
+    updated_at   TEXT NOT NULL
+  );`,
+];

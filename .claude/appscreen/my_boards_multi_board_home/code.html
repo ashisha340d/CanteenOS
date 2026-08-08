@@ -1,0 +1,337 @@
+<!DOCTYPE html><html class="light" lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Sanjay Bhaiya Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "inverse-on-surface": "#eaf1ff",
+                      "outline": "#757683",
+                      "surface-variant": "#d9e3f6",
+                      "background": "#f8f9ff",
+                      "on-secondary-fixed-variant": "#005236",
+                      "on-background": "#121c2a",
+                      "primary": "#102b88",
+                      "surface-container-lowest": "#ffffff",
+                      "tertiary-fixed": "#ffddb8",
+                      "secondary": "#006c49",
+                      "on-secondary-container": "#00714d",
+                      "tertiary-fixed-dim": "#ffb95f",
+                      "on-tertiary-fixed-variant": "#653e00",
+                      "on-primary-fixed": "#001356",
+                      "on-surface": "#121c2a",
+                      "on-secondary": "#ffffff",
+                      "surface-container-low": "#eff4ff",
+                      "on-tertiary-container": "#ffac34",
+                      "surface-tint": "#4257b3",
+                      "secondary-fixed": "#6ffbbe",
+                      "secondary-fixed-dim": "#4edea3",
+                      "primary-fixed": "#dde1ff",
+                      "error-container": "#ffdad6",
+                      "on-error-container": "#93000a",
+                      "surface-container-highest": "#d9e3f6",
+                      "on-primary-fixed-variant": "#283e9a",
+                      "on-surface-variant": "#454652",
+                      "surface-dim": "#d0dbed",
+                      "error": "#ba1a1a",
+                      "surface-bright": "#f8f9ff",
+                      "on-primary-container": "#acb9ff",
+                      "on-tertiary": "#ffffff",
+                      "surface": "#f8f9ff",
+                      "on-secondary-fixed": "#002113",
+                      "primary-container": "#2e44a0",
+                      "on-primary": "#ffffff",
+                      "on-tertiary-fixed": "#2a1700",
+                      "inverse-surface": "#27313f",
+                      "outline-variant": "#c5c5d4",
+                      "tertiary-container": "#6d4300",
+                      "on-error": "#ffffff",
+                      "tertiary": "#4e2f00",
+                      "surface-container": "#e6eeff",
+                      "surface-container-high": "#dee9fc",
+                      "primary-fixed-dim": "#b9c3ff",
+                      "inverse-primary": "#b9c3ff",
+                      "secondary-container": "#6cf8bb"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.125rem",
+                      "lg": "0.25rem",
+                      "xl": "0.5rem",
+                      "full": "0.75rem"
+              },
+              "spacing": {
+                      "stack-md": "16px",
+                      "stack-lg": "24px",
+                      "gutter": "16px",
+                      "margin-desktop": "24px",
+                      "margin-mobile": "12px",
+                      "unit": "4px",
+                      "stack-sm": "8px"
+              },
+              "fontFamily": {
+                      "data-mono": [
+                              "JetBrains Mono"
+                      ],
+                      "body-md": [
+                              "Inter"
+                      ],
+                      "headline-md": [
+                              "Inter"
+                      ],
+                      "headline-lg": [
+                              "Inter"
+                      ],
+                      "body-sm": [
+                              "Inter"
+                      ],
+                      "label-caps": [
+                              "Inter"
+                      ]
+              },
+              "fontSize": {
+                      "data-mono": [
+                              "13px",
+                              {
+                                      "lineHeight": "18px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "body-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-md": [
+                              "18px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-lg": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "body-sm": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "label-caps": [
+                              "11px",
+                              {
+                                      "lineHeight": "16px",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "700"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+      </script>
+</head>
+<body class="bg-background text-on-background font-body-md text-body-md h-screen w-full overflow-hidden flex flex-col md:flex-row">
+<!-- Navigation Drawer (Desktop) -->
+<nav class="hidden lg:flex flex-col fixed left-0 top-0 h-full z-40 bg-surface-container-low dark:bg-surface-container-lowest h-screen w-80 border-r border-outline-variant dark:border-outline transition-all duration-200 flat no shadows flex-shrink-0">
+<div class="p-6 border-b border-outline-variant flex items-center space-x-4">
+<div class="w-12 h-12 rounded-full overflow-hidden bg-surface-container-highest">
+<img alt="Sanjay Bhaiya" class="w-full h-full object-cover" data-alt="A professional, well-lit headshot of a logistics manager in a modern warehouse setting. The lighting is crisp and bright, emphasizing a clean, modern aesthetic with neutral grey and stark white tones. The mood is confident and efficient." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDDKTL6a-UG4RI1S--2cYHLChROXs0TThyQecH7opV3-nTm7KbIKCppNzqnHG2NR4nUmM2vQVhaBykBd59dgvsbIsunQS3HsUqha_Mkc_1Mp8J1cu3GwIpDgsomMdxojKQ6OET1gOR3-2tDIY40VWEhb02ZauBfUZ0AqJl_0x2lUgs_rdkeJE_IQNC2Y4xCv715zGwmpbRiqm6urRFivjQTK8i8-WFhK_aaJDq53Vg8RVnzj8I7WDbc">
+</div>
+<div class="flex-1">
+<h2 class="font-headline-md text-headline-md text-primary">Sanjay Bhaiya</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Administrator</p>
+</div>
+</div>
+<div class="px-6 py-4 flex-1 overflow-y-auto">
+<p class="font-label-caps text-label-caps text-on-surface-variant mb-4 pl-2">ACTIVE BOARDS</p>
+<ul class="space-y-1">
+<li class="">
+<a class="flex items-center px-4 py-3 rounded-full bg-primary-container dark:bg-primary text-on-primary-container dark:text-on-primary mx-2 transition-colors" href="#">
+<span class="material-symbols-outlined mr-3">wb_sunny</span>
+<span class="font-body-md text-body-md font-semibold">Mangarh Canteen</span>
+</a>
+</li>
+<li class="">
+<a class="flex items-center px-4 py-3 rounded-full text-on-surface-variant dark:text-outline mx-2 hover:bg-surface-container-highest dark:hover:bg-surface-variant transition-colors" href="#">
+<span class="material-symbols-outlined mr-3">business_center</span>
+<span class="font-body-md text-body-md">Prem Mandir Canteen</span>
+</a>
+</li>
+<li class="">
+<a class="flex items-center px-4 py-3 rounded-full text-on-surface-variant dark:text-outline mx-2 hover:bg-surface-container-highest dark:hover:bg-surface-variant transition-colors" href="#">
+<span class="material-symbols-outlined mr-3">celebration</span>
+<span class="font-body-md text-body-md">Mussourie Group</span>
+</a>
+</li>
+<li class="">
+<a class="flex items-center px-4 py-3 rounded-full text-on-surface-variant dark:text-outline mx-2 hover:bg-surface-container-highest dark:hover:bg-surface-variant transition-colors" href="#">
+<span class="material-symbols-outlined mr-3">groups</span>
+<span class="font-body-md text-body-md">Barsana Canteen</span>
+</a>
+</li>
+</ul>
+</div>
+<div class="p-6 border-t border-outline-variant">
+<a class="flex items-center px-4 py-3 rounded-full text-on-surface-variant dark:text-outline mx-2 hover:bg-surface-container-highest dark:hover:bg-surface-variant transition-colors" href="#">
+<span class="material-symbols-outlined mr-3">settings_applications</span>
+<span class="font-body-md text-body-md">Board Settings</span>
+</a>
+</div>
+</nav>
+<!-- Top App Bar (Mobile & Desktop Header) -->
+<header class="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-margin-mobile md:px-margin-desktop h-16 bg-surface dark:bg-background border-b border-outline-variant dark:border-outline flat no shadows lg:hidden">
+<div class="flex items-center">
+<div class="w-8 h-8 rounded-full overflow-hidden bg-surface-container-highest mr-3 md:hidden">
+<img alt="Sanjay Bhaiya Profile" class="w-full h-full object-cover" data-alt="A minimal, abstract profile placeholder icon featuring subtle gradients of indigo and silver. Clean lines, corporate aesthetic, brightly lit." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAzWvaDAQXIKw59aPR14LlwqBW25hxnt8TRK3VsUhV5k-DKdD_sfnlJePYV4SbEGDokdbi4bBNeyry9n269BilBsPkQknAqfvVwzvA1EB9fRJg1WD5HHuzmEoEmGvf1E3SleleuDXj_p3pTBPOIvvHrd0AyvEeXiZB6SqaPdkS38NBVn8GxYTv2g2UgvtbI45XMT4coBZZgOzl71bhp13EfwnOWBAfS07p-AtaQ95rPNN_Oft10E6vB">
+</div>
+<h1 class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed tracking-tight">VSK Order</h1>
+</div>
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container transition-colors active:scale-95 text-primary dark:text-primary-fixed">
+<span class="material-symbols-outlined">settings</span>
+</button>
+</header>
+<!-- Main Content Area -->
+<main class="flex-1 lg:ml-80 mt-16 lg:mt-0 flex flex-col h-full bg-background overflow-hidden relative">
+<header class="hidden lg:flex justify-between items-center px-8 py-6 bg-surface border-b border-outline-variant shrink-0">
+<h1 class="font-headline-lg text-headline-lg font-bold text-primary tracking-tight">Command Center</h1>
+<button class="flex items-center space-x-2 px-4 py-2 bg-primary text-on-primary rounded-full hover:bg-primary-container hover:text-on-primary-container transition-colors font-body-md font-semibold">
+<span class="material-symbols-outlined" style="font-size: 20px;">add</span>
+<span class="">New Board</span>
+</button>
+</header>
+<!-- List View Container -->
+<div class="flex-1 overflow-y-auto px-margin-mobile md:px-8 py-6 pb-24 md:pb-6 max-w-4xl w-full mx-auto">
+<div class="flex justify-between items-end mb-6">
+<div>
+<h2 class="font-headline-md text-headline-md text-on-surface mb-1">Canteen Boards</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Manage ongoing operations</p>
+</div>
+<div class="lg:hidden">
+<button class="w-10 h-10 bg-primary text-on-primary rounded-full flex items-center justify-center shadow-sm">
+<span class="material-symbols-outlined">add</span>
+</button>
+</div>
+</div>
+<!-- Thread List (WhatsApp Style) -->
+<div class="space-y-3">
+<!-- Item 1 (Active/Selected state on Desktop) -->
+<div class="group flex items-center bg-surface-container-lowest p-4 rounded-xl border-l-4 border-l-primary border-y border-r border-y-outline-variant border-r-outline-variant shadow-sm hover:bg-surface-container-low transition-colors cursor-pointer relative overflow-hidden">
+<div class="w-12 h-12 rounded-full overflow-hidden mr-4 shrink-0 border border-outline-variant"><img src="https://lh3.googleusercontent.com/aida-public/AB6AXuDvsevor2SA9S79wpbiQ4mOzCdvXj6U6kIEp4RMjq1MHf-94Q612g4zse62VzGyYkCSB3iTTGIH2KYrCJLhDjY4MAjrlWZZ7UkjSSZvlsi-OlrxT2cC4D4ioSzT4OKT9YaEeqxUNkMD0SEZ5EBV1mTpnQTdx1KX3ITbW6lEMf09HhIr8g992dgd7XTAIs8JPoKKsKuw6O92m52hQ6hJJL-G2w4BAXgYsrP_FB_LAsx8SxEDMJhKWpR0" alt="Mangarh Mandir" class="w-full h-full object-cover"></div>
+<div class="flex-1 min-w-0 pr-4">
+<div class="flex justify-between items-baseline mb-1">
+<h3 class="font-headline-md text-headline-md text-on-surface truncate pr-2"><span class="material-symbols-outlined text-[16px] mr-1 text-primary" style="font-variation-settings: &quot;FILL&quot; 1;">star</span>Mangarh Canteen</h3>
+<span class="font-data-mono text-data-mono text-on-surface-variant shrink-0 text-[11px]">10:42 AM</span>
+</div>
+<div class="flex items-center">
+<p class="font-body-md text-body-md text-on-surface-variant truncate">Order #8824: 50x Assorted Sandwiches...</p>
+</div>
+</div>
+<div class="flex flex-col items-end justify-between self-stretch shrink-0">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-[#ecfdf5] text-[#065f46] font-label-caps text-label-caps border border-[#a7f3d0]">
+                            ACTIVE
+                        </span>
+<div class="w-2 h-2 rounded-full bg-primary mt-auto mb-1"></div>
+</div>
+</div>
+<!-- Item 2 -->
+<div class="group flex items-center bg-surface-container-lowest p-4 rounded-xl border border-outline-variant hover:bg-surface-container-low transition-colors cursor-pointer">
+<div class="w-12 h-12 rounded-full overflow-hidden mr-4 shrink-0 border border-outline-variant"><img src="https://lh3.googleusercontent.com/aida-public/AB6AXuAe_LhN-T6wu3qq1GFtA9jK74WFhII1aFFnx8BWMpGxiwaLaRhesP0QbNG9C35IEvznPq0vPTHFStyNMHfKTJ21A3z_rXSLXgHBbgsKLUEzn2skmKO6HCf5ARjDPAhLZAyIhx1lydltXQFQylEtme1VGdNgj7aXQIOY1CujgxuoY42DFA9RQXfoXIpCGJy9r_rtgaOJSMacI7szAbsNa-Cswq1WY4BOg0h8Q-7avBO6TvtLi4Wszb_N" alt="Prem Mandir" class="w-full h-full object-cover"></div>
+<div class="flex-1 min-w-0 pr-4">
+<div class="flex justify-between items-baseline mb-1">
+<h3 class="font-headline-md text-headline-md text-on-surface truncate pr-2">Prem Mandir Canteen</h3>
+<span class="font-data-mono text-data-mono text-on-surface-variant shrink-0 text-[11px]">Yesterday</span>
+</div>
+<div class="flex items-center">
+<span class="material-symbols-outlined text-outline text-[16px] mr-1">done_all</span>
+<p class="font-body-md text-body-md text-on-surface-variant truncate">Invoice sent to accounting dept.</p>
+</div>
+</div>
+<div class="flex flex-col items-end justify-between self-stretch shrink-0"><button class="text-[10px] font-label-caps text-outline hover:text-primary mb-1 transition-colors">Set Default</button>
+<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-[#ecfdf5] text-[#065f46] font-label-caps text-label-caps border border-[#a7f3d0]">
+                            ACTIVE
+                        </span>
+</div>
+</div>
+<!-- Item 3 -->
+<div class="group flex items-center bg-surface-container-lowest p-4 rounded-xl border border-outline-variant hover:bg-surface-container-low transition-colors cursor-pointer">
+<div class="w-12 h-12 rounded-full overflow-hidden mr-4 shrink-0 border border-outline-variant"><img src="https://lh3.googleusercontent.com/aida-public/AB6AXuByF8Ek2B-8spUJuPy-uLpNZWwzcUkLmLfpMZlnvSAwRPznSRl-y0lAxceTjxjkS7as_IUnfYc8C-1hnnla-DFIr9wUb0ouEvy45_60-ly7a1iWy8h-OdMhPsuwJA6c9AEBBdKJkGab1sFYiTAu1wsdbKtErIBcrwzbGuVDu0SgtlMK6cx3dVPPN8G9OFEuW9Hf97r2gGhmlwkbUQAxVEo9t5BVBwMRNXdhFwDW9CmYisA-dxiTP7UC" alt="Temple Illustration" class="w-full h-full object-cover"></div>
+<div class="flex-1 min-w-0 pr-4">
+<div class="flex justify-between items-baseline mb-1">
+<h3 class="font-headline-md text-headline-md text-on-surface truncate pr-2">Mussourie Group</h3>
+<span class="font-data-mono text-data-mono text-on-surface-variant shrink-0 text-[11px]">Tue</span>
+</div>
+<div class="flex items-center">
+<p class="font-body-md text-body-md text-on-surface-variant truncate font-semibold text-on-surface">Close untill Next Year</p>
+</div>
+</div>
+<div class="flex flex-col items-end justify-between self-stretch shrink-0">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-[#ecfdf5] text-[#065f46] font-label-caps text-label-caps border border-[#a7f3d0]">
+                            ACTIVE
+                        </span>
+<div class="w-5 h-5 rounded-full bg-error text-on-error flex items-center justify-center font-label-caps text-[10px] mt-auto">3</div>
+</div>
+</div>
+<!-- Item 4 -->
+<div class="group flex items-center bg-surface-container-lowest p-4 rounded-xl border border-outline-variant hover:bg-surface-container-low transition-colors cursor-pointer opacity-75">
+<div class="w-12 h-12 rounded-full overflow-hidden mr-4 shrink-0 border border-outline-variant"><img src="https://lh3.googleusercontent.com/aida-public/AB6AXuA7crlIOB6LmpBH0O4WH5QCz8MGktpgCLaSFR_MRcRMS6v-gqwEx8YOmBJQ4NBk4btqfmPErnrDfDyqT1A9FcdP7H4r4vWyPtP2lMHiHaIBoR-5sL7hQPFcqtzE0LV_rWASCGN1AZFEeoVm1Pv7OJNrHjhoHWGEkZkENq2-cpzeZoXjWrZ6Rqf30hV8mCEbhdAXPXs3eaau_K0WR-ZCYsNGcbv8TPbMP0v6tNHDKV5VeWSF9RcRsQWK" alt="Kirti Mandir Barsana" class="w-full h-full object-cover"></div>
+<div class="flex-1 min-w-0 pr-4">
+<div class="flex justify-between items-baseline mb-1">
+<h3 class="font-headline-md text-headline-md text-on-surface truncate pr-2 text-outline">Barsana Canteen</h3>
+<span class="font-data-mono text-data-mono text-on-surface-variant shrink-0 text-[11px]">Mon</span>
+</div>
+<div class="flex items-center">
+<span class="material-symbols-outlined text-outline text-[16px] mr-1">done_all</span>
+<p class="font-body-md text-body-md text-on-surface-variant truncate">Didis Welcome Prepareatoin</p>
+</div>
+</div>
+<div class="flex flex-col items-end justify-between self-stretch shrink-0">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-surface-variant text-on-surface-variant font-label-caps text-label-caps border border-outline-variant">Active</span>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Bottom Navigation Bar (Mobile) -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-margin-mobile pb-6 pt-2 bg-surface dark:bg-background border-t border-outline-variant dark:border-outline flat no shadows md:hidden">
+<button class="flex flex-col items-center justify-center bg-secondary-container dark:bg-on-secondary-fixed-variant text-on-secondary-container dark:text-secondary-fixed rounded-full px-4 py-1 active:scale-90 transition-transform">
+<span class="material-symbols-outlined" style="font-variation-settings: &quot;FILL&quot; 1;">dashboard</span>
+<span class="font-label-caps text-label-caps mt-1">Boards</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline px-4 py-1 hover:text-primary dark:hover:text-primary-fixed active:scale-90 transition-transform">
+<span class="material-symbols-outlined">receipt_long</span>
+<span class="font-label-caps text-label-caps mt-1">Orders</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline px-4 py-1 hover:text-primary dark:hover:text-primary-fixed active:scale-90 transition-transform">
+<span class="material-symbols-outlined">group</span>
+<span class="font-label-caps text-label-caps mt-1">Users</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline px-4 py-1 hover:text-primary dark:hover:text-primary-fixed active:scale-90 transition-transform">
+<span class="material-symbols-outlined">inventory_2</span>
+<span class="font-label-caps text-label-caps mt-1">Archive</span>
+</button>
+</nav>
+
+
+
+
+
+
+</body></html>

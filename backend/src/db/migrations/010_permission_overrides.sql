@@ -1,0 +1,178 @@
+-- MenuBoard 010 — permission overrides
+--
+-- Moves the role -> capability and board role -> capability grants from the code-only
+-- matrix into the database, so the Admin Portal's Permissions page can edit them. Seeded
+-- with the exact grants that `shared/src/permissions` previously hard-coded; the code
+-- constants remain as the values these tables start from, not as the runtime source.
+
+SET NAMES utf8mb4;
+SET time_zone = '+00:00';
+
+CREATE TABLE IF NOT EXISTS role_capabilities (
+  role         VARCHAR(20)  NOT NULL,
+  capability   VARCHAR(64)  NOT NULL,
+  updated_by   CHAR(36)     NULL,
+  updated_at   DATETIME(3)  NOT NULL,
+  PRIMARY KEY (role, capability),
+  CONSTRAINT fk_role_capabilities_updated_by FOREIGN KEY (updated_by) REFERENCES users (id)
+    ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS board_role_capabilities (
+  board_role   VARCHAR(20)  NOT NULL,
+  capability   VARCHAR(64)  NOT NULL,
+  updated_by   CHAR(36)     NULL,
+  updated_at   DATETIME(3)  NOT NULL,
+  PRIMARY KEY (board_role, capability),
+  CONSTRAINT fk_board_role_capabilities_updated_by FOREIGN KEY (updated_by) REFERENCES users (id)
+    ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+INSERT INTO role_capabilities (role, capability, updated_at) VALUES
+  ('EMPLOYEE',    'master.read',              UTC_TIMESTAMP(3)),
+  ('EMPLOYEE',    'sync.use',                 UTC_TIMESTAMP(3)),
+
+  ('USER',        'master.read',              UTC_TIMESTAMP(3)),
+  ('USER',        'sync.use',                 UTC_TIMESTAMP(3)),
+  ('USER',        'recipe.read',              UTC_TIMESTAMP(3)),
+
+  ('MANAGER',     'master.read',              UTC_TIMESTAMP(3)),
+  ('MANAGER',     'sync.use',                 UTC_TIMESTAMP(3)),
+  ('MANAGER',     'recipe.read',              UTC_TIMESTAMP(3)),
+  ('MANAGER',     'user.read',                UTC_TIMESTAMP(3)),
+  ('MANAGER',     'board.create',             UTC_TIMESTAMP(3)),
+  ('MANAGER',     'order.quantity.edit',      UTC_TIMESTAMP(3)),
+  ('MANAGER',     'order.done',               UTC_TIMESTAMP(3)),
+  ('MANAGER',     'order.assign',             UTC_TIMESTAMP(3)),
+  ('MANAGER',     'shopping.read',            UTC_TIMESTAMP(3)),
+  ('MANAGER',     'shopping.generate',        UTC_TIMESTAMP(3)),
+
+  ('ADMIN',       'master.read',              UTC_TIMESTAMP(3)),
+  ('ADMIN',       'sync.use',                 UTC_TIMESTAMP(3)),
+  ('ADMIN',       'recipe.read',              UTC_TIMESTAMP(3)),
+  ('ADMIN',       'user.read',                UTC_TIMESTAMP(3)),
+  ('ADMIN',       'board.create',             UTC_TIMESTAMP(3)),
+  ('ADMIN',       'order.quantity.edit',      UTC_TIMESTAMP(3)),
+  ('ADMIN',       'order.done',               UTC_TIMESTAMP(3)),
+  ('ADMIN',       'order.assign',             UTC_TIMESTAMP(3)),
+  ('ADMIN',       'shopping.read',            UTC_TIMESTAMP(3)),
+  ('ADMIN',       'shopping.generate',        UTC_TIMESTAMP(3)),
+  ('ADMIN',       'user.write',               UTC_TIMESTAMP(3)),
+  ('ADMIN',       'user.role.assign',         UTC_TIMESTAMP(3)),
+  ('ADMIN',       'permission.read',          UTC_TIMESTAMP(3)),
+  ('ADMIN',       'permission.write',         UTC_TIMESTAMP(3)),
+  ('ADMIN',       'master.write',             UTC_TIMESTAMP(3)),
+  ('ADMIN',       'board.read.all',           UTC_TIMESTAMP(3)),
+  ('ADMIN',       'board.update',             UTC_TIMESTAMP(3)),
+  ('ADMIN',       'board.archive',            UTC_TIMESTAMP(3)),
+  ('ADMIN',       'board.member.manage',      UTC_TIMESTAMP(3)),
+  ('ADMIN',       'order.read',               UTC_TIMESTAMP(3)),
+  ('ADMIN',       'order.create',             UTC_TIMESTAMP(3)),
+  ('ADMIN',       'order.update',             UTC_TIMESTAMP(3)),
+  ('ADMIN',       'order.cancel',             UTC_TIMESTAMP(3)),
+  ('ADMIN',       'order.status.update',      UTC_TIMESTAMP(3)),
+  ('ADMIN',       'order.acknowledge',        UTC_TIMESTAMP(3)),
+  ('ADMIN',       'thread.read',              UTC_TIMESTAMP(3)),
+  ('ADMIN',       'thread.post',              UTC_TIMESTAMP(3)),
+  ('ADMIN',       'thread.delete.any',        UTC_TIMESTAMP(3)),
+  ('ADMIN',       'attachment.upload',        UTC_TIMESTAMP(3)),
+  ('ADMIN',       'attachment.delete.any',    UTC_TIMESTAMP(3)),
+  ('ADMIN',       'recipe.write',             UTC_TIMESTAMP(3)),
+  ('ADMIN',       'report.read',              UTC_TIMESTAMP(3)),
+  ('ADMIN',       'billing.generate',         UTC_TIMESTAMP(3)),
+  ('ADMIN',       'billing.read',             UTC_TIMESTAMP(3)),
+  ('ADMIN',       'billing.process',          UTC_TIMESTAMP(3)),
+  ('ADMIN',       'audit.read',               UTC_TIMESTAMP(3)),
+  ('ADMIN',       'settings.read',            UTC_TIMESTAMP(3)),
+  ('ADMIN',       'settings.write',           UTC_TIMESTAMP(3)),
+  ('ADMIN',       'alert.config',             UTC_TIMESTAMP(3)),
+
+  ('SUPER_ADMIN', 'master.read',              UTC_TIMESTAMP(3)),
+  ('SUPER_ADMIN', 'sync.use',                 UTC_TIMESTAMP(3)),
+  ('SUPER_ADMIN', 'recipe.read',              UTC_TIMESTAMP(3)),
+  ('SUPER_ADMIN', 'user.read',                UTC_TIMESTAMP(3)),
+  ('SUPER_ADMIN', 'board.create',             UTC_TIMESTAMP(3)),
+  ('SUPER_ADMIN', 'order.quantity.edit',      UTC_TIMESTAMP(3)),
+  ('SUPER_ADMIN', 'order.done',               UTC_TIMESTAMP(3)),
+  ('SUPER_ADMIN', 'order.assign',             UTC_TIMESTAMP(3)),
+  ('SUPER_ADMIN', 'shopping.read',            UTC_TIMESTAMP(3)),
+  ('SUPER_ADMIN', 'shopping.generate',        UTC_TIMESTAMP(3)),
+  ('SUPER_ADMIN', 'user.write',               UTC_TIMESTAMP(3)),
+  ('SUPER_ADMIN', 'user.role.assign',         UTC_TIMESTAMP(3)),
+  ('SUPER_ADMIN', 'permission.read',          UTC_TIMESTAMP(3)),
+  ('SUPER_ADMIN', 'permission.write',         UTC_TIMESTAMP(3)),
+  ('SUPER_ADMIN', 'master.write',             UTC_TIMESTAMP(3)),
+  ('SUPER_ADMIN', 'board.read.all',           UTC_TIMESTAMP(3)),
+  ('SUPER_ADMIN', 'board.update',             UTC_TIMESTAMP(3)),
+  ('SUPER_ADMIN', 'board.archive',            UTC_TIMESTAMP(3)),
+  ('SUPER_ADMIN', 'board.member.manage',      UTC_TIMESTAMP(3)),
+  ('SUPER_ADMIN', 'order.read',               UTC_TIMESTAMP(3)),
+  ('SUPER_ADMIN', 'order.create',             UTC_TIMESTAMP(3)),
+  ('SUPER_ADMIN', 'order.update',             UTC_TIMESTAMP(3)),
+  ('SUPER_ADMIN', 'order.cancel',             UTC_TIMESTAMP(3)),
+  ('SUPER_ADMIN', 'order.status.update',      UTC_TIMESTAMP(3)),
+  ('SUPER_ADMIN', 'order.acknowledge',        UTC_TIMESTAMP(3)),
+  ('SUPER_ADMIN', 'thread.read',              UTC_TIMESTAMP(3)),
+  ('SUPER_ADMIN', 'thread.post',              UTC_TIMESTAMP(3)),
+  ('SUPER_ADMIN', 'thread.delete.any',        UTC_TIMESTAMP(3)),
+  ('SUPER_ADMIN', 'attachment.upload',        UTC_TIMESTAMP(3)),
+  ('SUPER_ADMIN', 'attachment.delete.any',    UTC_TIMESTAMP(3)),
+  ('SUPER_ADMIN', 'recipe.write',             UTC_TIMESTAMP(3)),
+  ('SUPER_ADMIN', 'report.read',              UTC_TIMESTAMP(3)),
+  ('SUPER_ADMIN', 'billing.generate',         UTC_TIMESTAMP(3)),
+  ('SUPER_ADMIN', 'billing.read',             UTC_TIMESTAMP(3)),
+  ('SUPER_ADMIN', 'billing.process',          UTC_TIMESTAMP(3)),
+  ('SUPER_ADMIN', 'audit.read',               UTC_TIMESTAMP(3)),
+  ('SUPER_ADMIN', 'settings.read',            UTC_TIMESTAMP(3)),
+  ('SUPER_ADMIN', 'settings.write',           UTC_TIMESTAMP(3)),
+  ('SUPER_ADMIN', 'alert.config',             UTC_TIMESTAMP(3)),
+  ('SUPER_ADMIN', 'board.member.manage.any',  UTC_TIMESTAMP(3))
+ON DUPLICATE KEY UPDATE role = role;
+
+INSERT INTO board_role_capabilities (board_role, capability, updated_at) VALUES
+  ('OWNER',   'board.update',          UTC_TIMESTAMP(3)),
+  ('OWNER',   'board.archive',         UTC_TIMESTAMP(3)),
+  ('OWNER',   'board.member.manage',   UTC_TIMESTAMP(3)),
+  ('OWNER',   'order.read',            UTC_TIMESTAMP(3)),
+  ('OWNER',   'order.create',          UTC_TIMESTAMP(3)),
+  ('OWNER',   'order.update',          UTC_TIMESTAMP(3)),
+  ('OWNER',   'order.cancel',          UTC_TIMESTAMP(3)),
+  ('OWNER',   'order.status.update',   UTC_TIMESTAMP(3)),
+  ('OWNER',   'order.acknowledge',     UTC_TIMESTAMP(3)),
+  ('OWNER',   'order.assign',          UTC_TIMESTAMP(3)),
+  ('OWNER',   'thread.read',           UTC_TIMESTAMP(3)),
+  ('OWNER',   'thread.post',           UTC_TIMESTAMP(3)),
+  ('OWNER',   'thread.delete.any',     UTC_TIMESTAMP(3)),
+  ('OWNER',   'attachment.upload',     UTC_TIMESTAMP(3)),
+  ('OWNER',   'attachment.delete.any', UTC_TIMESTAMP(3)),
+  ('OWNER',   'recipe.read',           UTC_TIMESTAMP(3)),
+  ('OWNER',   'shopping.read',         UTC_TIMESTAMP(3)),
+
+  ('MANAGER', 'board.member.manage',   UTC_TIMESTAMP(3)),
+  ('MANAGER', 'order.read',            UTC_TIMESTAMP(3)),
+  ('MANAGER', 'order.create',          UTC_TIMESTAMP(3)),
+  ('MANAGER', 'order.update',          UTC_TIMESTAMP(3)),
+  ('MANAGER', 'order.cancel',          UTC_TIMESTAMP(3)),
+  ('MANAGER', 'order.status.update',   UTC_TIMESTAMP(3)),
+  ('MANAGER', 'order.acknowledge',     UTC_TIMESTAMP(3)),
+  ('MANAGER', 'order.assign',          UTC_TIMESTAMP(3)),
+  ('MANAGER', 'thread.read',           UTC_TIMESTAMP(3)),
+  ('MANAGER', 'thread.post',           UTC_TIMESTAMP(3)),
+  ('MANAGER', 'attachment.upload',     UTC_TIMESTAMP(3)),
+  ('MANAGER', 'recipe.read',           UTC_TIMESTAMP(3)),
+  ('MANAGER', 'shopping.read',         UTC_TIMESTAMP(3)),
+
+  ('MEMBER',  'order.read',            UTC_TIMESTAMP(3)),
+  ('MEMBER',  'order.create',          UTC_TIMESTAMP(3)),
+  ('MEMBER',  'order.update',          UTC_TIMESTAMP(3)),
+  ('MEMBER',  'order.status.update',   UTC_TIMESTAMP(3)),
+  ('MEMBER',  'order.acknowledge',     UTC_TIMESTAMP(3)),
+  ('MEMBER',  'thread.read',           UTC_TIMESTAMP(3)),
+  ('MEMBER',  'thread.post',           UTC_TIMESTAMP(3)),
+  ('MEMBER',  'attachment.upload',     UTC_TIMESTAMP(3)),
+  ('MEMBER',  'recipe.read',           UTC_TIMESTAMP(3)),
+
+  ('VIEWER',  'order.read',            UTC_TIMESTAMP(3)),
+  ('VIEWER',  'thread.read',           UTC_TIMESTAMP(3)),
+  ('VIEWER',  'order.acknowledge',     UTC_TIMESTAMP(3))
+ON DUPLICATE KEY UPDATE board_role = board_role;

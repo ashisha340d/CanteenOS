@@ -1,0 +1,172 @@
+<!DOCTYPE html><html class="light" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Add New User</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "primary-fixed-dim": "#b9c3ff",
+                        "surface-dim": "#d0dbed",
+                        "primary": "#102b88",
+                        "surface-container": "#e6eeff",
+                        "primary-container": "#2e44a0",
+                        "secondary-fixed": "#6ffbbe",
+                        "error-container": "#ffdad6",
+                        "on-surface": "#121c2a",
+                        "on-primary-container": "#acb9ff",
+                        "secondary-container": "#6cf8bb",
+                        "on-secondary-container": "#00714d",
+                        "inverse-surface": "#27313f",
+                        "tertiary-container": "#6d4300",
+                        "outline": "#757683",
+                        "on-primary": "#ffffff",
+                        "surface-variant": "#d9e3f6",
+                        "on-secondary-fixed": "#002113",
+                        "secondary": "#006c49",
+                        "on-primary-fixed": "#001356",
+                        "on-tertiary-container": "#ffac34",
+                        "surface-container-highest": "#d9e3f6",
+                        "surface-container-high": "#dee9fc",
+                        "surface-bright": "#f8f9ff",
+                        "on-secondary": "#ffffff",
+                        "primary-fixed": "#dde1ff",
+                        "outline-variant": "#c5c5d4",
+                        "inverse-primary": "#b9c3ff",
+                        "on-error-container": "#93000a",
+                        "on-primary-fixed-variant": "#283e9a",
+                        "surface": "#f8f9ff",
+                        "surface-tint": "#4257b3",
+                        "on-surface-variant": "#454652",
+                        "on-tertiary-fixed-variant": "#653e00",
+                        "surface-container-low": "#eff4ff",
+                        "background": "#f8f9ff",
+                        "surface-container-lowest": "#ffffff",
+                        "inverse-on-surface": "#eaf1ff",
+                        "on-background": "#121c2a",
+                        "on-tertiary": "#ffffff",
+                        "on-error": "#ffffff",
+                        "tertiary-fixed": "#ffddb8",
+                        "error": "#ba1a1a",
+                        "tertiary-fixed-dim": "#ffb95f",
+                        "on-tertiary-fixed": "#2a1700",
+                        "tertiary": "#4e2f00",
+                        "on-secondary-fixed-variant": "#005236",
+                        "secondary-fixed-dim": "#4edea3"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "stack-lg": "24px",
+                        "stack-md": "16px",
+                        "margin-desktop": "24px",
+                        "gutter": "16px",
+                        "margin-mobile": "12px",
+                        "stack-sm": "8px",
+                        "unit": "4px"
+                    },
+                    "fontFamily": {
+                        "label-caps": ["Inter"],
+                        "body-md": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "data-mono": ["JetBrains Mono"],
+                        "headline-lg": ["Inter"],
+                        "headline-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "label-caps": ["11px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "body-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+                        "data-mono": ["13px", { "lineHeight": "18px", "letterSpacing": "-0.02em", "fontWeight": "500" }],
+                        "headline-lg": ["24px", { "lineHeight": "32px", "fontWeight": "700" }],
+                        "headline-md": ["18px", { "lineHeight": "24px", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen flex flex-col antialiased">
+<!-- Header (Transactional context, so standard top bar) -->
+<header class="bg-surface dark:bg-background border-b border-outline-variant dark:border-outline fixed top-0 left-0 w-full z-50 flex justify-between items-center px-margin-mobile md:px-margin-desktop h-16 shadow-sm">
+<button aria-label="Go back" class="text-on-surface-variant hover:bg-surface-container rounded-full p-2 transition-colors active:scale-95" type="button">
+<span class="material-symbols-outlined">arrow_back</span>
+</button>
+<h1 class="font-headline-md text-headline-md text-primary dark:text-primary-fixed font-bold absolute left-1/2 -translate-x-1/2">Add New User</h1>
+<div class="w-10"></div> <!-- Spacer for centering -->
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-1 mt-16 px-margin-mobile md:px-margin-desktop py-stack-lg max-w-2xl mx-auto w-full flex flex-col pb-[100px]">
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-stack-md shadow-sm mb-stack-md">
+<p class="font-body-md text-body-md text-on-surface-variant mb-stack-lg">
+                Enter the details below to add a new user to the system. They will be assigned to a specific board for tracking and management.
+            </p>
+<form class="flex flex-col gap-stack-md" id="addUserForm">
+<!-- Full Name Input -->
+<div class="flex flex-col gap-unit">
+<label class="font-label-caps text-label-caps text-on-surface uppercase" for="fullName">Full Name</label>
+<div class="relative">
+<div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-outline">
+<span class="material-symbols-outlined text-[20px]">person</span>
+</div>
+<input class="block w-full pl-10 pr-3 py-2 border border-outline-variant rounded-lg bg-surface focus:ring-2 focus:ring-primary focus:border-primary font-body-md text-body-md text-on-surface placeholder-on-surface-variant/50 transition-shadow" id="fullName" name="fullName" placeholder="e.g. Ramesh Kumar" required="" type="text">
+</div>
+</div>
+<!-- Phone Number Input -->
+<div class="flex flex-col gap-unit">
+<label class="font-label-caps text-label-caps text-on-surface uppercase" for="phoneNumber">Phone Number</label>
+<div class="relative">
+<div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-outline">
+<span class="material-symbols-outlined text-[20px]">phone</span>
+</div>
+<input class="block w-full pl-10 pr-3 py-2 border border-outline-variant rounded-lg bg-surface focus:ring-2 focus:ring-primary focus:border-primary font-data-mono text-data-mono text-on-surface placeholder-on-surface-variant/50 transition-shadow" id="phoneNumber" name="phoneNumber" pattern="[0-9]{10}" placeholder="+91 9876543210" required="" type="tel">
+</div>
+</div>
+<!-- Assign Board Dropdown -->
+<div class="flex flex-col gap-unit">
+<label class="font-label-caps text-label-caps text-on-surface uppercase" for="boardAssign">Assign Board</label>
+<div class="relative">
+<div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-outline">
+<span class="material-symbols-outlined text-[20px]">dashboard</span>
+</div>
+<select class="block w-full pl-10 pr-10 py-2 border border-outline-variant rounded-lg bg-surface focus:ring-2 focus:ring-primary focus:border-primary font-body-md text-body-md text-on-surface appearance-none transition-shadow" id="boardAssign" name="boardAssign" required="">
+<option disabled="" selected="" value="">Select a board...</option>
+<option value="mangarh">Mangarh Canteen</option>
+<option value="prem_mandir">Prem Mandir Canteen</option>
+<option value="bhakti_bhavan">Bhakti Bhavan Kitchen</option>
+<option value="kirti_mandir">Kirti Mandir Outpost</option>
+</select>
+<div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-outline">
+<span class="material-symbols-outlined text-[20px]">expand_more</span>
+</div>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-1">This determines their primary access area.</p>
+</div>
+</form>
+</div>
+</main>
+<!-- Bottom Action Area (Fixed for mobile safety) -->
+<div class="fixed bottom-0 left-0 w-full bg-surface/90 backdrop-blur-md border-t border-outline-variant p-margin-mobile md:px-margin-desktop z-40 flex justify-center pb-8">
+<button class="w-full max-w-2xl bg-primary text-on-primary font-headline-md text-headline-md py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-primary-container active:scale-95 transition-all shadow-sm" form="addUserForm" type="submit">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">person_add</span>
+            Add User
+        </button>
+</div>
+</body></html>
