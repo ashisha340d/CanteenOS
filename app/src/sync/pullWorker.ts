@@ -23,13 +23,7 @@ export async function runPull(): Promise<void> {
 
   try {
     const db = await getDb();
-    // Wrap the entire pull (all pages) in one transaction and defer foreign key checks until
-    // commit. The server pages each entity independently, so a board can arrive on page 1 while
-    // its station arrives on page 2. Without deferred keys the intermediate commits fail with
-    // FOREIGN KEY constraint errors.
     await db.withTransactionAsync(async () => {
-      await db.runAsync('PRAGMA defer_foreign_keys = ON');
-
       while (true) {
         console.log(`[SYNC] pulling cursor=${cursor}`);
         const response = await syncApi.pull({
