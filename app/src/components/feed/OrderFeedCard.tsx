@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type {
@@ -93,6 +93,18 @@ export function OrderFeedCard({
   // that scrolled past still has to be findable where it happened.
   const settled = locked || order.doneAt !== null || order.status === 'CANCELLED' || over;
 
+  const lastTap = useRef<number>(0);
+  const DOUBLE_TAP_DELAY = 300;
+  const handlePress = () => {
+    const now = Date.now();
+    if (now - lastTap.current < DOUBLE_TAP_DELAY) {
+      onPress();
+      lastTap.current = 0;
+    } else {
+      lastTap.current = now;
+    }
+  };
+
   // Only an order still being worked counts down; a delivered or cancelled one has no
   // deadline left to miss, and a ticker on it would be alarming for no reason.
   const countdown = useCountdown(
@@ -148,7 +160,7 @@ export function OrderFeedCard({
           countdown !== null && (countdown.overdue ? styles.cardOverdue : styles.cardUrgent),
         ]}
       >
-        <PressableScale onPress={onPress}>
+        <PressableScale onPress={handlePress}>
           <View>
             {/* Identity ------------------------------------------------------ */}
             <View style={styles.header}>

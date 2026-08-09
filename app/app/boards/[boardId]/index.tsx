@@ -240,6 +240,15 @@ export default function BoardFeedScreen(): React.JSX.Element {
     }
   }, [data.entries, flashOrderIds]);
 
+  useEffect(() => {
+    if (data.entries.length > 0 && autoScrolledBoardId.current !== boardId) {
+      autoScrolledBoardId.current = boardId ?? null;
+      const id = setTimeout(() => listRef.current?.scrollToEnd({ animated: false }), 150);
+      return () => clearTimeout(id);
+    }
+    return undefined;
+  }, [boardId, data.entries]);
+
   const myAcks = useMemo(() => {
     const map = new Map<string, AcknowledgementDto>();
     if (!user) return map;
@@ -434,18 +443,6 @@ export default function BoardFeedScreen(): React.JSX.Element {
         data={data.entries}
         keyExtractor={(entry) => entry.key}
         contentContainerStyle={styles.list}
-        // Jump to the newest entry once per board, when the feed first has content. This used
-        // to fire on *every* content-size change, which snapped the view back to the bottom
-        // the moment anything re-laid out — making it impossible to scroll up and read
-        // history. Keying the guard by board id (rather than a bare flag) means switching
-        // boards jumps to the bottom again instead of silently reusing the previous board's
-        // "already scrolled" state.
-        onContentSizeChange={() => {
-          if (autoScrolledBoardId.current !== boardId && data.entries.length > 0) {
-            autoScrolledBoardId.current = boardId ?? null;
-            listRef.current?.scrollToEnd({ animated: false });
-          }
-        }}
         refreshControl={
           <RefreshControl
             refreshing={isSyncing}
