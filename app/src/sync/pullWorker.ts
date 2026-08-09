@@ -22,41 +22,52 @@ export async function runPull(): Promise<void> {
   console.log(`[SYNC] runPull starting from cursor ${startCursor}`);
 
   try {
-    while (true) {
-      console.log(`[SYNC] pulling cursor=${cursor}`);
-      const response = await syncApi.pull({
-        deviceId,
-        cursor,
-        limit: LIMITS.SYNC_PULL_LIMIT_DEFAULT,
-      });
+    const db = await getDb();
+    // Wrap the entire pull (all pages) in one transaction and defer foreign key checks until
+    // commit. The server pages each entity independently, so a board can arrive on page 1 while
+    // its station arrives on page 2. Without deferred keys the intermediate commits fail with
+    // FOREIGN KEY constraint errors.
+    await db.withTransactionAsync(async () => {
+      await db.execAsync('PRAGMA defer_foreign_keys = ON');
 
-      console.log(`[SYNC] pull response: cursor=${response.cursor}, hasMore=${response.hasMore}, boards=${response.changes.boards.length}, orders=${response.changes.orders.length}`);
+      while (true) {
+        console.log(`[SYNC] pulling cursor=${cursor}`);
+        const response = await syncApi.pull({
+          deviceId,
+          cursor,
+          limit: LIMITS.SYNC_PULL_LIMIT_DEFAULT,
+        });
 
-      // Checked against SQLite *before* the change set is applied: an order in the page that
-      // does not exist locally yet is one somebody else just raised. The initial bootstrap
-      // (cursor 0) is exempt — everything is "new" then, and buzzing for history is noise.
-      if (startCursor > 0 && response.changes.orders.length > 0) {
-        const currentUserId = await settingsRepository.get<string>(SETTINGS_KEYS.CURRENT_USER_ID);
-        for (const order of response.changes.orders) {
-          if (order.deletedAt !== null || order.createdBy === currentUserId) continue;
-          if ((await orderRepository.findById(order.id)) === null) newOrders.push(order);
+        console.log(
+          `[SYNC] pull response: cursor=${response.cursor}, hasMore=${response.hasMore}, ` +
+          `users=${response.changes.users.length}, stations=${response.changes.stations.length}, ` +
+          `boards=${response.changes.boards.length}, orders=${response.changes.orders.length}, ` +
+          `order_items=${response.changes.order_items.length}`,
+        );
+
+        // Checked against SQLite *before* the change set is applied: an order in the page that
+        // does not exist locally yet is one somebody else just raised. The initial bootstrap
+        // (cursor 0) is exempt — everything is "new" then, and buzzing for history is noise.
+        if (startCursor > 0 && response.changes.orders.length > 0) {
+          const currentUserId = await settingsRepository.get<string>(SETTINGS_KEYS.CURRENT_USER_ID);
+          for (const order of response.changes.orders) {
+            if (order.deletedAt !== null || order.createdBy === currentUserId) continue;
+            if ((await orderRepository.findById(order.id)) === null) newOrders.push(order);
+          }
         }
-      }
 
-      const db = await getDb();
-      await db.withTransactionAsync(async () => {
         await applyChangeSet(response.changes, db);
         await settingsRepository.set(SETTINGS_KEYS.SYNC_CURSOR, response.cursor, db);
-      });
 
-      cursor = response.cursor;
+        cursor = response.cursor;
+        if (!response.hasMore) break;
+      }
 
-      if (!response.hasMore) break;
-    }
+      const lastSyncAt = nowIso();
+      await settingsRepository.set(SETTINGS_KEYS.LAST_SYNC_AT, lastSyncAt, db);
+      console.log(`[SYNC] runPull completed, lastSyncAt=${lastSyncAt}`);
+    });
 
-    const lastSyncAt = nowIso();
-    await settingsRepository.set(SETTINGS_KEYS.LAST_SYNC_AT, lastSyncAt);
-    console.log(`[SYNC] runPull completed, lastSyncAt=${lastSyncAt}`);
     await useSyncStatusStore.getState().refresh();
 
     // Flash ids are registered synchronously inside notifyNewOrders, so they are already set

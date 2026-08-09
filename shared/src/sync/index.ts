@@ -31,9 +31,10 @@ import type {
  */
 export const SYNC_ENTITIES = [
   'users',
+  // stations must precede boards because boards.station_id is a foreign key.
+  'stations',
   'boards',
   'board_members',
-  'stations',
   'activity_types',
   'menu_categories',
   'menu_items',
