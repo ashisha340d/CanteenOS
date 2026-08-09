@@ -28,7 +28,7 @@ export async function runPull(): Promise<void> {
     // its station arrives on page 2. Without deferred keys the intermediate commits fail with
     // FOREIGN KEY constraint errors.
     await db.withTransactionAsync(async () => {
-      await db.execAsync('PRAGMA defer_foreign_keys = ON');
+      await db.runAsync('PRAGMA defer_foreign_keys = ON');
 
       while (true) {
         console.log(`[SYNC] pulling cursor=${cursor}`);
