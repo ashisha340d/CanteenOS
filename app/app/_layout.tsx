@@ -9,6 +9,7 @@ import { getDb } from '../src/db/client';
 import { LoadingScreen } from '../src/components/LoadingScreen';
 import { syncEngine } from '../src/sync/syncEngine';
 import { useAppFonts } from '../src/theme/useAppFonts';
+import { pingApi } from '../src/api/client';
 
 /**
  * Guards navigation by auth status. `(tabs)`, `boards` and `orders` are protected; `login`
@@ -46,6 +47,7 @@ export default function RootLayout(): React.JSX.Element {
 
   useEffect(() => {
     (async () => {
+      await pingApi();
       await getDb();
       await Promise.all([bootstrap(), loadPreferences()]);
     })();

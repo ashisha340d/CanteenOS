@@ -6,27 +6,69 @@ import { ClientType, ERROR_CODES, HEADERS } from '@menuboard/shared';
 import { secureTokenStore } from '../utils/secureTokenStore';
 import { getOrCreateDeviceId } from '../utils/deviceId';
 
+const HOST_URL = process.env.API_BASE_URL_HOST ?? 'http://10.0.2.2:4000/api/v1';
+const LOCALHOST_URL = process.env.API_BASE_URL_LOCALHOST ?? 'http://localhost:4000/api/v1';
+const NETWORK_URL = process.env.API_BASE_URL_NETWORK ?? 'http://192.168.1.37:4000/api/v1';
+const TAILSCALE_URL = process.env.API_BASE_URL_TAILSCALE ?? 'http://100.77.100.67:4000/api/v1';
+
+function resolveApiBaseUrl(): string {
+  const webUrl = Platform.OS === 'web' ? (Constants.expoConfig?.extra?.apiBaseUrlWeb as string | undefined) : undefined;
+  const mobileUrl = Constants.expoConfig?.extra?.apiBaseUrl as string | undefined;
+  const envActiveUrl = process.env.API_BASE_URL;
+
+  return envActiveUrl ?? webUrl ?? mobileUrl ?? TAILSCALE_URL;
+}
+
 /**
  * The single axios-backed API funnel for the whole app (per app/AGENTS.md). Every domain
  * module in `src/api/*` goes through this instance — nothing else in the app constructs
  * its own axios client or calls `fetch` against the backend directly.
  */
-/**
- * `apiBaseUrl` is `10.0.2.2`, the Android emulator's alias for the host machine — a browser
- * cannot resolve it, so the web development target reads `apiBaseUrlWeb` instead. Exported so
- * `socketClient.ts` derives the same host rather than re-deciding the platform split.
- */
-export const API_BASE_URL: string =
-  (Platform.OS === 'web'
-    ? (Constants.expoConfig?.extra?.apiBaseUrlWeb as string | undefined)
-    : undefined) ??
-  (Constants.expoConfig?.extra?.apiBaseUrl as string | undefined) ??
-  'http://10.0.2.2:4000/api/v1';
+export const API_BASE_URL: string = resolveApiBaseUrl();
+
+console.log('[API] Connection options:');
+console.log(`  HOST      : ${HOST_URL}`);
+console.log(`  LOCALHOST : ${LOCALHOST_URL}`);
+console.log(`  NETWORK   : ${NETWORK_URL}`);
+console.log(`  TAILSCALE : ${TAILSCALE_URL}`);
+console.log(`[API] Active endpoint: ${API_BASE_URL} (platform: ${Platform.OS})`);
 
 export const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   timeout: 20000,
 });
+
+export async function pingApi(url = API_BASE_URL): Promise<{ ok: boolean; status?: number; latencyMs: number; error?: string }> {
+  const start = Date.now();
+  try {
+    const response = await axios.get(`${url.replace(/\/api\/v1$/, '')}/health`, { timeout: 5000 });
+    const latencyMs = Date.now() - start;
+    console.log(`[API] Ping ${url} -> OK (${response.status}) in ${latencyMs}ms`);
+    return { ok: true, status: response.status, latencyMs };
+  } catch (error) {
+    const latencyMs = Date.now() - start;
+    const message = error instanceof AxiosError ? `${error.code}: ${error.message}` : String(error);
+    console.warn(`[API] Ping ${url} -> FAILED in ${latencyMs}ms: ${message}`);
+    return { ok: false, latencyMs, error: message };
+  }
+}
+
+if (__DEV__) {
+  apiClient.interceptors.request.use((config) => {
+    console.log(`[API] >> ${config.method?.toUpperCase()} ${config.url}`);
+    return config;
+  });
+  apiClient.interceptors.response.use(
+    (response) => {
+      console.log(`[API] << ${response.status} ${response.config.url}`);
+      return response;
+    },
+    (error: AxiosError) => {
+      console.warn(`[API] << ERROR ${error.response?.status ?? error.code} ${error.config?.url}`);
+      return Promise.reject(error);
+    },
+  );
+}
 
 export class ApiError extends Error {
   code: string;
