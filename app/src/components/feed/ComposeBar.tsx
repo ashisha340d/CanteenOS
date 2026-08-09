@@ -88,20 +88,16 @@ export function ComposeBar({
 
   return (
     <View style={styles.bar}>
-      {canCreateOrder ? (
-        <View style={styles.actionRow}>
-          <PressableScale onPress={onNewOrder}>
-            <View style={styles.newOrderButton}>
-              <Ionicons name="add" size={16} color={colors.onPrimary} />
-              <Text style={styles.newOrderLabel}>{t('newOrder', language)}</Text>
-            </View>
-          </PressableScale>
-        </View>
-      ) : null}
-
       {canPost ? (
         <View style={styles.inputRow}>
           <View style={styles.inputWrap}>
+            {canCreateOrder ? (
+              <PressableScale onPress={onNewOrder} hitSlop={6}>
+                <View style={styles.newOrderButton}>
+                  <Ionicons name="add" size={22} color={colors.onPrimary} />
+                </View>
+              </PressableScale>
+            ) : null}
             <TextInput
               style={styles.input}
               value={draft}
@@ -111,19 +107,28 @@ export function ComposeBar({
               multiline
               maxLength={4000}
             />
-            <PressableScale onPress={onStartRecording}>
-              <Ionicons name="mic-outline" size={20} color={colors.outline} />
+            <PressableScale onPress={onStartRecording} hitSlop={6}>
+              <Ionicons name="mic-outline" size={24} color={colors.outline} />
             </PressableScale>
-            <PressableScale onPress={onAttach}>
-              <Ionicons name="attach-outline" size={20} color={colors.outline} />
+            <PressableScale onPress={onAttach} hitSlop={6}>
+              <Ionicons name="attach-outline" size={24} color={colors.outline} />
             </PressableScale>
           </View>
 
           <PressableScale onPress={send} disabled={draft.trim() === ''}>
             <View style={[styles.sendButton, draft.trim() === '' && styles.sendButtonIdle]}>
-              <Ionicons name="send" size={16} color={colors.onPrimary} />
+              <Ionicons name="send" size={18} color={colors.onPrimary} />
             </View>
           </PressableScale>
+        </View>
+      ) : canCreateOrder ? (
+        <View style={styles.actionRow}>
+          <PressableScale onPress={onNewOrder}>
+            <View style={styles.newOrderButton}>
+              <Ionicons name="add" size={22} color={colors.onPrimary} />
+            </View>
+          </PressableScale>
+          <Text style={styles.readOnly}>You can only raise orders on this board.</Text>
         </View>
       ) : (
         <Text style={styles.readOnly}>You have read-only access to this board.</Text>
@@ -150,21 +155,14 @@ const styles = StyleSheet.create({
     paddingBottom: spacing[6],
     gap: spacing[2],
   },
-  actionRow: { flexDirection: 'row', gap: spacing[2] },
+  actionRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
   newOrderButton: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[1.5],
-    height: 36,
-    paddingHorizontal: spacing[4],
-    borderRadius: radii.full,
+    justifyContent: 'center',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: colors.primary,
-  },
-  newOrderLabel: {
-    color: colors.onPrimary,
-    fontFamily: fonts.sansSemibold,
-    fontSize: typography.bodyMd.size,
-    fontWeight: '600',
   },
 
   inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing[2] },
@@ -173,8 +171,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[2],
-    minHeight: 40,
-    paddingHorizontal: spacing[4],
+    minHeight: 48,
+    paddingHorizontal: spacing[3],
     paddingVertical: spacing[1.5],
     borderRadius: radii.full,
     borderWidth: 1,
@@ -185,14 +183,14 @@ const styles = StyleSheet.create({
     flex: 1,
     maxHeight: 96,
     fontFamily: fonts.sans,
-    fontSize: typography.bodyMd.size,
+    fontSize: 16,
     color: colors.onSurface,
     padding: 0,
   },
   sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.primary,

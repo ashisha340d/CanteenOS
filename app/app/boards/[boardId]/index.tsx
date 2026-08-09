@@ -443,6 +443,11 @@ export default function BoardFeedScreen(): React.JSX.Element {
         data={data.entries}
         keyExtractor={(entry) => entry.key}
         contentContainerStyle={styles.list}
+        initialNumToRender={8}
+        maxToRenderPerBatch={8}
+        windowSize={7}
+        removeClippedSubviews={true}
+        updateCellsBatchingPeriod={50}
         refreshControl={
           <RefreshControl
             refreshing={isSyncing}
