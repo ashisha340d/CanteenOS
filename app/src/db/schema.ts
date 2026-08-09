@@ -3,7 +3,7 @@
  * rename a column/table here without updating that document first — this file exists only
  * to let the migration runner apply the schema through expo-sqlite; it is not a redesign.
  */
-export const SCHEMA_VERSION = 11;
+export const SCHEMA_VERSION = 12;
 
 export const CREATE_SCHEMA_STATEMENTS: readonly string[] = [
   `CREATE TABLE IF NOT EXISTS users (

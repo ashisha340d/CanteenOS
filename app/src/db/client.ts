@@ -31,6 +31,19 @@ async function openAndMigrate(): Promise<SQLite.SQLiteDatabase> {
   return db;
 }
 
+async function addColumnIfMissing(
+  db: SQLite.SQLiteDatabase,
+  table: string,
+  column: string,
+  type: string,
+): Promise<void> {
+  const info = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(${table});`);
+  const exists = info.some((row) => row.name === column);
+  if (!exists) {
+    await db.execAsync(`ALTER TABLE ${table} ADD COLUMN ${column} ${type};`);
+  }
+}
+
 /**
  * Versioned migration runner. The current version lives in `settings.db_schema_version`
  * (per docs/sqlite-schema.sql). Future phases append further version steps here rather than
@@ -153,6 +166,15 @@ async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
         await db.execAsync('ALTER TABLE orders ADD COLUMN assigned_to TEXT;');
         await db.execAsync('ALTER TABLE orders ADD COLUMN assigned_at TEXT;');
         await db.runAsync('DELETE FROM settings WHERE setting_key = ?', ['sync_cursor']);
+      }
+
+      // v12 adds sync_error to tables that gained it after their initial creation. Earlier
+      // migrations kept rows but did not add the column, so pushes that update sync_state fail.
+      if (currentVersion > 0 && currentVersion < 12) {
+        await addColumnIfMissing(db, 'orders', 'sync_error', 'TEXT');
+        await addColumnIfMissing(db, 'boards', 'sync_error', 'TEXT');
+        await addColumnIfMissing(db, 'thread_messages', 'sync_error', 'TEXT');
+        await addColumnIfMissing(db, 'attachments', 'sync_error', 'TEXT');
       }
 
       for (const statement of CREATE_SCHEMA_STATEMENTS) {
