@@ -101,14 +101,20 @@ class SyncEngine {
     this.active = true;
     useSyncStatusStore.getState().setSyncing(true);
     useSyncStatusStore.getState().setError(null);
+    console.log('[SYNC] runCycle started');
 
     try {
       // Order matters: push local changes, upload bytes, then pull server deltas.
+      console.log('[SYNC] push drain...');
       await runPushDrain();
+      console.log('[SYNC] media upload...');
       await runMediaUpload();
+      console.log('[SYNC] pull...');
       await runPull();
+      console.log('[SYNC] runCycle completed successfully');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Sync failed';
+      console.error(`[SYNC] runCycle error: ${message}`);
       useSyncStatusStore.getState().setError(message);
     } finally {
       useSyncStatusStore.getState().setSyncing(false);
