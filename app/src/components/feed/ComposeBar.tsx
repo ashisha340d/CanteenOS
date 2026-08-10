@@ -1,21 +1,34 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, {
+  Easing,
+  FadeIn,
+  FadeOut,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import { PressableScale } from '../PressableScale';
 import { t, type Language } from '../../i18n';
-import { colors, radii, spacing, typography, fonts } from '../../theme/tokens';
+import { wa } from '../../theme/whatsapp';
+import { motion } from '../../theme/tokens';
 
 /**
- * The bottom action bar.
+ * WhatsApp's composer: a white rounded pill carrying the emoji button, the text field and the
+ * attachment/camera actions, with a single circular green button beside it that morphs between
+ * microphone and send as the draft fills.
  *
- * Task-oriented rather than conversational: "New Order" is a solid primary button on its own
- * row, because raising an order is the point of the board and should never be buried behind
- * an attachment menu. Typing, voice and attachments sit on the row below, secondary to it.
+ * "New Order" replaces the camera slot — it is this product's equivalent of the one structured
+ * thing you can post besides a message, and it belongs on the same row rather than above it.
  *
- * While recording, the input row is replaced entirely by a timer and a stop control — there
- * is nothing else worth doing mid-recording, and leaving the other affordances live invites
- * a mis-tap that loses the take.
+ * While recording, the pill is replaced by the blinking red dot, the running timer and the
+ * "slide to cancel" affordance, exactly as the real client does.
  */
 export function ComposeBar({
   language = 'en',
@@ -30,6 +43,7 @@ export function ComposeBar({
   onStopRecording,
   onCancelRecording,
   onAttach,
+  onTypingChange,
 }: {
   language?: Language;
   canPost: boolean;
@@ -44,8 +58,16 @@ export function ComposeBar({
   onStopRecording: () => void;
   onCancelRecording: () => void;
   onAttach: () => void;
+  /** Fired as the draft goes from empty to non-empty and back, for the typing indicator. */
+  onTypingChange?: (typing: boolean) => void;
 }): React.JSX.Element {
+  const insets = useSafeAreaInsets();
   const [draft, setDraft] = useState('');
+  const hasDraft = draft.trim() !== '';
+
+  useEffect(() => {
+    onTypingChange?.(hasDraft);
+  }, [hasDraft, onTypingChange]);
 
   const send = (): void => {
     const text = draft.trim();
@@ -54,85 +76,151 @@ export function ComposeBar({
     setDraft('');
   };
 
+  const bottom = Math.max(insets.bottom, 6);
+
   if (isRecording) {
     return (
-      <Animated.View entering={FadeIn.duration(150)} exiting={FadeOut.duration(150)} style={styles.bar}>
-        <View style={styles.recordingRow}>
-          <PressableScale onPress={onCancelRecording}>
-            <View style={styles.cancelButton}>
-              <Ionicons name="close" size={18} color={colors.error} />
-            </View>
-          </PressableScale>
-
-          <View style={styles.recordingMeter}>
-            <View
-              style={[
-                styles.recordingDot,
-                // Scales with input level so the user can see the microphone is live.
-                { transform: [{ scale: 1 + recordingLevel * 0.6 }] },
-              ]}
-            />
-            <Text style={styles.recordingLabel}>{t('recording', language)}</Text>
+      <View style={[styles.bar, { paddingBottom: bottom }]}>
+        <Animated.View
+          entering={FadeIn.duration(140)}
+          exiting={FadeOut.duration(140)}
+          style={styles.recordingRow}
+        >
+          <View style={styles.recordingPill}>
+            <BlinkingDot />
             <Text style={styles.recordingTime}>{formatDuration(recordingMs)}</Text>
+            <PressableScale onPress={onCancelRecording} style={styles.slideToCancel} hitSlop={8}>
+              <Ionicons name="chevron-back" size={15} color={wa.recordText} />
+              <Text style={styles.slideToCancelText}>
+                {language === 'hi' ? 'रद्द करने के लिए स्लाइड करें' : 'Slide to cancel'}
+              </Text>
+            </PressableScale>
           </View>
 
-          <PressableScale onPress={onStopRecording}>
-            <View style={styles.stopButton}>
-              <Ionicons name="stop" size={18} color={colors.onPrimary} />
-            </View>
-          </PressableScale>
+          <MicPulse level={recordingLevel}>
+            <PressableScale onPress={onStopRecording} style={styles.actionButton}>
+              <Ionicons name="send" size={21} color="#FFFFFF" />
+            </PressableScale>
+          </MicPulse>
+        </Animated.View>
+      </View>
+    );
+  }
+
+  if (!canPost && !canCreateOrder) {
+    return (
+      <View style={[styles.bar, { paddingBottom: bottom }]}>
+        <View style={styles.readOnlyPill}>
+          <Ionicons name="lock-closed" size={12} color={wa.systemPillText} />
+          <Text style={styles.readOnly}>
+            {language === 'hi'
+              ? 'आपके पास इस बोर्ड पर केवल देखने की अनुमति है'
+              : 'You have read-only access to this board'}
+          </Text>
         </View>
-      </Animated.View>
+      </View>
     );
   }
 
   return (
-    <View style={styles.bar}>
-      {canPost ? (
-        <View style={styles.inputRow}>
-          <View style={styles.inputWrap}>
-            {canCreateOrder ? (
-              <PressableScale onPress={onNewOrder} hitSlop={6}>
-                <View style={styles.newOrderButton}>
-                  <Ionicons name="add" size={22} color={colors.onPrimary} />
-                </View>
-              </PressableScale>
-            ) : null}
-            <TextInput
-              style={styles.input}
-              value={draft}
-              onChangeText={setDraft}
-              placeholder={t('typeMessage', language)}
-              placeholderTextColor={colors.outline}
-              multiline
-              maxLength={4000}
+    <View style={[styles.bar, { paddingBottom: bottom }]}>
+      <View style={styles.row}>
+        <View style={styles.inputPill}>
+          <PressableScale onPress={onNewOrder} hitSlop={6} style={styles.pillIcon} disabled={!canCreateOrder}>
+            <Ionicons
+              name="happy-outline"
+              size={25}
+              color={canCreateOrder ? wa.composeIcon : 'transparent'}
             />
-            <PressableScale onPress={onStartRecording} hitSlop={6}>
-              <Ionicons name="mic-outline" size={24} color={colors.outline} />
-            </PressableScale>
-            <PressableScale onPress={onAttach} hitSlop={6}>
-              <Ionicons name="attach-outline" size={24} color={colors.outline} />
-            </PressableScale>
-          </View>
+          </PressableScale>
 
-          <PressableScale onPress={send} disabled={draft.trim() === ''}>
-            <View style={[styles.sendButton, draft.trim() === '' && styles.sendButtonIdle]}>
-              <Ionicons name="send" size={18} color={colors.onPrimary} />
-            </View>
-          </PressableScale>
+          <TextInput
+            style={styles.input}
+            value={draft}
+            onChangeText={setDraft}
+            placeholder={canPost ? t('typeMessage', language) : 'Raise an order'}
+            placeholderTextColor={wa.composePlaceholder}
+            editable={canPost}
+            multiline
+            maxLength={4000}
+            underlineColorAndroid="transparent"
+          />
+
+          {canPost ? (
+            <PressableScale onPress={onAttach} hitSlop={6} style={styles.pillIcon}>
+              <View style={styles.clip}>
+                <Ionicons name="attach" size={24} color={wa.composeIcon} />
+              </View>
+            </PressableScale>
+          ) : null}
+
+          {canCreateOrder && !hasDraft ? (
+            <PressableScale onPress={onNewOrder} hitSlop={6} style={styles.pillIcon}>
+              <Ionicons name="add-circle-outline" size={25} color={wa.composeIcon} />
+            </PressableScale>
+          ) : null}
         </View>
-      ) : canCreateOrder ? (
-        <View style={styles.actionRow}>
-          <PressableScale onPress={onNewOrder}>
-            <View style={styles.newOrderButton}>
-              <Ionicons name="add" size={22} color={colors.onPrimary} />
-            </View>
-          </PressableScale>
-          <Text style={styles.readOnly}>You can only raise orders on this board.</Text>
-        </View>
-      ) : (
-        <Text style={styles.readOnly}>You have read-only access to this board.</Text>
-      )}
+
+        <PressableScale
+          onPress={hasDraft ? send : canPost ? onStartRecording : onNewOrder}
+          style={styles.actionButton}
+        >
+          <Animated.View key={hasDraft ? 'send' : 'mic'} entering={FadeIn.duration(120)}>
+            <Ionicons
+              name={hasDraft ? 'send' : canPost ? 'mic' : 'add'}
+              size={hasDraft ? 20 : 24}
+              color="#FFFFFF"
+              style={hasDraft ? styles.sendGlyph : undefined}
+            />
+          </Animated.View>
+        </PressableScale>
+      </View>
+    </View>
+  );
+}
+
+/** The red dot that pulses once a second while the microphone is live. */
+function BlinkingDot(): React.JSX.Element {
+  const opacity = useSharedValue(1);
+
+  useEffect(() => {
+    opacity.value = withRepeat(
+      withSequence(
+        withTiming(0.15, { duration: 500, easing: Easing.inOut(Easing.quad) }),
+        withTiming(1, { duration: 500, easing: Easing.inOut(Easing.quad) }),
+      ),
+      -1,
+      false,
+    );
+  }, [opacity]);
+
+  const animatedStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
+  return <Animated.View style={[styles.recordingDot, animatedStyle]} />;
+}
+
+/** A halo behind the send/stop button that swells with the microphone input level. */
+function MicPulse({
+  level,
+  children,
+}: {
+  level: number;
+  children: React.ReactNode;
+}): React.JSX.Element {
+  const amplitude = useSharedValue(0);
+
+  useEffect(() => {
+    amplitude.value = withSpring(level, motion.spring.snappy);
+  }, [amplitude, level]);
+
+  const haloStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: interpolate(amplitude.value, [0, 1], [1, 1.55]) }],
+    opacity: interpolate(amplitude.value, [0, 1], [0, 0.28]),
+  }));
+
+  return (
+    <View style={styles.micPulseWrap}>
+      <Animated.View style={[styles.micHalo, haloStyle]} pointerEvents="none" />
+      {children}
     </View>
   );
 }
@@ -146,106 +234,95 @@ function formatDuration(ms: number): string {
 
 const styles = StyleSheet.create({
   bar: {
-    borderTopWidth: 1,
-    borderTopColor: colors.outlineVariant,
-    backgroundColor: colors.surface,
-    paddingHorizontal: spacing.marginMobile,
-    paddingTop: spacing[2.5],
-    // Generous bottom padding keeps the controls clear of the gesture area, per DESIGN.md.
-    paddingBottom: spacing[6],
-    gap: spacing[2],
+    backgroundColor: wa.composeBg,
+    paddingHorizontal: 6,
+    paddingTop: 6,
   },
-  actionRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
-  newOrderButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.primary,
-  },
+  row: { flexDirection: 'row', alignItems: 'flex-end', gap: 6 },
 
-  inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing[2] },
-  inputWrap: {
+  inputPill: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[2],
     minHeight: 48,
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[1.5],
-    borderRadius: radii.full,
-    borderWidth: 1,
-    borderColor: colors.outlineVariant,
-    backgroundColor: colors.surfaceContainerLow,
+    maxHeight: 130,
+    paddingHorizontal: 6,
+    borderRadius: 24,
+    backgroundColor: wa.composeInputBg,
+    elevation: 1,
+    shadowColor: '#0B141A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
   },
+  pillIcon: { paddingHorizontal: 5, paddingVertical: 8 },
+  clip: { transform: [{ rotate: '-40deg' }] },
   input: {
     flex: 1,
-    maxHeight: 96,
-    fontFamily: fonts.sans,
-    fontSize: 16,
-    color: colors.onSurface,
-    padding: 0,
+    maxHeight: 110,
+    paddingHorizontal: 4,
+    paddingVertical: 12,
+    fontSize: 16.5,
+    lineHeight: 21,
+    color: wa.bubbleText,
   },
-  sendButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primary,
-  },
-  sendButtonIdle: { backgroundColor: colors.outlineVariant },
 
-  recordingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
-  cancelButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  actionButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.errorContainer,
+    backgroundColor: wa.actionButton,
+    elevation: 2,
+    shadowColor: '#0B141A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
   },
-  recordingMeter: {
+  /* The paper-plane glyph is optically left-heavy; nudge it back to centre. */
+  sendGlyph: { marginLeft: 2 },
+
+  micPulseWrap: { alignItems: 'center', justifyContent: 'center' },
+  micHalo: {
+    position: 'absolute',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: wa.actionButton,
+  },
+
+  recordingRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  recordingPill: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[2],
-    height: 40,
-    paddingHorizontal: spacing[4],
-    borderRadius: radii.full,
-    backgroundColor: colors.surfaceContainerLow,
-    borderWidth: 1,
-    borderColor: colors.outlineVariant,
+    gap: 9,
+    height: 48,
+    paddingHorizontal: 16,
+    borderRadius: 24,
+    backgroundColor: wa.composeInputBg,
   },
-  recordingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.error },
-  recordingLabel: {
-    flex: 1,
-    fontFamily: fonts.sans,
-    fontSize: typography.bodySm.size,
-    color: colors.onSurfaceVariant,
-  },
+  recordingDot: { width: 9, height: 9, borderRadius: 4.5, backgroundColor: wa.recordDot },
   recordingTime: {
-    fontFamily: fonts.mono,
-    fontSize: typography.dataMono.size,
-    fontWeight: '700',
-    color: colors.onSurface,
+    fontSize: 15,
+    color: wa.bubbleText,
     fontVariant: ['tabular-nums'],
+    minWidth: 42,
   },
-  stopButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.error,
-  },
+  slideToCancel: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2 },
+  slideToCancelText: { fontSize: 14.5, color: wa.recordText },
 
-  readOnly: {
-    textAlign: 'center',
-    fontFamily: fonts.sans,
-    fontSize: typography.bodySm.size,
-    color: colors.outline,
-    paddingVertical: spacing[2],
+  readOnlyPill: {
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 7.5,
+    backgroundColor: wa.systemPillBg,
   },
+  readOnly: { fontSize: 12.5, color: wa.systemPillText },
 });

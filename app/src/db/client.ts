@@ -45,6 +45,21 @@ async function addColumnIfMissing(
 }
 
 /**
+ * Treats an unreadable version marker as "brand new database". Throwing here would leave the
+ * app unable to open its database at all, with no way out short of a reinstall; re-running the
+ * idempotent `CREATE TABLE IF NOT EXISTS` statements is the safe interpretation.
+ */
+function readSchemaVersion(value: string | undefined): number {
+  if (value === undefined) return 0;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return typeof parsed === 'number' && Number.isFinite(parsed) ? parsed : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
  * Versioned migration runner. The current version lives in `settings.db_schema_version`
  * (per docs/sqlite-schema.sql). Future phases append further version steps here rather than
  * editing the statements already applied.
@@ -60,7 +75,7 @@ async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
     'SELECT value FROM settings WHERE setting_key = ?',
     ['db_schema_version'],
   );
-  const currentVersion = row ? (JSON.parse(row.value) as number) : 0;
+  const currentVersion = readSchemaVersion(row?.value);
 
   if (currentVersion < SCHEMA_VERSION) {
     await db.withTransactionAsync(async () => {
@@ -175,6 +190,32 @@ async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
         await addColumnIfMissing(db, 'boards', 'sync_error', 'TEXT');
         await addColumnIfMissing(db, 'thread_messages', 'sync_error', 'TEXT');
         await addColumnIfMissing(db, 'attachments', 'sync_error', 'TEXT');
+      }
+
+      // v13 brings the Menu Master sellable configuration down to the device: menu items carry
+      // base_price/always_available, and an order line carries the price snapshot frozen at sale
+      // time (menu_id, variant_id, variant_name, unit_price, tax/discount, line_total). All are
+      // nullable adds, which SQLite supports in place, so rows are kept and the cursor rewound so
+      // the next pull fills them from the server.
+      if (currentVersion > 0 && currentVersion < 13) {
+        await addColumnIfMissing(db, 'menu_items', 'base_price', 'REAL');
+        await addColumnIfMissing(db, 'menu_items', 'always_available', 'INTEGER NOT NULL DEFAULT 0');
+        await addColumnIfMissing(db, 'order_items', 'menu_id', 'TEXT');
+        await addColumnIfMissing(db, 'order_items', 'variant_id', 'TEXT');
+        await addColumnIfMissing(db, 'order_items', 'variant_name', 'TEXT');
+        await addColumnIfMissing(db, 'order_items', 'unit_price', 'REAL');
+        await addColumnIfMissing(db, 'order_items', 'tax_amount', 'REAL NOT NULL DEFAULT 0');
+        await addColumnIfMissing(db, 'order_items', 'discount_amount', 'REAL NOT NULL DEFAULT 0');
+        await addColumnIfMissing(db, 'order_items', 'line_total', 'REAL');
+        await db.runAsync('DELETE FROM settings WHERE setting_key = ?', ['sync_cursor']);
+      }
+
+      // v14 carries the food item's primary media-library image id down to the device, so a
+      // dish can be shown with its photograph. Nullable add; the cursor is rewound so the next
+      // pull fills it in for items that are already cached.
+      if (currentVersion > 0 && currentVersion < 14) {
+        await addColumnIfMissing(db, 'menu_items', 'primary_media_id', 'TEXT');
+        await db.runAsync('DELETE FROM settings WHERE setting_key = ?', ['sync_cursor']);
       }
 
       for (const statement of CREATE_SCHEMA_STATEMENTS) {

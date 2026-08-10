@@ -3,6 +3,7 @@ import { LayoutAnimation, Platform, StyleSheet, Text, TextInput, UIManager, View
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeIn, FadeInDown, Layout } from 'react-native-reanimated';
 import { LIMITS, type MenuCategoryDto, type MenuItemDto } from '@menuboard/shared';
+import { MenuItemImage } from '../MenuItemImage';
 import { PressableScale } from '../PressableScale';
 import { SearchInput } from '../SearchInput';
 import { newId } from '../../utils/uuid';
@@ -427,6 +428,7 @@ function CatalogueRow({
   return (
     <PressableScale onPress={onPress}>
       <View style={[styles.catalogueRow, chosen && styles.catalogueRowChosen]}>
+        <MenuItemImage item={item} size={36} style={styles.catalogueImage} />
         <Text style={styles.catalogueName} numberOfLines={1}>
           {menuItemName(item, language) || item.name}
         </Text>
@@ -599,6 +601,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.gray100,
   },
   catalogueRowChosen: { backgroundColor: colors.gray75 },
+  catalogueImage: { marginRight: spacing[0.5] },
   catalogueName: {
     flex: 1,
     fontFamily: fonts.sans,

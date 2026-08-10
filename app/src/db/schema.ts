@@ -3,7 +3,7 @@
  * rename a column/table here without updating that document first — this file exists only
  * to let the migration runner apply the schema through expo-sqlite; it is not a redesign.
  */
-export const SCHEMA_VERSION = 12;
+export const SCHEMA_VERSION = 14;
 
 export const CREATE_SCHEMA_STATEMENTS: readonly string[] = [
   `CREATE TABLE IF NOT EXISTS users (
@@ -119,6 +119,9 @@ export const CREATE_SCHEMA_STATEMENTS: readonly string[] = [
     unit              TEXT NOT NULL DEFAULT 'NOS',
     unit_hi           TEXT,
     image_path        TEXT,
+    primary_media_id  TEXT,
+    base_price        REAL,
+    always_available  INTEGER NOT NULL DEFAULT 0,
     status            TEXT NOT NULL DEFAULT 'ACTIVE',
     sort_order        INTEGER NOT NULL DEFAULT 0,
     created_at        TEXT NOT NULL,
@@ -181,6 +184,13 @@ export const CREATE_SCHEMA_STATEMENTS: readonly string[] = [
     cancelled_at        TEXT,
     cancelled_by        TEXT,
     replaced_by_item_id TEXT,
+    menu_id             TEXT,
+    variant_id          TEXT,
+    variant_name        TEXT,
+    unit_price          REAL,
+    tax_amount          REAL NOT NULL DEFAULT 0,
+    discount_amount     REAL NOT NULL DEFAULT 0,
+    line_total          REAL,
     created_at          TEXT NOT NULL,
     updated_at          TEXT NOT NULL,
     deleted_at          TEXT,

@@ -79,6 +79,12 @@ function toMenuItem(row: MenuItemRow): MenuItemDto {
     name: row.name,
     unit: row.unit,
     imagePath: row.image_path,
+    primaryMediaId: row.primary_media_id,
+    basePrice: row.base_price,
+    // Tax is an Admin Portal concern (billing is generated server-side), so the device neither
+    // syncs nor mirrors tax profiles — the column does not exist in the local schema.
+    taxProfileId: null,
+    alwaysAvailable: row.always_available === 1,
     status: row.status as MasterStatus,
     sortOrder: row.sort_order,
     createdAt: row.created_at,
@@ -183,18 +189,23 @@ export const masterRepository = {
     await runInTx(db, tx, async () => {
       for (const i of rows) {
         await db.runAsync(
-          `INSERT INTO menu_items (id, category_id, name, name_hi, unit, unit_hi, image_path, status,
+          `INSERT INTO menu_items (id, category_id, name, name_hi, unit, unit_hi, image_path,
+             primary_media_id, base_price, always_available, status,
              sort_order, created_at, updated_at, deleted_at, revision, server_sync_seq)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET
              category_id = excluded.category_id, name = excluded.name,
              name_hi = excluded.name_hi, unit = excluded.unit, unit_hi = excluded.unit_hi,
-             image_path = excluded.image_path, status = excluded.status,
+             image_path = excluded.image_path,
+             primary_media_id = excluded.primary_media_id, base_price = excluded.base_price,
+             always_available = excluded.always_available, status = excluded.status,
              sort_order = excluded.sort_order, updated_at = excluded.updated_at,
              deleted_at = excluded.deleted_at, revision = excluded.revision,
              server_sync_seq = excluded.server_sync_seq`,
           [
-            i.id, i.categoryId, i.name, i.nameHi, i.unit, i.unitHi, i.imagePath, i.status, i.sortOrder,
+            i.id, i.categoryId, i.name, i.nameHi, i.unit, i.unitHi, i.imagePath,
+            i.primaryMediaId ?? null, i.basePrice ?? null, i.alwaysAvailable ? 1 : 0,
+            i.status, i.sortOrder,
             i.createdAt, i.updatedAt, i.deletedAt, i.revision, i.syncSeq,
           ],
         );

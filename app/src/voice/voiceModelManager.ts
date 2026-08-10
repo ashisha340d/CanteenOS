@@ -162,6 +162,7 @@ export const voiceModelManager = {
       // A cancel resolves through this path too; the caller distinguishes them by having
       // called `cancel()`.
       if (activeDownload === null) fail('CANCELLED', 'Download cancelled.');
+      console.warn('[VOICE] Model download interrupted', error);
       fail('OFFLINE', 'The download was interrupted. Reconnect and tap Retry.');
     } finally {
       activeDownload = null;

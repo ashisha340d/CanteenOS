@@ -3,6 +3,7 @@ export * from './auth';
 export * from './boards';
 export * from './orders';
 export * from './masters';
+export * from './media';
 export * from './notifications';
 export * from './sync';
 export * from './attachments';

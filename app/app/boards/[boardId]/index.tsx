@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, KeyboardAvoidingView, Platform, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, { FadeInDown, FadeInUp, Layout } from 'react-native-reanimated';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import type {
   AcknowledgementDto,
@@ -27,12 +28,14 @@ import { useLanguage } from '../../../src/state/languageStore';
 import { useBoardCapability } from '../../../src/permissions/useBoardCapability';
 import { shoppingApi } from '../../../src/api';
 import { OrderFeedCard } from '../../../src/components/feed/OrderFeedCard';
-import { MessageBubble, SystemLine } from '../../../src/components/feed/MessageBubble';
+import { MessageBubble, SystemLine, type DeliveryState } from '../../../src/components/feed/MessageBubble';
 import { DateSeparator } from '../../../src/components/feed/FeedPrimitives';
 import { ComposeBar } from '../../../src/components/feed/ComposeBar';
 import { OrderHistorySheet } from '../../../src/components/feed/OrderHistorySheet';
 import { NewOrderFlash } from '../../../src/components/feed/NewOrderFlash';
 import { FeedBackground } from '../../../src/components/feed/FeedBackground';
+import { ChatHeader } from '../../../src/components/feed/ChatHeader';
+import { TypingBubble } from '../../../src/components/feed/TypingIndicator';
 import { ActionSheet, type ActionSheetItem } from '../../../src/components/ActionSheet';
 import { PickerSheet } from '../../../src/components/PickerSheet';
 import { QuantitySheet } from '../../../src/components/feed/QuantitySheet';
@@ -44,8 +47,10 @@ import { useVoiceNoteRecorder } from '../../../src/hooks/useVoiceNoteRecorder';
 import { useSyncedFocusLoad } from '../../../src/hooks/useSyncedFocusLoad';
 import { useNewOrderAlertStore } from '../../../src/alerts/newOrderAlert';
 import { pickBoardAttachment } from '../../../src/utils/attachmentPicker';
+import { useTypingStore } from '../../../src/state/typingStore';
+import { emitTyping } from '../../../src/sync/socketClient';
 import { orderLineName, t } from '../../../src/i18n';
-import { colors, spacing, typography, fonts } from '../../../src/theme/tokens';
+import { wa, waSenderColor } from '../../../src/theme/whatsapp';
 
 /**
  * The board feed — the screen the product is actually about.
@@ -160,6 +165,34 @@ export default function BoardFeedScreen(): React.JSX.Element {
   const autoScrolledBoardId = useRef<string | null>(null);
   const recorder = useVoiceNoteRecorder();
 
+  const typingByBoard = useTypingStore((s) => s.byBoard);
+  /** Names of the other members currently composing, for the header subtitle. */
+  const typingNames = useMemo(() => {
+    const now = Date.now();
+    const entries = (typingByBoard[boardId ?? ''] ?? []).filter((entry) => entry.expiresAt > now);
+    return entries
+      .filter((entry) => entry.userId !== user?.id)
+      .map(
+        (entry) =>
+          data.members.find((m) => m.userId === entry.userId)?.userName ?? 'Someone',
+      );
+  }, [typingByBoard, boardId, user?.id, data.members]);
+
+  const announceTyping = useCallback(
+    (typing: boolean) => {
+      if (boardId) emitTyping(boardId, typing);
+    },
+    [boardId],
+  );
+
+  // Leaving the screen mid-sentence must not leave a typing bubble stuck on everyone else's feed.
+  useEffect(
+    () => () => {
+      if (boardId) emitTyping(boardId, false);
+    },
+    [boardId],
+  );
+
   const load = useCallback(async () => {
     if (!boardId || !user) return;
     const [board, messages, orders, membership, members] = await Promise.all([
@@ -259,10 +292,41 @@ export default function BoardFeedScreen(): React.JSX.Element {
     return map;
   }, [data.acksByOrder, user]);
 
+  /**
+   * Which top-level bubbles start a new run.
+   *
+   * WhatsApp draws the tail and the sender's name only on the first message of a consecutive
+   * block from the same person; the rest tuck in beneath with square corners. A gap of more
+   * than five minutes breaks the run even when the sender has not changed.
+   */
+  const runStarts = useMemo(() => {
+    const starts = new Set<string>();
+    let previousAuthor: string | null = null;
+    let previousAt = 0;
+
+    for (const entry of data.entries) {
+      if (entry.kind !== 'MESSAGE') {
+        previousAuthor = null;
+        continue;
+      }
+      const at = Date.parse(entry.message.createdAt);
+      const sameAuthor = entry.message.authorId === previousAuthor;
+      const closeInTime = at - previousAt < 5 * 60_000;
+      if (!sameAuthor || !closeInTime) starts.add(entry.key);
+      previousAuthor = entry.message.authorId;
+      previousAt = at;
+    }
+    return starts;
+  }, [data.entries]);
+
   const acknowledge = async (orderId: string): Promise<void> => {
     if (!user) return;
-    await acknowledgementRepository.acknowledgeLocal(orderId, user.id);
-    await load();
+    try {
+      await acknowledgementRepository.acknowledgeLocal(orderId, user.id);
+      await load();
+    } catch (error) {
+      Alert.alert('Could not acknowledge', error instanceof Error ? error.message : 'Try again.');
+    }
   };
 
   const changeStatus = async (orderId: string, next: OrderStatus): Promise<void> => {
@@ -339,61 +403,73 @@ export default function BoardFeedScreen(): React.JSX.Element {
 
   const sendMessage = async (text: string): Promise<void> => {
     if (!user || !boardId) return;
-    // A reply carries both its parent *and* that parent's order, so it lands inside the same
-    // order div rather than at the bottom of the feed as an unrelated post.
-    await threadRepository.postLocal(boardId, user.id, {
-      body: text,
-      ...(replyTo !== null
-        ? { parentMessageId: replyTo.id, orderId: replyTo.orderId }
-        : {}),
-    });
-    setReplyTo(null);
-    await load();
-    scrollToEnd();
+    try {
+      // A reply carries both its parent *and* that parent's order, so it lands inside the same
+      // order div rather than at the bottom of the feed as an unrelated post.
+      await threadRepository.postLocal(boardId, user.id, {
+        body: text,
+        ...(replyTo !== null
+          ? { parentMessageId: replyTo.id, orderId: replyTo.orderId }
+          : {}),
+      });
+      setReplyTo(null);
+      await load();
+      scrollToEnd();
+    } catch (error) {
+      Alert.alert('Could not send', error instanceof Error ? error.message : 'Try again.');
+    }
   };
 
   const sendVoiceNote = async (): Promise<void> => {
     if (!user || !boardId) return;
-    const take = await recorder.stop();
-    if (take === null) return;
+    try {
+      const take = await recorder.stop();
+      if (take === null) return;
 
-    const message = await threadRepository.postLocal(boardId, user.id, { body: null });
-    await attachmentRepository.captureLocal({
-      ownerType: 'THREAD_MESSAGE',
-      ownerId: message.id,
-      kind: 'VOICE_NOTE',
-      fileName: `voice-${Date.now()}.m4a`,
-      mimeType: 'audio/m4a',
-      localPath: take.uri,
-      sizeBytes: take.sizeBytes,
-      durationMs: take.durationMs,
-      uploadedBy: user.id,
-    });
-    await load();
-    scrollToEnd();
+      const message = await threadRepository.postLocal(boardId, user.id, { body: null });
+      await attachmentRepository.captureLocal({
+        ownerType: 'THREAD_MESSAGE',
+        ownerId: message.id,
+        kind: 'VOICE_NOTE',
+        fileName: `voice-${Date.now()}.m4a`,
+        mimeType: 'audio/m4a',
+        localPath: take.uri,
+        sizeBytes: take.sizeBytes,
+        durationMs: take.durationMs,
+        uploadedBy: user.id,
+      });
+      await load();
+      scrollToEnd();
+    } catch (error) {
+      Alert.alert('Could not send voice note', error instanceof Error ? error.message : 'Try again.');
+    }
   };
 
   const attach = async (): Promise<void> => {
     if (!user || !boardId) return;
-    const picked = await pickBoardAttachment();
-    if (picked === null) return;
+    try {
+      const picked = await pickBoardAttachment();
+      if (picked === null) return;
 
-    const message = await threadRepository.postLocal(boardId, user.id, { body: null });
-    await attachmentRepository.captureLocal({
-      ownerType: 'THREAD_MESSAGE',
-      ownerId: message.id,
-      kind: picked.kind,
-      fileName: picked.fileName,
-      mimeType: picked.mimeType,
-      localPath: picked.uri,
-      sizeBytes: picked.sizeBytes,
-      durationMs: null,
-      width: picked.width,
-      height: picked.height,
-      uploadedBy: user.id,
-    });
-    await load();
-    scrollToEnd();
+      const message = await threadRepository.postLocal(boardId, user.id, { body: null });
+      await attachmentRepository.captureLocal({
+        ownerType: 'THREAD_MESSAGE',
+        ownerId: message.id,
+        kind: picked.kind,
+        fileName: picked.fileName,
+        mimeType: picked.mimeType,
+        localPath: picked.uri,
+        sizeBytes: picked.sizeBytes,
+        durationMs: null,
+        width: picked.width,
+        height: picked.height,
+        uploadedBy: user.id,
+      });
+      await load();
+      scrollToEnd();
+    } catch (error) {
+      Alert.alert('Could not attach', error instanceof Error ? error.message : 'Try again.');
+    }
   };
 
   const unsend = (message: ThreadMessageDto): void => {
@@ -404,8 +480,12 @@ export default function BoardFeedScreen(): React.JSX.Element {
         text: 'Unsend',
         style: 'destructive',
         onPress: async () => {
-          await threadRepository.deleteLocal(message.id);
-          await load();
+          try {
+            await threadRepository.deleteLocal(message.id);
+            await load();
+          } catch (error) {
+            Alert.alert('Could not unsend', error instanceof Error ? error.message : 'Try again.');
+          }
         },
       },
     ]);
@@ -419,7 +499,13 @@ export default function BoardFeedScreen(): React.JSX.Element {
   if (data.board !== null && !data.hasAccess) {
     return (
       <View style={styles.container}>
-        <Stack.Screen options={{ title: data.board.name }} />
+        <Stack.Screen options={{ headerShown: false }} />
+        <ChatHeader
+          title={data.board.name}
+          subtitle="No access"
+          typingNames={[]}
+          onBack={() => router.back()}
+        />
         <EmptyState
           title="No access"
           subtitle="You are not assigned to this board. Ask a board manager to add you."
@@ -429,283 +515,319 @@ export default function BoardFeedScreen(): React.JSX.Element {
   }
 
   const menuItems = buildOrderMenu();
+  const memberLine =
+    data.members.length === 0
+      ? 'tap here for board info'
+      : data.members
+        .map((member) => (member.userId === user?.id ? 'You' : member.userName ?? 'Member'))
+        .join(', ');
 
   return (
-    <FeedBackground>
-      <Stack.Screen
-        options={{
-          title: data.board?.name ?? 'Board',
-        }}
+    <View style={styles.screen}>
+      <Stack.Screen options={{ headerShown: false }} />
+
+      <ChatHeader
+        title={data.board?.name ?? 'Board'}
+        subtitle={memberLine}
+        typingNames={typingNames}
+        onBack={() => router.back()}
       />
 
-      <FlatList
-        ref={listRef}
-        data={data.entries}
-        keyExtractor={(entry) => entry.key}
-        contentContainerStyle={styles.list}
-        initialNumToRender={8}
-        maxToRenderPerBatch={8}
-        windowSize={7}
-        removeClippedSubviews={true}
-        updateCellsBatchingPeriod={50}
-        refreshControl={
-          <RefreshControl
-            refreshing={isSyncing}
-            onRefresh={async () => {
-              await refreshLocalData();
-              await load();
-            }}
-            tintColor={colors.primary}
-          />
-        }
-        ListEmptyComponent={
-          <EmptyState
-            title={t('noOrders', language)}
-            subtitle={
-              canCreateOrder
-                ? 'Raise the first order and it appears here for everyone.'
-                : 'Orders and messages posted to this board appear here.'
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <FeedBackground>
+          <FlatList
+            ref={listRef}
+            data={data.entries}
+            keyExtractor={(entry) => entry.key}
+            contentContainerStyle={styles.list}
+            initialNumToRender={12}
+            maxToRenderPerBatch={10}
+            windowSize={9}
+            removeClippedSubviews={true}
+            updateCellsBatchingPeriod={40}
+            ListFooterComponent={typingNames.length > 0 ? <TypingBubble /> : null}
+            refreshControl={
+              <RefreshControl
+                refreshing={isSyncing}
+                onRefresh={async () => {
+                  await refreshLocalData();
+                  await load();
+                }}
+                tintColor={wa.headerBg}
+              />
             }
-          />
-        }
-        renderItem={({ item: entry }) => {
-          switch (entry.kind) {
-            case 'DATE':
-              return <DateSeparator label={entry.label} />;
+            ListEmptyComponent={
+              <EmptyState
+                title={t('noOrders', language)}
+                subtitle={
+                  canCreateOrder
+                    ? 'Raise the first order and it appears here for everyone.'
+                    : 'Orders and messages posted to this board appear here.'
+                }
+              />
+            }
+            renderItem={({ item: entry, index }) => {
+              // Only the last screenful animates in; replaying the whole history on mount
+              // would look like a glitch rather than a message arriving.
+              const isRecent = index >= data.entries.length - 6;
+              const enter = isRecent ? FadeInDown.springify().damping(18).mass(0.6) : undefined;
 
-            case 'ORDER': {
-              const order = entry.order;
-              return (
-                <NewOrderFlash
-                  active={flashOrderIds.includes(order.id)}
-                  onDone={() => clearFlash(order.id)}
-                >
-                  <OrderFeedCard
-                    order={order}
-                    items={data.itemsByOrder.get(order.id) ?? []}
-                    menuItems={data.menuItems}
-                    acknowledgements={data.acksByOrder.get(order.id) ?? []}
-                    myAcknowledgement={myAcks.get(order.id)}
-                    authorName={entry.message.authorName ?? 'Member'}
-                    time={formatTime(entry.message.createdAt)}
-                    language={language}
-                    accentColor={data.board?.color ?? null}
-                    assigneeName={
-                      data.members.find((m) => m.userId === order.assignedTo)?.userName ?? null
-                    }
-                    // You don't acknowledge your own order — there is no one else to signal to.
-                    canAcknowledge={canAcknowledge && order.createdBy !== user?.id}
-                    canChangeStatus={canChangeStatus}
-                    historyEvents={data.statusEventsByOrder.get(order.id) ?? []}
-                    onAcknowledge={() => void acknowledge(order.id)}
-                    onChangeStatus={(next) => void changeStatus(order.id, next)}
-                    onOpenMenu={() => setMenuOrder(order)}
-                    onOpenHistory={() => setHistoryOrderId(order.id)}
-                    onPressItem={(item) => setItemMenu({ item, order })}
-                    onPress={() =>
-                      router.push({ pathname: '/orders/[orderId]', params: { orderId: order.id } })
-                    }
-                  >
-                    {/* The order's own div: every reply and voice note lives right here, under
+              switch (entry.kind) {
+                case 'DATE':
+                  return <DateSeparator label={entry.label} />;
+
+                case 'ORDER': {
+                  const order = entry.order;
+                  return (
+                    <NewOrderFlash
+                      active={flashOrderIds.includes(order.id)}
+                      onDone={() => clearFlash(order.id)}
+                    >
+                      <OrderFeedCard
+                        order={order}
+                        items={data.itemsByOrder.get(order.id) ?? []}
+                        menuItems={data.menuItems}
+                        acknowledgements={data.acksByOrder.get(order.id) ?? []}
+                        myAcknowledgement={myAcks.get(order.id)}
+                        authorName={entry.message.authorName ?? 'Member'}
+                        time={formatTime(entry.message.createdAt)}
+                        language={language}
+                        accentColor={data.board?.color ?? null}
+                        assigneeName={
+                          data.members.find((m) => m.userId === order.assignedTo)?.userName ?? null
+                        }
+                        // You don't acknowledge your own order — there is no one else to signal to.
+                        canAcknowledge={canAcknowledge && order.createdBy !== user?.id}
+                        canChangeStatus={canChangeStatus}
+                        historyEvents={data.statusEventsByOrder.get(order.id) ?? []}
+                        onAcknowledge={() => void acknowledge(order.id)}
+                        onChangeStatus={(next) => void changeStatus(order.id, next)}
+                        onOpenMenu={() => setMenuOrder(order)}
+                        onOpenHistory={() => setHistoryOrderId(order.id)}
+                        onPressItem={(item) => setItemMenu({ item, order })}
+                        onPress={() =>
+                          router.push({ pathname: '/orders/[orderId]', params: { orderId: order.id } })
+                        }
+                      >
+                        {/* The order's own div: every reply and voice note lives right here, under
                       its order, regardless of what else happened on the board in between.
                       A reply to a reply is indented once more, directly beneath the message it
                       answers — the thread stays inside the div rather than being flung to the
                       bottom of the feed the way a chat app would. */}
-                    {threadOf(entry.replies).map(({ message, depth }) =>
-                      message.messageType === 'SYSTEM' ? (
-                        <SystemLine
-                          key={message.id}
-                          text={describeSystemEvent(message, language)}
-                          time={formatTime(message.createdAt)}
-                        />
-                      ) : (
-                        <MessageBubble
-                          key={message.id}
-                          message={message}
-                          attachments={data.attachmentsByMessage.get(message.id) ?? []}
-                          localUris={data.localUris}
-                          time={formatTime(message.createdAt)}
-                          isMine={message.authorId === user?.id}
-                          nested
-                          depth={depth}
-                          replyingToName={
-                            message.parentMessageId === null
-                              ? undefined
-                              : entry.replies.find((r) => r.id === message.parentMessageId)
-                                ?.authorName ?? undefined
-                          }
-                          onLongPress={
-                            message.authorId === user?.id ? () => unsend(message) : undefined
-                          }
-                        />
-                      ),
-                    )}
-                  </OrderFeedCard>
-                </NewOrderFlash>
-              );
-            }
+                        {threadOf(entry.replies).map(({ message, depth }) =>
+                          message.messageType === 'SYSTEM' ? (
+                            <SystemLine
+                              key={message.id}
+                              text={describeSystemEvent(message, language)}
+                              time={formatTime(message.createdAt)}
+                            />
+                          ) : (
+                            <MessageBubble
+                              key={message.id}
+                              message={message}
+                              attachments={data.attachmentsByMessage.get(message.id) ?? []}
+                              localUris={data.localUris}
+                              time={formatTime(message.createdAt)}
+                              isMine={message.authorId === user?.id}
+                              delivery={deliveryOf(message)}
+                              depth={depth}
+                              replyingToName={
+                                message.parentMessageId === null
+                                  ? undefined
+                                  : entry.replies.find((r) => r.id === message.parentMessageId)
+                                    ?.authorName ?? undefined
+                              }
+                              replyingToBody={
+                                message.parentMessageId === null
+                                  ? undefined
+                                  : entry.replies.find((r) => r.id === message.parentMessageId)
+                                    ?.body ?? undefined
+                              }
+                              onLongPress={
+                                message.authorId === user?.id ? () => unsend(message) : undefined
+                              }
+                            />
+                          ),
+                        )}
+                      </OrderFeedCard>
+                    </NewOrderFlash>
+                  );
+                }
 
-            case 'MESSAGE':
-              return (
-                <MessageBubble
-                  message={entry.message}
-                  attachments={data.attachmentsByMessage.get(entry.message.id) ?? []}
-                  localUris={data.localUris}
-                  time={formatTime(entry.message.createdAt)}
-                  isMine={entry.message.authorId === user?.id}
-                  nested={entry.nested}
-                  onLongPress={
-                    entry.message.authorId === user?.id ? () => unsend(entry.message) : undefined
-                  }
-                />
-              );
+                case 'MESSAGE': {
+                  const startsRun = runStarts.has(entry.key);
+                  return (
+                    <Animated.View entering={enter} layout={Layout.springify().damping(20)}>
+                      <MessageBubble
+                        message={entry.message}
+                        attachments={data.attachmentsByMessage.get(entry.message.id) ?? []}
+                        localUris={data.localUris}
+                        time={formatTime(entry.message.createdAt)}
+                        isMine={entry.message.authorId === user?.id}
+                        delivery={deliveryOf(entry.message)}
+                        showTail={startsRun}
+                        showAuthor={startsRun}
+                        onLongPress={
+                          entry.message.authorId === user?.id ? () => unsend(entry.message) : undefined
+                        }
+                      />
+                    </Animated.View>
+                  );
+                }
 
-            case 'SYSTEM':
-              return (
-                <SystemLine
-                  text={describeSystemEvent(entry.message, language)}
-                  time={formatTime(entry.message.createdAt)}
-                />
-              );
-          }
-        }}
-      />
-
-      {
-        replyTo !== null ? (
-          <View style={styles.replyBanner}>
-            <View style={styles.replyBar} />
-            <View style={styles.replyBody}>
-              <Text style={styles.replyName} numberOfLines={1}>
-                Replying to {replyTo.authorName ?? 'Member'}
-              </Text>
-              <Text style={styles.replyText} numberOfLines={1}>
-                {replyTo.body ?? 'Attachment'}
-              </Text>
-            </View>
-            <PressableScale onPress={() => setReplyTo(null)} hitSlop={8}>
-              <Ionicons name="close" size={18} color={colors.onSurfaceVariant} />
-            </PressableScale>
-          </View>
-        ) : null
-      }
-
-      <ComposeBar
-        language={language}
-        canPost={canPost}
-        canCreateOrder={canCreateOrder}
-        isRecording={recorder.isRecording}
-        recordingMs={recorder.durationMs}
-        recordingLevel={recorder.level}
-        onSend={(text) => void sendMessage(text)}
-        onNewOrder={() =>
-          router.push({ pathname: '/boards/[boardId]/create-order', params: { boardId } })
-        }
-        onStartRecording={() => void recorder.start()}
-        onStopRecording={() => void sendVoiceNote()}
-        onCancelRecording={() => void recorder.cancel()}
-        onAttach={() => void attach()}
-      />
-
-      {/* An ad-hoc line has no catalogue entry and therefore no recipe, so the sheet simply
-          does not open for one. */}
-      {
-        recipeFor !== null && recipeFor.item.menuItemId !== null ? (
-          <RecipeSheet
-            menuItemId={recipeFor.item.menuItemId}
-            menuItem={data.menuItems.get(recipeFor.item.menuItemId)}
-            pax={recipeFor.pax}
-            language={language}
-            onClose={() => setRecipeFor(null)}
+                case 'SYSTEM':
+                  return (
+                    <SystemLine
+                      text={describeSystemEvent(entry.message, language)}
+                      time={formatTime(entry.message.createdAt)}
+                    />
+                  );
+              }
+            }}
           />
-        ) : null
-      }
 
-      <OrderHistorySheet
-        isOpen={historyOrderId !== null}
-        onClose={() => setHistoryOrderId(null)}
-        orderNumber={
-          historyOrderId === null
-            ? null
-            : data.entries.find(
-              (e) => e.kind === 'ORDER' && e.order.id === historyOrderId,
-            )?.kind === 'ORDER'
-              ? (data.entries.find(
-                (e) => e.kind === 'ORDER' && e.order.id === historyOrderId,
-              ) as Extract<FeedEntry, { kind: 'ORDER' }>).order.orderNumber
-              : null
-        }
-        events={historyOrderId !== null ? data.statusEventsByOrder.get(historyOrderId) ?? [] : []}
-        language={language}
-      />
+          {
+            replyTo !== null ? (
+              <Animated.View entering={FadeInUp.duration(160)} style={styles.replyBanner}>
+                <View
+                  style={[
+                    styles.replyBar,
+                    { backgroundColor: waSenderColor(replyTo.authorName ?? 'Member') },
+                  ]}
+                />
+                <View style={styles.replyBody}>
+                  <Text
+                    style={[
+                      styles.replyName,
+                      { color: waSenderColor(replyTo.authorName ?? 'Member') },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {replyTo.authorId === user?.id ? 'You' : replyTo.authorName ?? 'Member'}
+                  </Text>
+                  <Text style={styles.replyText} numberOfLines={1}>
+                    {replyTo.body ?? 'Attachment'}
+                  </Text>
+                </View>
+                <PressableScale onPress={() => setReplyTo(null)} hitSlop={8}>
+                  <Ionicons name="close" size={19} color={wa.composeIcon} />
+                </PressableScale>
+              </Animated.View>
+            ) : null
+          }
 
-      <ActionSheet
-        isOpen={menuOrder !== null}
-        onClose={() => setMenuOrder(null)}
-        title={menuOrder?.orderNumber}
-        items={menuItems}
-      />
+          <ComposeBar
+            language={language}
+            canPost={canPost}
+            canCreateOrder={canCreateOrder}
+            isRecording={recorder.isRecording}
+            recordingMs={recorder.durationMs}
+            recordingLevel={recorder.level}
+            onSend={(text) => void sendMessage(text)}
+            onNewOrder={() =>
+              router.push({ pathname: '/boards/[boardId]/create-order', params: { boardId } })
+            }
+            onStartRecording={() => void recorder.start()}
+            onStopRecording={() => void sendVoiceNote()}
+            onCancelRecording={() => void recorder.cancel()}
+            onAttach={() => void attach()}
+            onTypingChange={announceTyping}
+          />
 
-      <ActionSheet
-        isOpen={itemMenu !== null}
-        onClose={() => setItemMenu(null)}
-        title={
-          itemMenu === null
-            ? undefined
-            : orderLineName(itemMenu.item, data.menuItems, language, 'Item')
-        }
-        items={buildItemMenu()}
-      />
+          {/* An ad-hoc line has no catalogue entry and therefore no recipe, so the sheet simply
+          does not open for one. */}
+          {
+            recipeFor !== null && recipeFor.item.menuItemId !== null ? (
+              <RecipeSheet
+                menuItemId={recipeFor.item.menuItemId}
+                menuItem={data.menuItems.get(recipeFor.item.menuItemId)}
+                pax={recipeFor.pax}
+                language={language}
+                onClose={() => setRecipeFor(null)}
+              />
+            ) : null
+          }
 
-      <PickerSheet
-        isOpen={assignFor !== null}
-        onClose={() => setAssignFor(null)}
-        title="Assign to"
-        searchable
-        options={[
-          { id: UNASSIGNED, label: 'Nobody (unassign)' },
-          ...data.members.map((member) => ({
-            id: member.userId,
-            label: member.userName ?? member.userId.slice(0, 8),
-            subtitle: member.boardRole,
-          })),
-        ]}
-        selectedId={assignFor?.assignedTo ?? UNASSIGNED}
-        onSelect={(option) => {
-          const order = assignFor;
-          if (order === null) return;
-          void assign(order, option.id === UNASSIGNED ? null : option.id);
-        }}
-      />
+          <OrderHistorySheet
+            isOpen={historyOrderId !== null}
+            onClose={() => setHistoryOrderId(null)}
+            orderNumber={
+              historyOrderId === null
+                ? null
+                : data.entries.find(
+                  (e) => e.kind === 'ORDER' && e.order.id === historyOrderId,
+                )?.kind === 'ORDER'
+                  ? (data.entries.find(
+                    (e) => e.kind === 'ORDER' && e.order.id === historyOrderId,
+                  ) as Extract<FeedEntry, { kind: 'ORDER' }>).order.orderNumber
+                  : null
+            }
+            events={historyOrderId !== null ? data.statusEventsByOrder.get(historyOrderId) ?? [] : []}
+            language={language}
+          />
 
-      <QuantitySheet
-        isOpen={editQtyFor !== null}
-        onClose={() => setEditQtyFor(null)}
-        itemName={
-          editQtyFor === null
-            ? ''
-            : orderLineName(editQtyFor.item, data.menuItems, language, 'Item')
-        }
-        unit={editQtyFor?.item.unit ?? 'NOS'}
-        quantity={editQtyFor?.item.quantity ?? 0}
-        onSave={(next) => {
-          const target = editQtyFor;
-          if (target === null) return;
-          void editQuantity(target.order, target.item, next);
-        }}
-      />
+          <ActionSheet
+            isOpen={menuOrder !== null}
+            onClose={() => setMenuOrder(null)}
+            title={menuOrder?.orderNumber}
+            items={menuItems}
+          />
 
-      {
-        !canPost && !canCreateOrder ? (
-          <View style={styles.readOnlyStrip}>
-            <Ionicons name="eye-outline" size={14} color={colors.onSurfaceVariant} />
-            <Text style={styles.readOnlyText}>
-              {language === 'hi' ? 'केवल देखने की अनुमति' : 'View only'}
-            </Text>
-          </View>
-        ) : null
-      }
-    </FeedBackground >
+          <ActionSheet
+            isOpen={itemMenu !== null}
+            onClose={() => setItemMenu(null)}
+            title={
+              itemMenu === null
+                ? undefined
+                : orderLineName(itemMenu.item, data.menuItems, language, 'Item')
+            }
+            items={buildItemMenu()}
+          />
+
+          <PickerSheet
+            isOpen={assignFor !== null}
+            onClose={() => setAssignFor(null)}
+            title="Assign to"
+            searchable
+            options={[
+              { id: UNASSIGNED, label: 'Nobody (unassign)' },
+              ...data.members.map((member) => ({
+                id: member.userId,
+                label: member.userName ?? member.userId.slice(0, 8),
+                subtitle: member.boardRole,
+              })),
+            ]}
+            selectedId={assignFor?.assignedTo ?? UNASSIGNED}
+            onSelect={(option) => {
+              const order = assignFor;
+              if (order === null) return;
+              void assign(order, option.id === UNASSIGNED ? null : option.id);
+            }}
+          />
+
+          <QuantitySheet
+            isOpen={editQtyFor !== null}
+            onClose={() => setEditQtyFor(null)}
+            itemName={
+              editQtyFor === null
+                ? ''
+                : orderLineName(editQtyFor.item, data.menuItems, language, 'Item')
+            }
+            unit={editQtyFor?.item.unit ?? 'NOS'}
+            quantity={editQtyFor?.item.quantity ?? 0}
+            onSave={(next) => {
+              const target = editQtyFor;
+              if (target === null) return;
+              void editQuantity(target.order, target.item, next);
+            }}
+          />
+
+        </FeedBackground>
+      </KeyboardAvoidingView>
+    </View>
   );
 
   /**
@@ -809,6 +931,18 @@ export default function BoardFeedScreen(): React.JSX.Element {
 
 /** Sentinel option id for "assign to nobody", which is a real choice, not an absence. */
 const UNASSIGNED = '__unassigned__';
+
+/**
+ * Delivery ticks from what the device actually knows.
+ *
+ * `syncSeq` is only stamped once the server has accepted the row, so zero means the message is
+ * still sitting in the outbox — the clock. Anything above zero has reached the server and every
+ * other member's next pull, which is a delivered double tick. Blue "read" ticks are deliberately
+ * never shown: there are no read receipts in this system, and faking them would be a lie.
+ */
+function deliveryOf(message: ThreadMessageDto): DeliveryState {
+  return message.syncSeq > 0 ? 'DELIVERED' : 'PENDING';
+}
 
 /**
  * Orders an order's replies so a reply-to-a-reply sits directly beneath the message it
@@ -955,46 +1089,33 @@ function formatTime(iso: string): string {
 }
 
 const styles = StyleSheet.create({
-  // A tinted "wallpaper" behind the feed, distinct from the white message/order cards sitting
-  // on top of it — otherwise a white card on a near-white page has no edge to read against.
-  container: { flex: 1, backgroundColor: colors.surfaceContainer },
+  screen: { flex: 1, backgroundColor: wa.wallpaper },
+  flex: { flex: 1 },
+  container: { flex: 1, backgroundColor: wa.wallpaper },
   list: {
-    paddingHorizontal: spacing.marginMobile,
-    paddingTop: spacing[3],
-    paddingBottom: spacing[4],
+    paddingHorizontal: 4,
+    paddingTop: 8,
+    paddingBottom: 10,
     flexGrow: 1,
   },
-  readOnlyStrip: {
-    position: 'absolute',
-    top: spacing[2],
-    alignSelf: 'center',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[1],
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[1],
-    borderRadius: 999,
-    backgroundColor: colors.surfaceContainerHigh,
-  },
-  readOnlyText: { fontFamily: fonts.sans, fontSize: typography.bodySm.size, color: colors.onSurfaceVariant },
 
+  /* The quoted strip above the composer, drawn on the compose bar's own grey. */
   replyBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[2],
-    paddingHorizontal: spacing.marginMobile,
-    paddingVertical: spacing[2],
-    backgroundColor: colors.surfaceContainerLowest,
-    borderTopWidth: 1,
-    borderTopColor: colors.outlineVariant,
+    gap: 8,
+    marginHorizontal: 6,
+    marginTop: 6,
+    paddingLeft: 0,
+    paddingRight: 10,
+    paddingVertical: 6,
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+    backgroundColor: wa.composeInputBg,
+    overflow: 'hidden',
   },
-  replyBar: { width: 3, alignSelf: 'stretch', borderRadius: 2, backgroundColor: colors.primary },
-  replyBody: { flex: 1 },
-  replyName: {
-    fontFamily: fonts.sansSemibold,
-    fontSize: typography.bodySm.size,
-    fontWeight: '600',
-    color: colors.primary,
-  },
-  replyText: { fontFamily: fonts.sans, fontSize: typography.bodySm.size, color: colors.outline },
+  replyBar: { width: 4, alignSelf: 'stretch', backgroundColor: wa.replyBarMine },
+  replyBody: { flex: 1, paddingVertical: 2 },
+  replyName: { fontSize: 13.5, fontWeight: '600' },
+  replyText: { fontSize: 13.5, color: wa.quotedText, marginTop: 1 },
 });

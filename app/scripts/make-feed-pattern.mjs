@@ -1,23 +1,19 @@
 /**
  * Generates `assets/feed-pattern.png` — the tiled doodle wallpaper behind the board feed.
  *
- * This exists so the repository always contains a valid asset at that path and the bundle
- * never breaks on a missing `require`. It is a stand-in: replace the PNG with the real
- * artwork whenever you have it, at the same path and no code change is needed.
- *
- * Hand-rolled PNG encoding (zlib + CRC) rather than a drawing library, because pulling a
- * canvas dependency into the app workspace to produce one static file is a poor trade.
+ * Reproduces WhatsApp's light-theme chat wallpaper: warm paper `#EFEAE2` scattered with faint
+ * `#DCD3C6` line doodles. Hand-rolled PNG encoding (zlib + CRC) rather than a drawing library,
+ * because pulling a canvas dependency into the app workspace to produce one static file is a
+ * poor trade.
  */
 import { deflateSync } from 'node:zlib';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const SIZE = 256;
-// Warm paper, with the doodles only a few shades darker — the pattern has to stay behind the
-// content, not compete with it.
-const BG = [0xf3, 0xf0, 0xe9];
-const INK = [0xe6, 0xe1, 0xd6];
+const SIZE = 300;
+const BG = [0xef, 0xea, 0xe2];
+const INK = [0xdc, 0xd3, 0xc6];
 
 const pixels = Buffer.alloc(SIZE * SIZE * 3);
 for (let i = 0; i < SIZE * SIZE; i += 1) {
@@ -27,7 +23,6 @@ for (let i = 0; i < SIZE * SIZE; i += 1) {
 }
 
 function plot(x, y) {
-  // Wrap, so every shape tiles seamlessly across the edges.
   const px = ((Math.round(x) % SIZE) + SIZE) % SIZE;
   const py = ((Math.round(y) % SIZE) + SIZE) % SIZE;
   const offset = (py * SIZE + px) * 3;
@@ -36,63 +31,136 @@ function plot(x, y) {
   pixels[offset + 2] = INK[2];
 }
 
-function circle(cx, cy, r) {
-  const steps = Math.max(24, Math.ceil(2 * Math.PI * r));
-  for (let i = 0; i < steps; i += 1) {
-    const a = (i / steps) * Math.PI * 2;
+function line(x1, y1, x2, y2) {
+  const steps = Math.max(2, Math.ceil(Math.hypot(x2 - x1, y2 - y1) * 2));
+  for (let i = 0; i <= steps; i += 1) {
+    const t = i / steps;
+    plot(x1 + (x2 - x1) * t, y1 + (y2 - y1) * t);
+  }
+}
+
+function arc(cx, cy, r, from, to) {
+  const steps = Math.max(16, Math.ceil(Math.abs(to - from) * r * 2));
+  for (let i = 0; i <= steps; i += 1) {
+    const a = from + ((to - from) * i) / steps;
     plot(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
-    plot(cx + Math.cos(a) * (r + 0.5), cy + Math.sin(a) * (r + 0.5));
   }
 }
 
-function roundedBox(cx, cy, w, h) {
-  for (let x = -w; x <= w; x += 0.5) {
-    plot(cx + x, cy - h);
-    plot(cx + x, cy + h);
-  }
-  for (let y = -h; y <= h; y += 0.5) {
-    plot(cx - w, cy + y);
-    plot(cx + w, cy + y);
-  }
+const circle = (cx, cy, r) => arc(cx, cy, r, 0, Math.PI * 2);
+
+function roundedRect(cx, cy, w, h, r) {
+  line(cx - w + r, cy - h, cx + w - r, cy - h);
+  line(cx - w + r, cy + h, cx + w - r, cy + h);
+  line(cx - w, cy - h + r, cx - w, cy + h - r);
+  line(cx + w, cy - h + r, cx + w, cy + h - r);
+  arc(cx - w + r, cy - h + r, r, Math.PI, Math.PI * 1.5);
+  arc(cx + w - r, cy - h + r, r, Math.PI * 1.5, Math.PI * 2);
+  arc(cx + w - r, cy + h - r, r, 0, Math.PI * 0.5);
+  arc(cx - w + r, cy + h - r, r, Math.PI * 0.5, Math.PI);
 }
 
-function squiggle(cx, cy, w) {
-  for (let x = -w; x <= w; x += 0.5) {
-    plot(cx + x, cy + Math.sin((x / w) * Math.PI * 2) * 3);
-  }
+/* ------------------------------------------------------------ doodle set */
+
+function chatBubble(cx, cy, s) {
+  roundedRect(cx, cy, s, s * 0.72, s * 0.3);
+  line(cx - s * 0.35, cy + s * 0.72, cx - s * 0.15, cy + s * 1.1);
+  line(cx - s * 0.15, cy + s * 1.1, cx - s * 0.05, cy + s * 0.72);
+}
+
+function heart(cx, cy, s) {
+  arc(cx - s * 0.5, cy - s * 0.2, s * 0.5, Math.PI, Math.PI * 2);
+  arc(cx + s * 0.5, cy - s * 0.2, s * 0.5, Math.PI, Math.PI * 2);
+  line(cx - s, cy - s * 0.2, cx, cy + s);
+  line(cx + s, cy - s * 0.2, cx, cy + s);
+}
+
+function camera(cx, cy, s) {
+  roundedRect(cx, cy, s, s * 0.68, s * 0.22);
+  circle(cx, cy + s * 0.05, s * 0.34);
+  line(cx - s * 0.4, cy - s * 0.68, cx - s * 0.25, cy - s * 0.95);
+  line(cx + s * 0.1, cy - s * 0.68, cx - s * 0.25, cy - s * 0.95);
+  line(cx - s * 0.4, cy - s * 0.68, cx + s * 0.1, cy - s * 0.68);
+}
+
+function musicNote(cx, cy, s) {
+  circle(cx - s * 0.45, cy + s * 0.7, s * 0.32);
+  circle(cx + s * 0.6, cy + s * 0.45, s * 0.32);
+  line(cx - s * 0.14, cy + s * 0.7, cx - s * 0.14, cy - s * 0.8);
+  line(cx + s * 0.9, cy + s * 0.45, cx + s * 0.9, cy - s * 1.05);
+  line(cx - s * 0.14, cy - s * 0.8, cx + s * 0.9, cy - s * 1.05);
 }
 
 function star(cx, cy, r) {
   for (let i = 0; i < 5; i += 1) {
     const a1 = (i / 5) * Math.PI * 2 - Math.PI / 2;
     const a2 = ((i + 2) / 5) * Math.PI * 2 - Math.PI / 2;
-    for (let t = 0; t <= 1; t += 0.02) {
-      plot(
-        cx + (Math.cos(a1) * r) * (1 - t) + (Math.cos(a2) * r) * t,
-        cy + (Math.sin(a1) * r) * (1 - t) + (Math.sin(a2) * r) * t,
-      );
-    }
+    line(cx + Math.cos(a1) * r, cy + Math.sin(a1) * r, cx + Math.cos(a2) * r, cy + Math.sin(a2) * r);
   }
+}
+
+function cup(cx, cy, s) {
+  line(cx - s * 0.7, cy - s * 0.6, cx - s * 0.5, cy + s * 0.8);
+  line(cx + s * 0.7, cy - s * 0.6, cx + s * 0.5, cy + s * 0.8);
+  line(cx - s * 0.5, cy + s * 0.8, cx + s * 0.5, cy + s * 0.8);
+  line(cx - s * 0.7, cy - s * 0.6, cx + s * 0.7, cy - s * 0.6);
+  arc(cx + s * 0.75, cy, s * 0.4, -Math.PI * 0.5, Math.PI * 0.5);
+  line(cx - s * 0.25, cy - s * 1.3, cx - s * 0.25, cy - s * 0.8);
+  line(cx + s * 0.2, cy - s * 1.3, cx + s * 0.2, cy - s * 0.8);
+}
+
+function balloon(cx, cy, s) {
+  circle(cx, cy, s * 0.7);
+  line(cx, cy + s * 0.7, cx, cy + s * 1.5);
+  line(cx - s * 0.15, cy + s * 1.5, cx + s * 0.15, cy + s * 1.5);
+}
+
+function leaf(cx, cy, s) {
+  arc(cx, cy, s, -Math.PI * 0.75, -Math.PI * 0.05);
+  arc(cx, cy, s, Math.PI * 0.25, Math.PI * 0.95);
+  line(cx - s * 0.7, cy + s * 0.7, cx + s * 0.7, cy - s * 0.7);
+}
+
+function smiley(cx, cy, r) {
+  circle(cx, cy, r);
+  circle(cx - r * 0.35, cy - r * 0.25, r * 0.1);
+  circle(cx + r * 0.35, cy - r * 0.25, r * 0.1);
+  arc(cx, cy + r * 0.05, r * 0.5, Math.PI * 0.2, Math.PI * 0.8);
+}
+
+function plane(cx, cy, s) {
+  line(cx - s, cy, cx + s, cy - s * 0.5);
+  line(cx + s, cy - s * 0.5, cx - s * 0.2, cy + s * 0.8);
+  line(cx - s * 0.2, cy + s * 0.8, cx - s * 0.35, cy + s * 0.1);
+  line(cx - s * 0.35, cy + s * 0.1, cx - s, cy);
+}
+
+function clock(cx, cy, r) {
+  circle(cx, cy, r);
+  line(cx, cy, cx, cy - r * 0.6);
+  line(cx, cy, cx + r * 0.45, cy);
 }
 
 // A fixed, hand-placed scatter rather than a random one, so regenerating the file produces
 // byte-identical output and does not churn in git.
-circle(34, 30, 13);
-star(120, 26, 10);
-roundedBox(200, 34, 14, 9);
-squiggle(70, 74, 16);
-circle(160, 84, 9);
-star(238, 92, 8);
-roundedBox(30, 118, 10, 13);
-squiggle(190, 132, 20);
-circle(108, 140, 15);
-star(46, 186, 9);
-roundedBox(140, 196, 16, 10);
-circle(216, 176, 11);
-squiggle(96, 226, 14);
-star(178, 240, 8);
-circle(20, 246, 10);
-roundedBox(250, 220, 9, 12);
+chatBubble(40, 34, 12);
+heart(128, 28, 9);
+camera(214, 40, 12);
+musicNote(276, 108, 9);
+star(58, 108, 11);
+smiley(152, 104, 13);
+cup(232, 152, 11);
+plane(36, 176, 12);
+balloon(112, 176, 11);
+leaf(196, 214, 12);
+clock(272, 224, 12);
+chatBubble(76, 248, 11);
+heart(150, 268, 9);
+star(226, 284, 10);
+smiley(292, 20, 11);
+musicNote(6, 254, 9);
+camera(120, 214, 10);
+cup(20, 82, 9);
 
 // PNG: each scanline is prefixed with a filter byte (0 = None).
 const raw = Buffer.alloc(SIZE * (SIZE * 3 + 1));

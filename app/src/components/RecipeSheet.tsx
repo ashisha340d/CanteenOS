@@ -4,6 +4,7 @@ import type { MenuItemDto, ScaledRecipeDto } from '@menuboard/shared';
 import { scaleRecipe } from '@menuboard/shared';
 import { recipeRepository } from '../db/repositories';
 import { ThemedBottomSheet } from './BottomSheet';
+import { MenuItemImage } from './MenuItemImage';
 import { LabelCaps } from './feed/FeedPrimitives';
 import { menuItemName, t, tCount, type Language } from '../i18n';
 import { colors, radii, spacing, typography, fonts } from '../theme/tokens';
@@ -58,6 +59,7 @@ export function RecipeSheet({
   return (
     <ThemedBottomSheet isOpen onClose={onClose} snapPoints={['55%', '90%']}>
       <View style={styles.header}>
+        {menuItem !== undefined ? <MenuItemImage item={menuItem} size={44} /> : null}
         <Text style={styles.title}>{title}</Text>
         <View style={styles.paxChip}>
           <Text style={styles.paxChipText}>{tCount('forPax', pax, language)}</Text>

@@ -110,6 +110,11 @@ export interface MenuItemRow {
   /** Devanagari unit; null falls back to `unit`. */
   unit_hi: string | null;
   image_path: string | null;
+  /** Media library asset id; the device mints its own signed URL when it renders it. */
+  primary_media_id: string | null;
+  /** Used only while the item has zero ACTIVE variants. */
+  base_price: number | null;
+  always_available: number;
   status: string;
   sort_order: number;
   created_at: string;
@@ -169,6 +174,14 @@ export interface OrderItemRow {
   cancelled_by: string | null;
   /** On a cancelled line, points at the line that superseded it. */
   replaced_by_item_id: string | null;
+  /** Menu Master snapshot frozen at sale time; never recomputed from the current master. */
+  menu_id: string | null;
+  variant_id: string | null;
+  variant_name: string | null;
+  unit_price: number | null;
+  tax_amount: number;
+  discount_amount: number;
+  line_total: number | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;

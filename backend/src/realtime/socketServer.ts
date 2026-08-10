@@ -75,7 +75,11 @@ export function createSocketServer(httpServer: HttpServer): SocketServer {
   });
 
   io.on('connection', (socket) => {
-    void onConnection(socket);
+    // A rejection here would be an unhandled rejection on the process, not a failed request:
+    // socket handlers have no error boundary above them, so each one catches its own.
+    onConnection(socket).catch((error: unknown) => {
+      logger.warn('Socket connection setup failed', { socketId: socket.id }, error);
+    });
   });
 
   realtime.attach(io);
@@ -108,12 +112,40 @@ async function onConnection(socket: Socket): Promise<void> {
 
   // Explicit join, for a board added during the session.
   socket.on(SOCKET_EVENTS.JOIN_BOARD, (payload: unknown) => {
-    void joinBoard(socket, auth, payload);
+    joinBoard(socket, auth, payload).catch((error: unknown) => {
+      logger.warn('Socket board room join failed', { userId: auth.userId }, error);
+    });
   });
 
   socket.on(SOCKET_EVENTS.LEAVE_BOARD, (payload: unknown) => {
     const boardId = readBoardId(payload);
-    if (boardId !== null) void socket.leave(SOCKET_ROOMS.board(boardId));
+    if (boardId === null) return;
+    // `leave` returns void or a promise depending on the adapter, so normalise before catching.
+    Promise.resolve(socket.leave(SOCKET_ROOMS.board(boardId))).catch((error: unknown) => {
+      logger.warn('Socket board room leave failed', { userId: auth.userId, boardId }, error);
+    });
+  });
+
+  /**
+   * Typing presence. Relayed to the rest of the board room and never written anywhere — the
+   * room membership established above is the authorisation, so a socket can only announce
+   * itself on a board it already belongs to.
+   */
+  socket.on(SOCKET_EVENTS.TYPING_SET, (payload: unknown) => {
+    const boardId = readBoardId(payload);
+    if (boardId === null) return;
+    if (!socket.rooms.has(SOCKET_ROOMS.board(boardId))) return;
+
+    const typing =
+      typeof payload === 'object' &&
+      payload !== null &&
+      (payload as { typing?: unknown }).typing === true;
+
+    socket.to(SOCKET_ROOMS.board(boardId)).emit(SOCKET_EVENTS.TYPING, {
+      boardId,
+      userId: auth.userId,
+      typing,
+    });
   });
 
   socket.on('disconnect', (reason) => {

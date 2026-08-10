@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { colors, radii, spacing, typography, fonts } from '../../theme/tokens';
+import { wa } from '../../theme/whatsapp';
 
 /**
  * Small shared pieces of the board feed.
@@ -60,13 +61,13 @@ export function DataRow({
   );
 }
 
-/** The "TODAY" / date rule between groups of feed entries. */
+/** The floating "TODAY" / date chip between groups of feed entries, as WhatsApp draws it. */
 export function DateSeparator({ label }: { label: string }): React.JSX.Element {
   return (
     <View style={styles.separator}>
-      <View style={styles.separatorLine} />
-      <Text style={styles.separatorLabel}>{label}</Text>
-      <View style={styles.separatorLine} />
+      <View style={styles.datePill}>
+        <Text style={styles.datePillLabel}>{label.toUpperCase()}</Text>
+      </View>
     </View>
   );
 }
@@ -176,21 +177,23 @@ const styles = StyleSheet.create({
   dataRowLabel: { width: 64 },
   dataRowValue: { flex: 1, marginLeft: spacing[2] },
 
-  separator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing[3],
-    marginVertical: spacing[4],
+  separator: { alignItems: 'center', marginVertical: spacing[2] },
+  datePill: {
+    backgroundColor: wa.datePillBg,
+    borderRadius: 7.5,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    elevation: 1,
+    shadowColor: '#0B141A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.13,
+    shadowRadius: 0.5,
   },
-  separatorLine: { height: 1, width: 56, backgroundColor: colors.outlineVariant },
-  separatorLabel: {
-    fontFamily: fonts.sansBold,
-    fontSize: typography.labelCaps.size,
-    letterSpacing: typography.labelCaps.letterSpacing,
-    fontWeight: typography.labelCaps.weight,
-    color: colors.outline,
-    textTransform: 'uppercase',
+  datePillLabel: {
+    fontSize: 12.2,
+    fontWeight: '500',
+    letterSpacing: 0.2,
+    color: wa.datePillText,
   },
 
   avatar: {

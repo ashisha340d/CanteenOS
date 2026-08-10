@@ -33,7 +33,13 @@ export default function SettingsScreen(): React.JSX.Element {
   }, [refresh]);
 
   const onLogout = async (): Promise<void> => {
-    await logout();
+    // Leaving the user stranded on a signed-out session is worse than a failed server-side
+    // revoke, so the redirect happens either way.
+    try {
+      await logout();
+    } catch (error) {
+      console.warn('[AUTH] Logout did not complete cleanly', error);
+    }
     router.replace('/login');
   };
 

@@ -3,6 +3,7 @@ import { SOCKET_EVENTS } from '@menuboard/shared';
 import { API_BASE_URL, performRefresh } from '../api/client';
 import { secureTokenStore } from '../utils/secureTokenStore';
 import { useSyncStatusStore } from '../state/syncStatusStore';
+import { useTypingStore } from '../state/typingStore';
 
 // Derived from the same platform-resolved API_BASE_URL the REST client uses, so the socket
 // host follows apiBaseUrlWeb on web instead of always falling back to the Android emulator alias.
@@ -73,6 +74,17 @@ export function connectSocket(): void {
       onPullRequest?.();
     });
   }
+
+  // Presence, not data: applied straight to the typing store rather than triggering a pull.
+  socket.on(SOCKET_EVENTS.TYPING, (payload: { boardId?: string; userId?: string; typing?: boolean }) => {
+    if (typeof payload?.boardId !== 'string' || typeof payload?.userId !== 'string') return;
+    useTypingStore.getState().setTyping(payload.boardId, payload.userId, payload.typing === true);
+  });
+}
+
+/** Announces (or withdraws) the signed-in user's typing state on a board. */
+export function emitTyping(boardId: string, typing: boolean): void {
+  socket?.emit(SOCKET_EVENTS.TYPING_SET, { boardId, typing });
 }
 
 export function disconnectSocket(): void {

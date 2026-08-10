@@ -30,23 +30,51 @@ export async function runPushDrain(): Promise<void> {
   if (rows.length === 0) return;
 
   const deviceId = await getOrCreateDeviceId();
-  const items: SyncPushItem[] = rows.map((row) => ({
-    clientOpId: row.id,
-    entity: row.entity as PushableEntity,
-    entityId: row.entity_id,
-    op: row.op as SyncOp,
-    payload: row.payload ? (JSON.parse(row.payload) as Record<string, unknown>) : null,
-    clientTimestamp: row.created_at,
-    baseRevision: row.base_revision ?? undefined,
-  }));
+
+  // A row whose payload will not parse can never be pushed, so retrying it forever would wedge
+  // the whole outbox behind it (the drain is ordered by sequence). Drop it here instead, and
+  // surface it, rather than letting the throw escape and abort every other queued change.
+  const drainable: SyncQueueRow[] = [];
+  const items: SyncPushItem[] = [];
+  for (const row of rows) {
+    let payload: Record<string, unknown> | null = null;
+    if (row.payload) {
+      try {
+        payload = JSON.parse(row.payload) as Record<string, unknown>;
+      } catch {
+        await discardCorruptQueueRow(row);
+        continue;
+      }
+    }
+    drainable.push(row);
+    items.push({
+      clientOpId: row.id,
+      entity: row.entity as PushableEntity,
+      entityId: row.entity_id,
+      op: row.op as SyncOp,
+      payload,
+      clientTimestamp: row.created_at,
+      baseRevision: row.base_revision ?? undefined,
+    });
+  }
+
+  if (items.length === 0) return;
 
   try {
     const response = await syncApi.push({ deviceId, items });
-    await handlePushResponse(response.results, rows);
+    await handlePushResponse(response.results, drainable);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Network or server error';
-    await handleBatchFailure(rows, message);
+    await handleBatchFailure(drainable, message);
   }
+}
+
+async function discardCorruptQueueRow(row: SyncQueueRow): Promise<void> {
+  const message = `Discarded unreadable queued change for ${row.entity} ${row.entity_id}`;
+  console.warn(`[SYNC] ${message}`);
+  await syncQueueRepository.remove(row.id);
+  await syncQueueRepository.updateEntitySyncState(row.entity, row.entity_id, 'FAILED', message);
+  useSyncStatusStore.getState().setError(message);
 }
 
 async function handlePushResponse(

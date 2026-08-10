@@ -42,8 +42,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ status: 'signedOut', user: null, capabilities: [] });
     });
 
-    const remember = await settingsRepository.get<boolean>(SETTINGS_KEYS.REMEMBER_LOGIN);
-    const refreshToken = await secureTokenStore.getRefreshToken();
+    // Anything that throws before `isBootstrapping` is cleared leaves the app on its splash
+    // screen forever, so reading the stored session is guarded too — an unreadable local
+    // session means "signed out", not "never finish starting".
+    let remember: boolean | null = null;
+    let refreshToken: string | null = null;
+    try {
+      remember = await settingsRepository.get<boolean>(SETTINGS_KEYS.REMEMBER_LOGIN);
+      refreshToken = await secureTokenStore.getRefreshToken();
+    } catch {
+      set({ status: 'signedOut', isBootstrapping: false });
+      return;
+    }
+
     if (!remember || !refreshToken) {
       set({ status: 'signedOut', isBootstrapping: false });
       return;
@@ -64,7 +75,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
       void registerPushToken();
     } catch {
-      await secureTokenStore.clear();
+      await secureTokenStore.clear().catch(() => undefined);
       set({ status: 'signedOut', isBootstrapping: false });
     }
   },

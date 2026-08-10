@@ -63,6 +63,13 @@ function toOrderItemDto(row: OrderItemRow): OrderItemDto {
     cancelledAt: row.cancelled_at,
     cancelledBy: row.cancelled_by,
     replacedByItemId: row.replaced_by_item_id,
+    menuId: row.menu_id,
+    variantId: row.variant_id,
+    variantName: row.variant_name,
+    unitPrice: row.unit_price,
+    taxAmount: row.tax_amount ?? 0,
+    discountAmount: row.discount_amount ?? 0,
+    lineTotal: row.line_total,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     deletedAt: row.deleted_at,
@@ -94,6 +101,11 @@ function orderToPayload(order: OrderDto, items: OrderItemDto[]): Record<string, 
       notes: i.notes,
       mentionedUserIds: i.mentionedUserIds,
       sortOrder: i.sortOrder,
+      // Which menu/variant the line was ordered from. The server resolves and freezes the
+      // name/price snapshot from these, so dropping them here would silently unprice the line.
+      menuId: i.menuId,
+      variantId: i.variantId,
+      discountAmount: i.discountAmount,
     })),
   };
 }
@@ -156,9 +168,10 @@ export const orderRepository = {
         await db.runAsync(
           `INSERT INTO order_items (id, order_id, menu_item_id, custom_item_name, quantity,
              unit, notes, mentioned_user_ids, sort_order, cancelled_at, cancelled_by,
-             replaced_by_item_id, created_at, updated_at, deleted_at, revision,
+             replaced_by_item_id, menu_id, variant_id, variant_name, unit_price, tax_amount,
+             discount_amount, line_total, created_at, updated_at, deleted_at, revision,
              server_sync_seq, sync_state)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'SYNCED')
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'SYNCED')
            ON CONFLICT(id) DO UPDATE SET
              menu_item_id = excluded.menu_item_id,
              custom_item_name = excluded.custom_item_name, quantity = excluded.quantity,
@@ -166,13 +179,19 @@ export const orderRepository = {
              mentioned_user_ids = excluded.mentioned_user_ids, sort_order = excluded.sort_order,
              cancelled_at = excluded.cancelled_at, cancelled_by = excluded.cancelled_by,
              replaced_by_item_id = excluded.replaced_by_item_id,
+             menu_id = excluded.menu_id, variant_id = excluded.variant_id,
+             variant_name = excluded.variant_name, unit_price = excluded.unit_price,
+             tax_amount = excluded.tax_amount, discount_amount = excluded.discount_amount,
+             line_total = excluded.line_total,
              updated_at = excluded.updated_at, deleted_at = excluded.deleted_at,
              revision = excluded.revision, server_sync_seq = excluded.server_sync_seq,
              sync_state = 'SYNCED'`,
           [
             i.id, i.orderId, i.menuItemId, i.customItemName, i.quantity, i.unit, i.notes,
             toJsonArray(i.mentionedUserIds), i.sortOrder, i.cancelledAt, i.cancelledBy,
-            i.replacedByItemId, i.createdAt, i.updatedAt,
+            i.replacedByItemId, i.menuId ?? null, i.variantId ?? null, i.variantName ?? null,
+            i.unitPrice ?? null, i.taxAmount ?? 0, i.discountAmount ?? 0, i.lineTotal ?? null,
+            i.createdAt, i.updatedAt,
             i.deletedAt, i.revision, i.syncSeq,
           ],
         );
@@ -380,6 +399,15 @@ export const orderRepository = {
       cancelledAt: null,
       cancelledBy: null,
       replacedByItemId: null,
+      menuId: item.menuId ?? null,
+      variantId: item.variantId ?? null,
+      // The server owns the price snapshot: it resolves variantId to a name/price and computes
+      // the totals when the push lands, and the pull writes them back over these placeholders.
+      variantName: null,
+      unitPrice: null,
+      taxAmount: 0,
+      discountAmount: item.discountAmount ?? 0,
+      lineTotal: null,
       createdAt: now,
       updatedAt: now,
       deletedAt: null,
@@ -404,12 +432,14 @@ export const orderRepository = {
       for (const item of items) {
         await db.runAsync(
           `INSERT INTO order_items (id, order_id, menu_item_id, custom_item_name, quantity,
-             unit, notes, mentioned_user_ids, sort_order, created_at, updated_at, deleted_at,
+             unit, notes, mentioned_user_ids, sort_order, menu_id, variant_id, discount_amount,
+             created_at, updated_at, deleted_at,
              revision, server_sync_seq, sync_state)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, 0, 'PENDING')`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, 0, 'PENDING')`,
           [
             item.id, item.orderId, item.menuItemId, item.customItemName, item.quantity,
             item.unit, item.notes, toJsonArray(item.mentionedUserIds), item.sortOrder,
+            item.menuId, item.variantId, item.discountAmount,
             item.createdAt, item.updatedAt,
           ],
         );
@@ -482,6 +512,13 @@ export const orderRepository = {
         cancelledAt: null,
         cancelledBy: null,
         replacedByItemId: null,
+        menuId: item.menuId ?? null,
+        variantId: item.variantId ?? null,
+        variantName: null,
+        unitPrice: null,
+        taxAmount: 0,
+        discountAmount: item.discountAmount ?? 0,
+        lineTotal: null,
         createdAt: now,
         updatedAt: now,
         deletedAt: null,
