@@ -8,6 +8,7 @@ import { settingsRepository, SETTINGS_KEYS, userRepository } from '../db/reposit
 import { populateInitialData } from '../sync/populateFromServer';
 import { registerPushToken } from '../utils/pushNotifications';
 import { nowIso } from '../utils/date';
+import { useLanguageStore } from './languageStore';
 
 interface AuthState {
   status: 'unknown' | 'signedOut' | 'signedIn';
@@ -73,6 +74,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         mustChangePassword: me.user.mustChangePassword,
         isBootstrapping: false,
       });
+      void useLanguageStore.getState().load(me.user.role);
       void registerPushToken();
     } catch {
       await secureTokenStore.clear().catch(() => undefined);
@@ -123,6 +125,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       capabilities: response.capabilities,
       mustChangePassword: response.user.mustChangePassword,
     });
+    void useLanguageStore.getState().load(response.user.role);
     void registerPushToken();
 
     if (!response.user.mustChangePassword) {

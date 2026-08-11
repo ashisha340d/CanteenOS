@@ -23,6 +23,28 @@ export const Capability = {
   MASTER_READ: 'master.read',
   MASTER_WRITE: 'master.write',
 
+  /** Read the HSN/SAC classification master and tax profiles. Everyone who reads masters. */
+  TAX_READ: 'tax.read',
+  /** Create/edit/deactivate Tax Profiles. Admin only. */
+  TAX_WRITE: 'tax.write',
+  /** Run "Sync GST Master" against the official GST/GSTN dataset. Admin only. */
+  TAX_SYNC: 'tax.sync',
+  /** Assign an HSN/SAC code that is not offered by the synchronized master. Admin only. */
+  TAX_OVERRIDE: 'tax.override',
+
+  /** See your own task list and the team's current activity. Everyone. */
+  TASK_READ: 'task.read',
+  /**
+   * Create a task for yourself. User, Manager and Admin only — deliberately withheld from
+   * Employee (who works what they are given, never invents their own line item) and from
+   * Super Admin (who oversees the roster rather than carrying personal work on it).
+   */
+  TASK_SELF: 'task.self',
+  /** Hand work to somebody else — User, Manager and Admin, never Super Admin or Employee. */
+  TASK_ASSIGN: 'task.assign',
+  /** Start, stop and finish a task already assigned to you. Everyone. */
+  TASK_WORK: 'task.work',
+
   BOARD_READ_ALL: 'board.read.all',
   BOARD_CREATE: 'board.create',
   BOARD_UPDATE: 'board.update',
@@ -31,6 +53,20 @@ export const Capability = {
   BOARD_MEMBER_MANAGE: 'board.member.manage',
   /** Assign members on *any* board, member or not. Super Admin only. */
   BOARD_MEMBER_MANAGE_ANY: 'board.member.manage.any',
+
+  /** Read the Entity master — customers, employees, vendors. Everyone who reads masters. */
+  ENTITY_READ: 'entity.read',
+  /** Create/edit/deactivate an entity. Manager and above; the counter registers walk-ins. */
+  ENTITY_WRITE: 'entity.write',
+
+  /** See the POS dashboard and open tickets. */
+  POS_READ: 'pos.read',
+  /** Take an order: create, edit, schedule, hold as draft. */
+  POS_OPERATE: 'pos.operate',
+  /** Settle a ticket — record payment and close the sale. */
+  POS_CHECKOUT: 'pos.checkout',
+  /** Cancel an open ticket or reverse a completed sale. Manager and above. */
+  POS_VOID: 'pos.void',
 
   ORDER_READ: 'order.read',
   ORDER_CREATE: 'order.create',
@@ -79,14 +115,38 @@ export type Capability = (typeof Capability)[keyof typeof Capability];
  * composition means a capability can never be granted to a Manager but forgotten for an
  * Admin.
  */
+/**
+ * Removes capabilities from an already-composed list. The roles otherwise nest strictly
+ * additively (each tier is the one below plus its own grants); Task assignment is the one
+ * place the specification carves out an exception — Super Admin inherits everything else an
+ * Admin holds but must not create or hand out task work — so composition alone cannot express
+ * it and this is the one place a tier subtracts from what it would otherwise inherit.
+ */
+function without(list: readonly Capability[], ...remove: Capability[]): Capability[] {
+  const excluded = new Set<Capability>(remove);
+  return list.filter((capability) => !excluded.has(capability));
+}
+
 const EMPLOYEE_CAPABILITIES: readonly Capability[] = [
   Capability.MASTER_READ,
+  Capability.TAX_READ,
+  Capability.TASK_READ,
+  Capability.TASK_WORK,
   Capability.SYNC_USE,
 ];
 
 const USER_CAPABILITIES: readonly Capability[] = [
   ...EMPLOYEE_CAPABILITIES,
   Capability.RECIPE_READ,
+  // A counter operator is an ordinary USER: they take and settle sales, but never author the
+  // entity master and never reverse a completed one.
+  Capability.ENTITY_READ,
+  Capability.POS_READ,
+  Capability.POS_OPERATE,
+  Capability.POS_CHECKOUT,
+  // A User raises their own to-dos and may hand work to an Employee, same as a Manager.
+  Capability.TASK_SELF,
+  Capability.TASK_ASSIGN,
 ];
 
 const MANAGER_CAPABILITIES: readonly Capability[] = [
@@ -98,6 +158,8 @@ const MANAGER_CAPABILITIES: readonly Capability[] = [
   Capability.ORDER_ASSIGN,
   Capability.SHOPPING_LIST_READ,
   Capability.SHOPPING_LIST_GENERATE,
+  Capability.ENTITY_WRITE,
+  Capability.POS_VOID,
 ];
 
 const ADMIN_CAPABILITIES: readonly Capability[] = [
@@ -107,6 +169,9 @@ const ADMIN_CAPABILITIES: readonly Capability[] = [
   Capability.PERMISSION_READ,
   Capability.PERMISSION_WRITE,
   Capability.MASTER_WRITE,
+  Capability.TAX_WRITE,
+  Capability.TAX_SYNC,
+  Capability.TAX_OVERRIDE,
   Capability.BOARD_READ_ALL,
   Capability.BOARD_UPDATE,
   Capability.BOARD_ARCHIVE,
@@ -133,9 +198,12 @@ const ADMIN_CAPABILITIES: readonly Capability[] = [
   Capability.ALERT_CONFIG,
 ];
 
-/** Super Admin additionally reaches across board boundaries. */
+/**
+ * Super Admin additionally reaches across board boundaries, but — unlike every other tier —
+ * does not carry personal task work: they oversee the roster, they are never on it.
+ */
 const SUPER_ADMIN_CAPABILITIES: readonly Capability[] = [
-  ...ADMIN_CAPABILITIES,
+  ...without(ADMIN_CAPABILITIES, Capability.TASK_SELF, Capability.TASK_ASSIGN),
   Capability.BOARD_MEMBER_MANAGE_ANY,
 ];
 

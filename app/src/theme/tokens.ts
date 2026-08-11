@@ -123,6 +123,29 @@ export const colors = {
   boardOnHold: { bg: '#d9e3f6', fg: '#454652', border: '#c5c5d4' },
   boardArchived: { bg: '#e6eeff', fg: '#757683', border: '#c5c5d4' },
 
+  /**
+   * WhatsApp chrome, used app-wide (not just the Canteen OS task screens).
+   *
+   * The whole app is modelled on the messaging app every volunteer already has muscle memory
+   * for — the exact WhatsApp light-theme header green, its FAB green, its list hairlines and
+   * muted secondary-text grey. Carried as tokens so the hexes never appear inside a screen,
+   * exactly like `boardActive` above. Mirrors `src/theme/whatsapp.ts`'s `wa` tokens, which the
+   * board feed (a real chat surface) reads directly; these aliases let every other screen —
+   * top bars, tab bar, task list — pick up the same palette without importing that module.
+   */
+  taskBar: '#008069',
+  taskBarDark: '#006a5b',
+  onTaskBar: '#ffffff',
+  taskTabInactive: 'rgba(255, 255, 255, 0.72)',
+  taskAccent: '#00a884',
+  taskFab: '#25d366',
+  taskRowDivider: '#e9edef',
+  taskAvatar: '#e4e1dc',
+  taskAvatarFg: '#5c5d6b',
+  taskUrgent: '#e4256b',
+  taskMuted: '#667781',
+  taskOnline: '#25d366',
+
   /* ------------------------------------------------------------- legacy */
   /**
    * Numbered-scale names from the previous palette, remapped onto this one.

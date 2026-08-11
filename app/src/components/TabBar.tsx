@@ -4,17 +4,17 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { PressableScale } from './PressableScale';
-import { colors, radii, spacing, typography } from '../theme/tokens';
+import { colors, spacing, typography } from '../theme/tokens';
 
 /**
- * The bottom navigation from the Stitch mockups.
- *
- * Replaces the default tab bar because the active state is a filled emerald *pill* wrapping
- * icon and label together, which the stock `tabBarActiveTintColor` cannot express — it only
- * tints. Every mockup shows this treatment, so it is the navigation, not a flourish.
+ * The bottom navigation — WhatsApp's own tab-bar treatment: a plain white bar, a hairline on
+ * top, and the active destination picked out by colour alone (its own header green) rather
+ * than a filled pill. Replaces the default tab bar so every icon/label pair can carry that
+ * colour together, which the stock `tabBarActiveTintColor` option cannot express on its own.
  */
 
 const ICONS: Record<string, keyof typeof MaterialIcons.glyphMap> = {
+  tasks: 'checklist',
   boards: 'dashboard',
   orders: 'receipt-long',
   users: 'group',
@@ -22,6 +22,7 @@ const ICONS: Record<string, keyof typeof MaterialIcons.glyphMap> = {
 };
 
 const LABELS: Record<string, string> = {
+  tasks: 'Tasks',
   boards: 'Boards',
   orders: 'Orders',
   users: 'Users',
@@ -61,11 +62,11 @@ export function TabBar({
             accessibilityLabel={label}
             style={styles.itemPress}
           >
-            <View style={[styles.item, focused && styles.itemActive]}>
+            <View style={styles.item}>
               <MaterialIcons
                 name={icon}
                 size={24}
-                color={focused ? colors.onSecondaryContainer : colors.onSurfaceVariant}
+                color={focused ? colors.taskBar : colors.outline}
               />
               <Text style={[styles.label, focused && styles.labelActive]} numberOfLines={1}>
                 {label}
@@ -95,17 +96,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[1],
-    borderRadius: radii.full,
   },
-  itemActive: { backgroundColor: colors.secondaryContainer },
   label: {
     fontFamily: typography.labelCaps.fontFamily,
     fontSize: typography.labelCaps.size,
     lineHeight: typography.labelCaps.lineHeight,
     letterSpacing: typography.labelCaps.letterSpacing,
     fontWeight: typography.labelCaps.weight,
-    color: colors.onSurfaceVariant,
+    color: colors.outline,
     marginTop: spacing[1],
   },
-  labelActive: { color: colors.onSecondaryContainer },
+  labelActive: { color: colors.taskBar, fontWeight: '700' },
 });

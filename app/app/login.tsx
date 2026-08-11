@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: radii['2xl'],
-    backgroundColor: colors.primary600,
+    backgroundColor: colors.taskBar,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing[4],
@@ -141,7 +141,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  checkboxChecked: { backgroundColor: colors.primary600, borderColor: colors.primary600 },
+  checkboxChecked: { backgroundColor: colors.taskBar, borderColor: colors.taskBar },
   rememberLabel: { fontFamily: fonts.sansSemibold, fontSize: typography.body.size, color: colors.textSecondary, fontWeight: '600' },
   error: { color: colors.danger500, marginBottom: spacing[4], textAlign: 'center', fontWeight: '600' },
 });

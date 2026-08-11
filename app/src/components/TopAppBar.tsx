@@ -1,12 +1,16 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StatusBar, StyleSheet, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PressableScale } from './PressableScale';
 import { colors, radii, spacing, typography } from '../theme/tokens';
 
 /**
- * The single top bar for every screen, per the Stitch mockups.
+ * The single top bar for every screen — WhatsApp's own green, app-wide, per the "make it look
+ * like WhatsApp everywhere" brief. Every WhatsApp tab (Chats, Status, Calls) wears the same
+ * solid green header regardless of what it shows underneath, which is the effect this is
+ * copying: one unmistakable band of colour at the top of every screen in the app, not just
+ * the board feed.
  *
  * Two shapes exist in the designs and both live here rather than in two components, because
  * the difference is only which slots are filled:
@@ -47,11 +51,12 @@ export function TopAppBar({
 
   return (
     <View style={[styles.bar, { paddingTop: insets.top }]}>
+      <StatusBar barStyle="light-content" backgroundColor={colors.taskBarDark} />
       <View style={styles.row}>
         {transactional ? (
           <PressableScale onPress={onBack} accessibilityLabel="Go back" accessibilityRole="button">
             <View style={styles.iconButton}>
-              <MaterialIcons name="arrow-back" size={24} color={colors.onSurface} />
+              <MaterialIcons name="arrow-back" size={24} color={colors.onTaskBar} />
             </View>
           </PressableScale>
         ) : null}
@@ -61,7 +66,7 @@ export function TopAppBar({
             <MaterialIcons
               name={leadingIcon}
               size={24}
-              color={colors.primary}
+              color={colors.onTaskBar}
               style={styles.leadingIcon}
             />
           ) : null}
@@ -87,7 +92,7 @@ export function TopAppBar({
                 accessibilityRole="button"
               >
                 <View style={styles.iconButton}>
-                  <MaterialIcons name={action.icon} size={24} color={colors.primary} />
+                  <MaterialIcons name={action.icon} size={24} color={colors.onTaskBar} />
                   {action.badgeCount !== undefined && action.badgeCount > 0 ? (
                     <View style={styles.badge}>
                       <Text style={styles.badgeText} numberOfLines={1}>
@@ -107,9 +112,12 @@ export function TopAppBar({
 
 const styles = StyleSheet.create({
   bar: {
-    backgroundColor: colors.surface,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.outlineVariant,
+    backgroundColor: colors.taskBar,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
   },
   row: {
     height: 64,
@@ -125,7 +133,7 @@ const styles = StyleSheet.create({
     fontSize: typography.headlineMd.size,
     lineHeight: typography.headlineMd.lineHeight,
     fontWeight: typography.headlineMd.weight,
-    color: colors.primary,
+    color: colors.onTaskBar,
     letterSpacing: -0.2,
     flexShrink: 1,
   },

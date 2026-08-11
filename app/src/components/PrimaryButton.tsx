@@ -43,9 +43,12 @@ export function PrimaryButton({
   );
 }
 
+// WhatsApp's own action colour — its "Send", "Save", "Done" buttons are all this teal-green,
+// not the app's indigo brand. Applied here rather than per-screen so every primary action in
+// the app (sign in, save, confirm) reads as WhatsApp's without hunting down each call site.
 const stylesByVariant = {
   primary: {
-    container: { backgroundColor: colors.primary600 },
+    container: { backgroundColor: colors.taskBar },
     textColor: colors.white,
     loaderColor: colors.white,
   },
@@ -61,8 +64,8 @@ const stylesByVariant = {
   },
   ghost: {
     container: { backgroundColor: 'transparent' },
-    textColor: colors.primary600,
-    loaderColor: colors.primary600,
+    textColor: colors.taskBar,
+    loaderColor: colors.taskBar,
   },
 };
 

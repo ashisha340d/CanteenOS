@@ -87,7 +87,7 @@ export default function SettingsScreen(): React.JSX.Element {
               <Ionicons name="volume-high-outline" size={18} color={colors.gray500} style={{ marginRight: spacing[2] }} />
               <Text style={styles.rowLabel}>Notification sound</Text>
             </View>
-            <Switch value={soundEnabled} onValueChange={setSoundEnabled} trackColor={{ false: colors.gray200, true: colors.primary200 }} thumbColor={soundEnabled ? colors.primary600 : colors.white} />
+            <Switch value={soundEnabled} onValueChange={setSoundEnabled} trackColor={{ false: colors.gray200, true: colors.taskOnline }} thumbColor={colors.white} />
           </View>
         </Section>
       </Animated.View>
@@ -178,7 +178,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.gray200,
   },
-  themeChipSelected: { backgroundColor: colors.primary600, borderColor: colors.primary600 },
+  themeChipSelected: { backgroundColor: colors.taskBar, borderColor: colors.taskBar },
   themeLabel: { fontFamily: fonts.sansBold, fontSize: typography.callout.size, fontWeight: '700', color: colors.textSecondary },
   themeLabelSelected: { color: colors.white },
   switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing[2] },
