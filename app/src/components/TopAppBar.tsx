@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { StatusBar, StyleSheet, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PressableScale } from './PressableScale';
-import { colors, radii, spacing, typography } from '../theme/tokens';
+import { radii, spacing, typography } from '../theme/tokens';
+import { useThemeColors } from '../theme/useThemeColors';
 
 /**
  * The single top bar for every screen — WhatsApp's own green, app-wide, per the "make it look
@@ -47,6 +48,8 @@ export function TopAppBar({
   actions = [],
 }: TopAppBarProps): React.JSX.Element {
   const insets = useSafeAreaInsets();
+  const { colors } = useThemeColors();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const transactional = onBack !== undefined;
 
   return (
@@ -110,58 +113,60 @@ export function TopAppBar({
   );
 }
 
-const styles = StyleSheet.create({
-  bar: {
-    backgroundColor: colors.taskBar,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.15,
-    shadowRadius: 2,
-  },
-  row: {
-    height: 64,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.marginMobile,
-  },
-  titleWrap: { flex: 1, flexDirection: 'row', alignItems: 'center', minWidth: 0 },
-  titleWrapCentered: { justifyContent: 'center' },
-  leadingIcon: { marginRight: spacing[2] },
-  title: {
-    fontFamily: typography.headlineMd.fontFamily,
-    fontSize: typography.headlineMd.size,
-    lineHeight: typography.headlineMd.lineHeight,
-    fontWeight: typography.headlineMd.weight,
-    color: colors.onTaskBar,
-    letterSpacing: -0.2,
-    flexShrink: 1,
-  },
-  titleCentered: { textAlign: 'center' },
-  actions: { flexDirection: 'row', alignItems: 'center' },
-  iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: radii.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  badge: {
-    position: 'absolute',
-    top: 2,
-    right: 2,
-    minWidth: 18,
-    height: 18,
-    paddingHorizontal: spacing[1],
-    borderRadius: radii.full,
-    backgroundColor: colors.error,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  badgeText: {
-    fontFamily: typography.labelCaps.fontFamily,
-    fontSize: 10,
-    lineHeight: 14,
-    color: colors.onError,
-  },
-});
+function createStyles(colors: ReturnType<typeof useThemeColors>['colors']) {
+  return StyleSheet.create({
+    bar: {
+      backgroundColor: colors.taskBar,
+      elevation: 4,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.15,
+      shadowRadius: 2,
+    },
+    row: {
+      height: 64,
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: spacing.marginMobile,
+    },
+    titleWrap: { flex: 1, flexDirection: 'row', alignItems: 'center', minWidth: 0 },
+    titleWrapCentered: { justifyContent: 'center' },
+    leadingIcon: { marginRight: spacing[2] },
+    title: {
+      fontFamily: typography.headlineMd.fontFamily,
+      fontSize: typography.headlineMd.size,
+      lineHeight: typography.headlineMd.lineHeight,
+      fontWeight: typography.headlineMd.weight,
+      color: colors.onTaskBar,
+      letterSpacing: -0.2,
+      flexShrink: 1,
+    },
+    titleCentered: { textAlign: 'center' },
+    actions: { flexDirection: 'row', alignItems: 'center' },
+    iconButton: {
+      width: 40,
+      height: 40,
+      borderRadius: radii.full,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    badge: {
+      position: 'absolute',
+      top: 2,
+      right: 2,
+      minWidth: 18,
+      height: 18,
+      paddingHorizontal: spacing[1],
+      borderRadius: radii.full,
+      backgroundColor: colors.error,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    badgeText: {
+      fontFamily: typography.labelCaps.fontFamily,
+      fontSize: 10,
+      lineHeight: 14,
+      color: colors.onError,
+    },
+  });
+}

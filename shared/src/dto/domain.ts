@@ -3,19 +3,42 @@ import type {
   AlertType,
   AttachmentKind,
   AttachmentOwnerType,
+  AvailabilityStatus,
   BillingStatus,
   BoardRole,
   BoardStatus,
+  EntityType,
+  GstSyncStatus,
+  GstTaxability,
+  HsnSacCodeType,
+  ItcEligibility,
   MasterStatus,
+  MediaEntityType,
+  MediaRole,
+  MediaType,
   MemberStatus,
   MessageType,
+  ModifierSelectionType,
   NotificationType,
   OrderPriority,
   OrderStatus,
+  PosDiscountType,
+  PosOrderItemStatus,
+  PosOrderStatus,
+  PosOrderType,
+  PosPaymentMethod,
+  PosPaymentStatus,
   RecipeDifficulty,
   RecipeIngredientScaling,
+  RoutableEntityType,
+  ScheduleShift,
   ShoppingListStatus,
+  SupplyType,
   SystemEvent,
+  TaskKind,
+  TaskPriority,
+  TaskSource,
+  TaskStatus,
   UserRole,
   UserStatus,
   YoutubeImportStatus,
@@ -204,6 +227,19 @@ export interface MenuItemDto extends SyncMeta {
   /** Devanagari unit ("प्लेट", "किलो"). Null falls back to `unit`. */
   unitHi: string | null;
   imagePath: string | null;
+  /**
+   * Primary image from the media library (MediaEntityType.MENU_ITEM), if one is attached. The
+   * id is stable and syncs to the device; `primaryMediaUrl` is a signed, expiring link and is
+   * only present on responses served to an authenticated caller.
+   */
+  primaryMediaId: Uuid | null;
+  primaryMediaUrl?: string | null;
+  /** Used only while this item has zero ACTIVE variants (see MenuItemVariantDto). */
+  basePrice: number | null;
+  /** The Tax Profile this food item assigns. Variants inherit it unless they override. */
+  taxProfileId: Uuid | null;
+  /** When true, ignores MenuItemScheduleDto and is always available. */
+  alwaysAvailable: boolean;
   status: MasterStatus;
   sortOrder: number;
 }
@@ -231,6 +267,572 @@ export interface MenuItemWriteRequest extends MasterWriteRequest {
   unit: string;
   unitHi?: string | null;
   imagePath?: string | null;
+  basePrice?: number | null;
+  taxProfileId?: Uuid | null;
+  alwaysAvailable?: boolean;
+}
+
+/* ------------------------------------------------------------- menu master */
+
+/**
+ * A configurable menu definition — VSK, PUBLIC, SATSANGEE, PUBLIC_MORNING, ... . Ordinary data
+ * rows: nothing about a menu's identity is a schema enum, so a new menu never requires a
+ * deployment.
+ */
+export interface MenuDto extends SyncMeta {
+  id: Uuid;
+  code: string;
+  name: string;
+  description: string | null;
+  status: MasterStatus;
+  sortOrder: number;
+  priority: number;
+  version: number;
+  effectiveFrom: IsoDate | null;
+  effectiveUntil: IsoDate | null;
+  /** Null while unpublished. POS/MenuBoard consumers should treat an unpublished menu as absent. */
+  publishedAt: IsoDateTime | null;
+  createdBy: Uuid | null;
+}
+
+export interface MenuWriteRequest {
+  id?: Uuid;
+  code: string;
+  name: string;
+  description?: string | null;
+  status?: MasterStatus;
+  sortOrder?: number;
+  priority?: number;
+  effectiveFrom?: IsoDate | null;
+  effectiveUntil?: IsoDate | null;
+}
+
+/** Reuses the global `menu_categories` master on a given menu, with per-menu overrides. */
+export interface MenuCategoryAssignmentDto extends SyncMeta {
+  id: Uuid;
+  menuId: Uuid;
+  categoryId: Uuid;
+  displayName: string | null;
+  displayNameHi: string | null;
+  description: string | null;
+  descriptionHi: string | null;
+  status: MasterStatus;
+  sortOrder: number;
+  posVisible: boolean;
+  boardVisible: boolean;
+  createdBy: Uuid | null;
+  /** Denormalised from menu_categories for display. */
+  categoryName?: string;
+  categoryNameHi?: string | null;
+  categoryImagePath?: string | null;
+}
+
+export interface MenuCategoryAssignmentWriteRequest {
+  id?: Uuid;
+  categoryId: Uuid;
+  displayName?: string | null;
+  displayNameHi?: string | null;
+  description?: string | null;
+  descriptionHi?: string | null;
+  status?: MasterStatus;
+  sortOrder?: number;
+  posVisible?: boolean;
+  boardVisible?: boolean;
+}
+
+/**
+ * Offers an existing Food Item (a `menu_items` row) on a specific menu. The same food item can
+ * have any number of these — one per menu — each carrying its own description, preparation
+ * method, visibility and channel availability. The global food item is never modified by this.
+ */
+export interface MenuItemAssignmentDto extends SyncMeta {
+  id: Uuid;
+  menuId: Uuid;
+  foodItemId: Uuid;
+  categoryAssignmentId: Uuid | null;
+  displayName: string | null;
+  displayNameHi: string | null;
+  description: string | null;
+  descriptionHi: string | null;
+  preparationMethod: string | null;
+  preparationMethodHi: string | null;
+  preparationTimeMinutes: number | null;
+  unit: string | null;
+  status: MasterStatus;
+  availability: AvailabilityStatus;
+  sortOrder: number;
+  posVisible: boolean;
+  boardVisible: boolean;
+  qrVisible: boolean;
+  webVisible: boolean;
+  appVisible: boolean;
+  dineInAvailable: boolean;
+  takeawayAvailable: boolean;
+  deliveryAvailable: boolean;
+  allowDecimalQuantity: boolean;
+  createdBy: Uuid | null;
+  /** Denormalised from menu_items (the Food Item Master) for display. */
+  foodItemName?: string;
+  foodItemNameHi?: string | null;
+  foodItemUnit?: string;
+  foodItemImagePath?: string | null;
+  /** The food item's own base price/variants — pricing lives on the Master File, not here. */
+  foodItemBasePrice?: number | null;
+  variantCount?: number;
+}
+
+export interface MenuItemAssignmentWriteRequest {
+  id?: Uuid;
+  foodItemId: Uuid;
+  categoryAssignmentId?: Uuid | null;
+  displayName?: string | null;
+  displayNameHi?: string | null;
+  description?: string | null;
+  descriptionHi?: string | null;
+  preparationMethod?: string | null;
+  preparationMethodHi?: string | null;
+  preparationTimeMinutes?: number | null;
+  unit?: string | null;
+  status?: MasterStatus;
+  availability?: AvailabilityStatus;
+  sortOrder?: number;
+  posVisible?: boolean;
+  boardVisible?: boolean;
+  qrVisible?: boolean;
+  webVisible?: boolean;
+  appVisible?: boolean;
+  dineInAvailable?: boolean;
+  takeawayAvailable?: boolean;
+  deliveryAvailable?: boolean;
+  allowDecimalQuantity?: boolean;
+}
+
+/**
+ * The actual sellable configuration and price. A food item (Menu Master File) may have zero,
+ * one or many of these — "Tiny / ₹30", "Large / ₹100" are ordinary rows, never schema enum
+ * values. Global to the dish: the same variants apply on every menu it is assigned to.
+ */
+export interface MenuItemVariantDto extends SyncMeta {
+  id: Uuid;
+  foodItemId: Uuid;
+  variantCode: string | null;
+  name: string;
+  nameHi: string | null;
+  description: string | null;
+  descriptionHi: string | null;
+  portionName: string | null;
+  portionNameHi: string | null;
+  quantity: number | null;
+  unit: string | null;
+  price: number;
+  /** Null means inherit the food item's Tax Profile — the normal case. */
+  taxProfileId: Uuid | null;
+  status: MasterStatus;
+  availability: AvailabilityStatus;
+  sortOrder: number;
+  preparationMethod: string | null;
+  preparationMethodHi: string | null;
+  preparationTimeMinutes: number | null;
+  isDefault: boolean;
+  allowDecimalQuantity: boolean;
+  createdBy: Uuid | null;
+}
+
+export interface MenuItemVariantWriteRequest {
+  id?: Uuid;
+  variantCode?: string | null;
+  name: string;
+  nameHi?: string | null;
+  description?: string | null;
+  descriptionHi?: string | null;
+  portionName?: string | null;
+  portionNameHi?: string | null;
+  quantity?: number | null;
+  unit?: string | null;
+  price: number;
+  taxProfileId?: Uuid | null;
+  status?: MasterStatus;
+  availability?: AvailabilityStatus;
+  sortOrder?: number;
+  preparationMethod?: string | null;
+  preparationMethodHi?: string | null;
+  preparationTimeMinutes?: number | null;
+  isDefault?: boolean;
+  allowDecimalQuantity?: boolean;
+}
+
+/** A snapshot of one resolved, orderable line for POS/MenuBoard consumption — see `MenuTreeDto`. */
+export interface ResolvedMenuVariantDto {
+  id: Uuid;
+  variantCode: string | null;
+  name: string;
+  nameHi: string | null;
+  portionName: string | null;
+  quantity: number | null;
+  unit: string | null;
+  price: number;
+  availability: AvailabilityStatus;
+  sortOrder: number;
+  /** Resolved by variant -> menu item -> food item, first non-null wins. Never duplicated. */
+  primaryMediaUrl: string | null;
+  allowDecimalQuantity: boolean;
+  counters: string[];
+  printingGroups: string[];
+  modifierGroupIds: Uuid[];
+}
+
+export interface ResolvedMenuItemDto {
+  id: Uuid;
+  foodItemId: Uuid;
+  name: string;
+  nameHi: string | null;
+  description: string | null;
+  unit: string;
+  availability: AvailabilityStatus;
+  sortOrder: number;
+  primaryMediaUrl: string | null;
+  allowDecimalQuantity: boolean;
+  basePrice: number | null;
+  variants: ResolvedMenuVariantDto[];
+  posVisible: boolean;
+  boardVisible: boolean;
+  qrVisible: boolean;
+  webVisible: boolean;
+  appVisible: boolean;
+}
+
+export interface ResolvedMenuCategoryDto {
+  id: Uuid;
+  categoryId: Uuid;
+  name: string;
+  nameHi: string | null;
+  sortOrder: number;
+  primaryMediaUrl: string | null;
+  items: ResolvedMenuItemDto[];
+}
+
+/** The full tree a POS or MenuBoard client requests for one published menu. */
+export interface MenuTreeDto {
+  id: Uuid;
+  code: string;
+  name: string;
+  description: string | null;
+  primaryMediaUrl: string | null;
+  categories: ResolvedMenuCategoryDto[];
+}
+
+/* --------------------------------------------------------------- media library */
+
+/**
+ * A reusable media asset. One row per physical file; any number of `MediaAssignmentDto` rows
+ * may point at it from different Menu Master entities without duplicating the file.
+ */
+export interface MediaAssetDto extends SyncMeta {
+  id: Uuid;
+  fileName: string;
+  mimeType: string;
+  fileExtension: string | null;
+  sizeBytes: number;
+  width: number | null;
+  height: number | null;
+  mediaType: MediaType;
+  title: string | null;
+  altText: string | null;
+  status: MasterStatus;
+  createdBy: Uuid | null;
+  /** Signed, time-limited download URL — same convention as `AttachmentDto`. */
+  url: string;
+}
+
+export interface MediaAssetUpdateRequest {
+  title?: string | null;
+  altText?: string | null;
+  status?: MasterStatus;
+}
+
+/** Links a media asset to a Menu, Menu Category Assignment, Menu Item Assignment or Variant. */
+export interface MediaAssignmentDto extends SyncMeta {
+  id: Uuid;
+  mediaId: Uuid;
+  entityType: MediaEntityType;
+  entityId: Uuid;
+  role: MediaRole;
+  isPrimary: boolean;
+  sortOrder: number;
+  status: MasterStatus;
+  createdBy: Uuid | null;
+  media?: MediaAssetDto;
+}
+
+export interface MediaAssignmentWriteRequest {
+  mediaId: Uuid;
+  entityType: MediaEntityType;
+  entityId: Uuid;
+  role?: MediaRole;
+  isPrimary?: boolean;
+  sortOrder?: number;
+}
+
+/* ------------------------------------------------------------------- counters */
+
+/** Operational service counters (VSK Counter, Main Counter, ...) — never attached to a food item
+ * directly, only to a menu item assignment or variant via `CounterRouteDto`. */
+export interface CounterDto extends SyncMeta {
+  id: Uuid;
+  name: string;
+  code: string | null;
+  description: string | null;
+  status: MasterStatus;
+  sortOrder: number;
+  createdBy: Uuid | null;
+}
+
+export interface CounterWriteRequest {
+  id?: Uuid;
+  name: string;
+  code?: string | null;
+  description?: string | null;
+  status?: MasterStatus;
+  sortOrder?: number;
+}
+
+export interface CounterRouteDto extends SyncMeta {
+  id: Uuid;
+  entityType: RoutableEntityType;
+  entityId: Uuid;
+  counterId: Uuid;
+  status: MasterStatus;
+  createdBy: Uuid | null;
+  counterName?: string;
+}
+
+export interface CounterRouteWriteRequest {
+  entityType: RoutableEntityType;
+  entityId: Uuid;
+  counterId: Uuid;
+  status?: MasterStatus;
+}
+
+/* ---------------------------------------------------------------- item groups */
+
+/** Reusable tag master for the Food Item Master (À La Carte, Combo Eligible, Set Menu, ...). */
+export interface ItemGroupDto extends SyncMeta {
+  id: Uuid;
+  name: string;
+  code: string | null;
+  description: string | null;
+  status: MasterStatus;
+  sortOrder: number;
+  createdBy: Uuid | null;
+}
+
+export interface ItemGroupWriteRequest {
+  id?: Uuid;
+  name: string;
+  code?: string | null;
+  description?: string | null;
+  status?: MasterStatus;
+  sortOrder?: number;
+}
+
+export interface ItemGroupAssignmentDto extends SyncMeta {
+  id: Uuid;
+  foodItemId: Uuid;
+  groupId: Uuid;
+  status: MasterStatus;
+  createdBy: Uuid | null;
+  /** Denormalised from item_groups for display. */
+  groupName?: string;
+}
+
+export interface ItemGroupAssignmentWriteRequest {
+  foodItemId: Uuid;
+  groupId: Uuid;
+  status?: MasterStatus;
+}
+
+/* -------------------------------------------------------------- printing groups */
+
+/** Kitchen / Bakery / Coffee / Pizza / Packing / Bar — independent of physical printer hardware. */
+export interface PrintingGroupDto extends SyncMeta {
+  id: Uuid;
+  name: string;
+  code: string | null;
+  description: string | null;
+  status: MasterStatus;
+  sortOrder: number;
+  createdBy: Uuid | null;
+}
+
+export interface PrintingGroupWriteRequest {
+  id?: Uuid;
+  name: string;
+  code?: string | null;
+  description?: string | null;
+  status?: MasterStatus;
+  sortOrder?: number;
+}
+
+export interface PrintingRouteDto extends SyncMeta {
+  id: Uuid;
+  entityType: RoutableEntityType;
+  entityId: Uuid;
+  printingGroupId: Uuid;
+  sortOrder: number;
+  status: MasterStatus;
+  createdBy: Uuid | null;
+  printingGroupName?: string;
+}
+
+export interface PrintingRouteWriteRequest {
+  entityType: RoutableEntityType;
+  entityId: Uuid;
+  printingGroupId: Uuid;
+  sortOrder?: number;
+  status?: MasterStatus;
+}
+
+/* ------------------------------------------------------------------- modifiers */
+
+export interface ModifierGroupDto extends SyncMeta {
+  id: Uuid;
+  name: string;
+  description: string | null;
+  selectionType: ModifierSelectionType;
+  minSelect: number;
+  maxSelect: number | null;
+  status: MasterStatus;
+  sortOrder: number;
+  createdBy: Uuid | null;
+  modifiers?: ModifierDto[];
+}
+
+export interface ModifierGroupWriteRequest {
+  id?: Uuid;
+  name: string;
+  description?: string | null;
+  selectionType?: ModifierSelectionType;
+  minSelect?: number;
+  maxSelect?: number | null;
+  status?: MasterStatus;
+  sortOrder?: number;
+}
+
+export interface ModifierDto extends SyncMeta {
+  id: Uuid;
+  modifierGroupId: Uuid;
+  name: string;
+  nameHi: string | null;
+  priceDelta: number;
+  status: MasterStatus;
+  sortOrder: number;
+  createdBy: Uuid | null;
+}
+
+export interface ModifierWriteRequest {
+  id?: Uuid;
+  name: string;
+  nameHi?: string | null;
+  priceDelta?: number;
+  status?: MasterStatus;
+  sortOrder?: number;
+}
+
+export interface ModifierAssignmentDto extends SyncMeta {
+  id: Uuid;
+  entityType: RoutableEntityType;
+  entityId: Uuid;
+  modifierGroupId: Uuid;
+  isRequired: boolean;
+  sortOrder: number;
+  status: MasterStatus;
+  createdBy: Uuid | null;
+  modifierGroupName?: string;
+}
+
+export interface ModifierAssignmentWriteRequest {
+  entityType: RoutableEntityType;
+  entityId: Uuid;
+  modifierGroupId: Uuid;
+  isRequired?: boolean;
+  sortOrder?: number;
+  status?: MasterStatus;
+}
+
+/* --------------------------------------------------------------- menu schedules */
+
+/** Configurable time-based availability. `dayOfWeek` null means "every day". Nothing named
+ * Morning/Evening exists in this schema — PUBLIC_MORNING/PUBLIC_EVENING are just two `menus`
+ * rows, each optionally carrying its own schedule. */
+export interface MenuScheduleDto extends SyncMeta {
+  id: Uuid;
+  menuId: Uuid;
+  /** 0 = Sunday .. 6 = Saturday; null = every day. */
+  dayOfWeek: number | null;
+  startTime: ClockTime;
+  endTime: ClockTime;
+  status: MasterStatus;
+  createdBy: Uuid | null;
+}
+
+export interface MenuScheduleWriteRequest {
+  id?: Uuid;
+  dayOfWeek?: number | null;
+  startTime: ClockTime;
+  endTime: ClockTime;
+  status?: MasterStatus;
+}
+
+/* ---------------------------------------------------------- food item schedules */
+
+/** Per food item, per weekday, per shift availability. Ignored entirely while the food
+ * item's `alwaysAvailable` flag is true. */
+export interface MenuItemScheduleDto extends SyncMeta {
+  id: Uuid;
+  foodItemId: Uuid;
+  /** 0 = Sunday .. 6 = Saturday. */
+  dayOfWeek: number;
+  shift: ScheduleShift;
+  isAvailable: boolean;
+  createdBy: Uuid | null;
+}
+
+export interface MenuItemScheduleWriteRequest {
+  dayOfWeek: number;
+  shift: ScheduleShift;
+  isAvailable: boolean;
+}
+
+export interface MenuItemScheduleBulkWriteRequest {
+  alwaysAvailable: boolean;
+  slots: MenuItemScheduleWriteRequest[];
+}
+
+export interface MenuItemScheduleBulkResponse {
+  alwaysAvailable: boolean;
+  slots: MenuItemScheduleDto[];
+}
+
+/* ------------------------------------------------------- variant catalogue pricing */
+
+/** Lets a specific catalogue (a `menus` row) override a variant's price without touching the
+ * variant's own base price. */
+export interface MenuItemVariantCatalogPriceDto extends SyncMeta {
+  id: Uuid;
+  variantId: Uuid;
+  menuId: Uuid;
+  price: number;
+  status: MasterStatus;
+  createdBy: Uuid | null;
+  /** Denormalised from menus for display. */
+  menuName?: string;
+  menuCode?: string;
+}
+
+/** `price: null` removes the override, reverting the variant to its base price. */
+export interface MenuItemVariantCatalogPriceWriteRequest {
+  menuId: Uuid;
+  price: number | null;
 }
 
 /* ----------------------------------------------------------------- orders */
@@ -311,6 +913,22 @@ export interface OrderItemDto extends SyncMeta {
   cancelledBy: Uuid | null;
   /** Set on the cancelled line, pointing at the line that superseded it. */
   replacedByItemId: Uuid | null;
+  /**
+   * Menu Master sellable-configuration snapshot, frozen at the moment the line was created.
+   * Null on lines created before Menu Master existed, or on an ad-hoc line. None of these are
+   * ever recomputed from the current Menu Master — a later price or name change on `menuId` /
+   * `variantId` must never alter an existing order line.
+   */
+  menuId: Uuid | null;
+  variantId: Uuid | null;
+  /** The variant's name at sale time — survives the variant being renamed or deleted later. */
+  variantName: string | null;
+  /** Price of one unit at sale time. */
+  unitPrice: number | null;
+  taxAmount: number;
+  discountAmount: number;
+  /** (unitPrice * quantity) + taxAmount - discountAmount, frozen at sale time. */
+  lineTotal: number | null;
   /** Denormalised for display; not stored on the item row. */
   menuItemName?: string;
 }
@@ -360,6 +978,15 @@ export interface CreateOrderItemRequest {
   notes?: string | null;
   mentionedUserIds?: Uuid[];
   sortOrder?: number;
+  /**
+   * Which menu/variant this line was ordered from. Optional: an order raised outside Menu
+   * Master context (or for a food item with no menu assignment) simply omits these, and the
+   * line carries no price snapshot. When `variantId` is supplied the server resolves and
+   * freezes its current name/price into the line at creation time.
+   */
+  menuId?: Uuid | null;
+  variantId?: Uuid | null;
+  discountAmount?: number;
 }
 
 export interface UpdateOrderRequest {
@@ -998,4 +1625,559 @@ export interface YoutubeImportDto {
 
 export interface YoutubeImportCreateRequest {
   url: string;
+}
+
+/* --------------------------------------------------------- GST / HSN / SAC */
+
+/**
+ * One classification row from the official GST/GSTN dataset. Reference data: never authored
+ * in the Admin Portal, never carrying a tax rate (the official workbook has none), and never
+ * deleted — a code that leaves the authoritative dataset is deactivated so that food items
+ * referencing it keep resolving.
+ */
+export interface HsnSacCodeDto {
+  id: Uuid;
+  code: string;
+  codeType: HsnSacCodeType;
+  description: string;
+  /** Derived from `code` on import; HSN only, null for SAC. */
+  chapter: string | null;
+  heading: string | null;
+  subHeading: string | null;
+  isActive: boolean;
+  source: string;
+  /** The source workbook's own modified date — the official file carries no version field. */
+  sourceVersion: string | null;
+  lastSyncedAt: IsoDateTime;
+  deactivatedAt: IsoDateTime | null;
+}
+
+export interface HsnSacSearchQuery {
+  q?: string;
+  codeType?: HsnSacCodeType;
+  /** Defaults to true; only an override flow has any reason to see deactivated codes. */
+  activeOnly?: boolean;
+  page?: number;
+  pageSize?: number;
+}
+
+/** Headline state for the HSN/SAC Master admin screen. Counts always come from the data. */
+export interface HsnSacMasterSummaryDto {
+  totalCodes: number;
+  activeCodes: number;
+  hsnCodes: number;
+  sacCodes: number;
+  inactiveCodes: number;
+  lastSyncedAt: IsoDateTime | null;
+  source: string;
+  sourceVersion: string | null;
+  lastSyncStatus: GstSyncStatus | null;
+}
+
+/** The result of one "Sync GST Master" run, and the row persisted for the audit log. */
+export interface GstSyncRunDto {
+  id: Uuid;
+  startedAt: IsoDateTime;
+  completedAt: IsoDateTime | null;
+  startedBy: Uuid | null;
+  startedByName?: string | null;
+  source: string;
+  sourceUrl: string | null;
+  sourceVersion: string | null;
+  sourceChecksum: string | null;
+  recordsDownloaded: number;
+  recordsAdded: number;
+  recordsUpdated: number;
+  recordsDeactivated: number;
+  recordsUnchanged: number;
+  recordsFailed: number;
+  status: GstSyncStatus;
+  errorDetails: string | null;
+  /** Wall-clock duration of the run; null while still RUNNING. */
+  durationMs: number | null;
+}
+
+/**
+ * A reusable tax treatment. This — not the HSN/SAC master — is where rates live, because the
+ * official dataset supplies classification only. Syncing the master never alters a profile.
+ */
+export interface TaxProfileDto {
+  id: Uuid;
+  code: string;
+  name: string;
+  description: string | null;
+  hsnSacId: Uuid | null;
+  supplyType: SupplyType;
+  gstTaxability: GstTaxability;
+  gstRate: number;
+  cgstRate: number;
+  sgstRate: number;
+  igstRate: number;
+  cessRate: number;
+  priceIsInclusive: boolean;
+  itcEligibility: ItcEligibility;
+  effectiveFrom: IsoDate | null;
+  effectiveTo: IsoDate | null;
+  exemptionReason: string | null;
+  regulatoryNotes: string | null;
+  status: MasterStatus;
+  sortOrder: number;
+  createdBy: Uuid | null;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+  /** Denormalised from hsn_sac_master for display. */
+  hsnSacCode?: string | null;
+  hsnSacCodeType?: HsnSacCodeType | null;
+  hsnSacDescription?: string | null;
+  /** How many food items currently assign this profile — drives delete/deactivate guards. */
+  foodItemCount?: number;
+}
+
+export interface TaxProfileWriteRequest {
+  id?: Uuid;
+  code: string;
+  name: string;
+  description?: string | null;
+  hsnSacId?: Uuid | null;
+  supplyType: SupplyType;
+  gstTaxability?: GstTaxability;
+  gstRate?: number;
+  cgstRate?: number;
+  sgstRate?: number;
+  igstRate?: number;
+  cessRate?: number;
+  priceIsInclusive?: boolean;
+  itcEligibility?: ItcEligibility;
+  effectiveFrom?: IsoDate | null;
+  effectiveTo?: IsoDate | null;
+  exemptionReason?: string | null;
+  regulatoryNotes?: string | null;
+  status?: MasterStatus;
+  sortOrder?: number;
+}
+
+/* ------------------------------------------------------------------ tasks */
+
+/**
+ * A unit of work a volunteer owns. Order-derived tasks carry `orderId` and a real
+ * `dueAt` taken from the order; an ordinary task has neither, by design.
+ */
+export interface TaskDto {
+  id: Uuid;
+  title: string;
+  description: string | null;
+  kind: TaskKind;
+  source: TaskSource;
+  status: TaskStatus;
+  priority: TaskPriority;
+  assignedTo: Uuid;
+  assignedBy: Uuid | null;
+  orderId: Uuid | null;
+  boardId: Uuid | null;
+  /** Operational deadline. Only ever set from a linked order — never invented. */
+  dueAt: IsoDateTime | null;
+  estimatedMinutes: number | null;
+  startedAt: IsoDateTime | null;
+  completedAt: IsoDateTime | null;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+  /** Denormalised for display. */
+  assignedToName?: string;
+  assignedByName?: string | null;
+  orderNumber?: string | null;
+  boardName?: string | null;
+}
+
+/** The one question the Tasks screen exists to answer, in one response. */
+export interface MyTasksDto {
+  /** The single task currently being worked on, or null for "Nothing in Progress". */
+  active: TaskDto | null;
+  /** Everything assigned and not yet started, deadline-bearing work first. */
+  available: TaskDto[];
+  completedToday: TaskDto[];
+}
+
+export interface TaskCreateRequest {
+  title: string;
+  description?: string | null;
+  kind?: TaskKind;
+  priority?: TaskPriority;
+  /** Omitted or equal to the caller means a self-assigned task. Otherwise needs TASK_ASSIGN. */
+  assignedTo?: Uuid;
+  boardId?: Uuid | null;
+  estimatedMinutes?: number | null;
+}
+
+export interface TaskUpdateRequest {
+  title?: string;
+  description?: string | null;
+  priority?: TaskPriority;
+  assignedTo?: Uuid;
+  estimatedMinutes?: number | null;
+  status?: TaskStatus;
+}
+
+export interface TaskListQuery {
+  assignedTo?: Uuid;
+  status?: TaskStatus;
+  source?: TaskSource;
+  kind?: TaskKind;
+  search?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+/** One row of the team activity view: who is working, and when they come free. */
+export interface TeamMemberActivityDto {
+  userId: Uuid;
+  name: string;
+  /** Two-letter monogram for the avatar, derived server-side so both clients agree. */
+  initials: string;
+  status: 'WORKING' | 'FREE' | 'OFF';
+  currentTaskId: Uuid | null;
+  currentTaskTitle: string | null;
+  currentTaskPriority: TaskPriority | null;
+  startedAt: IsoDateTime | null;
+  /** Minutes until the current task's estimate runs out. Null when there is no estimate. */
+  freeInMinutes: number | null;
+  /** Deadline of the active task, when it came from an order. */
+  dueAt: IsoDateTime | null;
+  lastTaskTitle: string | null;
+  lastActiveAt: IsoDateTime | null;
+}
+
+/** The tax treatment in force for a variant, after inheritance is resolved. */
+export interface ResolvedTaxDto {
+  taxProfileId: Uuid | null;
+  /** True when the variant carries its own profile rather than the food item's. */
+  isOverride: boolean;
+  profile: TaxProfileDto | null;
+}
+
+/* --------------------------------------------------------------- entities */
+
+/**
+ * A party the operation deals with: a customer at the counter, an employee taking a subsidised
+ * meal, a vendor being paid out. One row per person or organisation, `type` saying which role
+ * they play — see the `EntityType` note on why these are not three separate tables.
+ *
+ * `linkedUserId` connects an EMPLOYEE entity to the login account of the same person, so a
+ * staff meal charged at the counter and the account that raised it resolve to one human.
+ */
+export interface EntityDto {
+  id: Uuid;
+  code: string;
+  type: EntityType;
+  name: string;
+  nameHi: string | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  city: string | null;
+  /** Two-digit GST state code; drives CGST+SGST versus IGST at checkout. */
+  stateCode: string | null;
+  gstin: string | null;
+  pan: string | null;
+  /** EMPLOYEE only — which department the meal is charged against. */
+  department: string | null;
+  designation: string | null;
+  linkedUserId: Uuid | null;
+  /** Standing discount applied to every line of this entity's POS orders. */
+  discountPercent: number;
+  /** Ceiling on the unsettled ACCOUNT balance. Zero means no credit is extended. */
+  creditLimit: number;
+  /** Positive = the entity owes the operation. Maintained by ACCOUNT settlements. */
+  accountBalance: number;
+  notes: string | null;
+  status: MasterStatus;
+  sortOrder: number;
+  createdBy: Uuid | null;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+  /** Denormalised for display. */
+  linkedUserName?: string | null;
+  /** Completed POS orders raised in this entity's name — drives the delete guard. */
+  posOrderCount?: number;
+}
+
+export interface EntityWriteRequest {
+  id?: Uuid;
+  /** Omitted on create: the server allocates `CUS-0001` / `EMP-0001` / `VEN-0001`. */
+  code?: string;
+  type: EntityType;
+  name: string;
+  nameHi?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  address?: string | null;
+  city?: string | null;
+  stateCode?: string | null;
+  gstin?: string | null;
+  pan?: string | null;
+  department?: string | null;
+  designation?: string | null;
+  linkedUserId?: Uuid | null;
+  discountPercent?: number;
+  creditLimit?: number;
+  notes?: string | null;
+  status?: MasterStatus;
+  sortOrder?: number;
+}
+
+export interface EntityListQuery {
+  search?: string;
+  type?: EntityType;
+  status?: MasterStatus;
+  /** Exact-match phone lookup, for the counter's "who is this?" search. */
+  phone?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+/* -------------------------------------------------------------------- POS */
+
+/**
+ * One sale line, frozen at the moment it was rung up.
+ *
+ * `itemName`, `variantName`, `unitPrice` and every tax field are snapshots, not lookups: the
+ * menu may be re-priced or the variant retired tomorrow, and the bill that was handed to the
+ * customer must still add up. Same reasoning as `order_items` in the Menu Master extension.
+ */
+export interface PosOrderItemDto {
+  id: Uuid;
+  posOrderId: Uuid;
+  menuItemId: Uuid | null;
+  variantId: Uuid | null;
+  /** Set instead of `menuItemId` for a line typed on the spot. */
+  customItemName: string | null;
+  itemName: string;
+  variantName: string | null;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  /** quantity × unitPrice, before any discount. */
+  grossAmount: number;
+  discountType: PosDiscountType;
+  discountValue: number;
+  discountAmount: number;
+  taxableAmount: number;
+  taxProfileId: Uuid | null;
+  taxRate: number;
+  cgstAmount: number;
+  sgstAmount: number;
+  igstAmount: number;
+  cessAmount: number;
+  taxAmount: number;
+  /** taxableAmount + taxAmount — what this line contributes to the bill. */
+  lineTotal: number;
+  allowDecimalQuantity: boolean;
+  notes: string | null;
+  sortOrder: number;
+  status: PosOrderItemStatus;
+  cancelledAt: IsoDateTime | null;
+  cancelledBy: Uuid | null;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
+export interface PosPaymentDto {
+  id: Uuid;
+  posOrderId: Uuid;
+  method: PosPaymentMethod;
+  /** Negative on a reversal row, so the payment ledger never rewrites history. */
+  amount: number;
+  tenderedAmount: number | null;
+  changeAmount: number;
+  reference: string | null;
+  notes: string | null;
+  /** Set for ACCOUNT settlement — whose account was charged. */
+  entityId: Uuid | null;
+  isReversal: boolean;
+  receivedBy: Uuid | null;
+  receivedAt: IsoDateTime;
+}
+
+/** The POS ticket header. Items and payments come with `PosOrderDetailDto`. */
+export interface PosOrderDto {
+  id: Uuid;
+  orderNumber: string;
+  /** Resets each business date; the human-facing token number at the counter. */
+  dailySequence: number;
+  businessDate: IsoDate;
+  orderType: PosOrderType;
+  status: PosOrderStatus;
+  paymentStatus: PosPaymentStatus;
+  stationId: Uuid | null;
+  counterId: Uuid | null;
+  menuId: Uuid | null;
+  entityId: Uuid | null;
+  /** Snapshot of who the order was raised for, kept even if the entity is later renamed. */
+  entityType: EntityType | null;
+  entityName: string | null;
+  entityPhone: string | null;
+  entityAddress: string | null;
+  /** Free text — "T4", "Hall 2". A named table master is deliberately not modelled. */
+  tableLabel: string | null;
+  pax: number;
+  /** Set on a SCHEDULED order: when the food is wanted. */
+  scheduledFor: IsoDateTime | null;
+  notes: string | null;
+  subtotalAmount: number;
+  discountAmount: number;
+  taxAmount: number;
+  roundOffAmount: number;
+  totalAmount: number;
+  paidAmount: number;
+  balanceAmount: number;
+  placedAt: IsoDateTime | null;
+  completedAt: IsoDateTime | null;
+  cancelledAt: IsoDateTime | null;
+  cancelReason: string | null;
+  createdBy: Uuid;
+  updatedBy: Uuid | null;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+  revision: number;
+  /** Denormalised for the dashboard card. */
+  stationName?: string | null;
+  counterName?: string | null;
+  createdByName?: string | null;
+  itemCount?: number;
+}
+
+export interface PosOrderDetailDto extends PosOrderDto {
+  items: PosOrderItemDto[];
+  payments: PosPaymentDto[];
+}
+
+export interface PosOrderItemInput {
+  id?: Uuid;
+  menuItemId?: Uuid | null;
+  variantId?: Uuid | null;
+  customItemName?: string | null;
+  unitPrice?: number;
+  quantity: number;
+  unit?: string;
+  discountType?: PosDiscountType;
+  discountValue?: number;
+  notes?: string | null;
+  sortOrder?: number;
+  allowDecimalQuantity?: boolean;
+}
+
+export interface CreatePosOrderRequest {
+  id?: Uuid;
+  orderType: PosOrderType;
+  /** DRAFT, SCHEDULED or OPEN. Defaults to OPEN — the counter's normal case. */
+  status?: PosOrderStatus;
+  stationId?: Uuid | null;
+  counterId?: Uuid | null;
+  menuId?: Uuid | null;
+  entityId?: Uuid | null;
+  /** Names the order without registering an entity, for a one-off walk-in. */
+  entityName?: string | null;
+  entityPhone?: string | null;
+  entityAddress?: string | null;
+  tableLabel?: string | null;
+  pax?: number;
+  scheduledFor?: IsoDateTime | null;
+  notes?: string | null;
+  /** Whole-bill discount, applied after line discounts. */
+  discountType?: PosDiscountType;
+  discountValue?: number;
+  items: PosOrderItemInput[];
+}
+
+export interface UpdatePosOrderRequest {
+  orderType?: PosOrderType;
+  stationId?: Uuid | null;
+  counterId?: Uuid | null;
+  menuId?: Uuid | null;
+  entityId?: Uuid | null;
+  entityName?: string | null;
+  entityPhone?: string | null;
+  entityAddress?: string | null;
+  tableLabel?: string | null;
+  pax?: number;
+  scheduledFor?: IsoDateTime | null;
+  notes?: string | null;
+  discountType?: PosDiscountType;
+  discountValue?: number;
+  items?: PosOrderItemInput[];
+  /** Optimistic concurrency: rejected with STALE_WRITE when the ticket moved underneath. */
+  expectedRevision?: number;
+}
+
+export interface UpdatePosOrderStatusRequest {
+  status: PosOrderStatus;
+  /** Required when moving to SCHEDULED. */
+  scheduledFor?: IsoDateTime | null;
+  reason?: string | null;
+}
+
+export interface PosPaymentInput {
+  method: PosPaymentMethod;
+  amount: number;
+  tenderedAmount?: number | null;
+  reference?: string | null;
+  notes?: string | null;
+  entityId?: Uuid | null;
+}
+
+/** Settles the ticket. Split tender is the general case; one payment is the common one. */
+export interface PosCheckoutRequest {
+  payments: PosPaymentInput[];
+  /** Whole-bill discount applied at the till, overriding whatever was on the ticket. */
+  discountType?: PosDiscountType;
+  discountValue?: number;
+  expectedRevision?: number;
+}
+
+export interface PosVoidRequest {
+  reason: string;
+}
+
+export interface PosOrderListQuery {
+  status?: PosOrderStatus[];
+  orderType?: PosOrderType[];
+  paymentStatus?: PosPaymentStatus[];
+  entityId?: Uuid;
+  stationId?: Uuid;
+  counterId?: Uuid;
+  /** True: only orders raised in the name of an entity. False: only anonymous ones. */
+  named?: boolean;
+  dateFrom?: IsoDate;
+  dateTo?: IsoDate;
+  search?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+/** The counts behind the POS dashboard tiles, computed server-side in one pass. */
+export interface PosDashboardSummaryDto {
+  businessDate: IsoDate;
+  draftCount: number;
+  scheduledCount: number;
+  openCount: number;
+  takeawayCount: number;
+  dineInCount: number;
+  deliveryCount: number;
+  quickSaleCount: number;
+  namedCount: number;
+  completedToday: number;
+  cancelledToday: number;
+  /** Money taken today across completed sales, net of reversals. */
+  salesToday: number;
+  /** Money still owed on active tickets. */
+  outstandingAmount: number;
+}
+
+/** Everything the POS dashboard renders in one round trip. */
+export interface PosDashboardDto {
+  summary: PosDashboardSummaryDto;
+  drafts: PosOrderDto[];
+  scheduled: PosOrderDto[];
+  takeaway: PosOrderDto[];
+  named: PosOrderDto[];
+  open: PosOrderDto[];
 }

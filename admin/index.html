@@ -3,7 +3,30 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MenuBoard Admin</title>
+    <title>Canteen OS</title>
+    <script>
+      /*
+       * Paint the stored skin before React mounts. ThemeProvider applies it in an effect, which
+       * runs after the first paint — so without this a dark-mode operator got a full-screen
+       * white flash on every load. Kept deliberately tiny and dependency-free, and mirroring
+       * SKIN_CLASSES / SKIN_COLOR_SCHEME in src/theme/ThemeProvider.tsx.
+       */
+      (function () {
+        try {
+          var root = document.documentElement;
+          var skin = localStorage.getItem('menuboard.admin.theme');
+          if (skin === 'dark') root.classList.add('dark');
+          else if (skin === 'brand') root.classList.add('dark', 'contrast');
+          root.style.colorScheme = skin === 'dark' || skin === 'brand' ? 'dark' : 'light';
+
+          var size = localStorage.getItem('menuboard.admin.textSize');
+          root.dataset.textSize =
+            size === 'compact' || size === 'large' ? size : 'default';
+        } catch (err) {
+          /* Private mode with storage denied: fall through to the light default. */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

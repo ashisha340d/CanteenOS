@@ -605,6 +605,10 @@ There are no standalone REST endpoints for individual order items. Items are emb
 - `notes?: string | null` — max 1000
 - `mentionedUserIds?: Uuid[]` — max 50 (deduplicated)
 - `sortOrder?: number` — defaults to array index
+- `menuId?: Uuid | null` — Menu Master reference, optional (see §17)
+- `variantId?: Uuid | null` — when set, the server resolves and freezes that variant's
+  current name/price into the line at creation time; never re-derived afterwards
+- `discountAmount?: number` — 0–10,000,000, only meaningful alongside `variantId`
 
 **Validation rule — exactly one of `menuItemId` / `customItemName` must be supplied.**
 Supplying both, or neither, returns `VALIDATION_FAILED` on `items`. A blank or whitespace-only
@@ -620,6 +624,11 @@ Mirrors the above once resolved: `menuItemId: Uuid | null`, `customItemName: str
 with the same exclusivity guarantee (`ck_order_items_dish`). `menuItemName` remains a
 denormalised display field, populated only for catalogued lines; clients should render
 `customItemName ?? menuItemName`.
+
+Also carries the frozen Menu Master snapshot: `menuId`, `variantId`, `variantName`,
+`unitPrice`, `taxAmount`, `discountAmount`, `lineTotal` — all null (`taxAmount`/
+`discountAmount` zero) on a line created without a `variantId`, or created before this
+extension existed. None of these are ever recomputed from the current Menu Master.
 
 Returned in `OrderDetailDto.items` as `OrderItemDto`.
 
@@ -964,7 +973,184 @@ Currently defined settings (from `SettingsService`):
 
 ---
 
-## 17. Socket.IO
+## 17. Menu Master
+
+Base: `/api/v1/menus`, `/api/v1/menu-item-assignments`, `/api/v1/menu-item-variants`,
+`/api/v1/counters`, `/api/v1/counter-routes`, `/api/v1/printing-groups`,
+`/api/v1/printing-routes`, `/api/v1/modifier-groups`, `/api/v1/modifiers`,
+`/api/v1/modifier-assignments`, `/api/v1/menu-schedules`, `/api/v1/media`. See
+[MENUBOARD_SPEC.md §3a](./MENUBOARD_SPEC.md#3a-menu-master-extension) for the product
+framing and [DATABASE.md](./DATABASE.md#menu-master-012_menu_mastersql) for the schema.
+Reads require `MASTER_READ`, writes require `MASTER_WRITE` — identical gate to §8 Masters,
+which this extends rather than replaces.
+
+### 17.1 Menus
+
+- `GET /menus` — `menuListQuerySchema` (extends `pageQuery`) → `200 Paginated<MenuDto>`
+- `GET /menus/:id` → `200 MenuDto`
+- `POST /menus` — `MenuWriteRequest` (`code` unique, letters/digits/`_`/`-` only) → `201 MenuDto`
+- `PATCH /menus/:id` → `200 MenuDto`
+- `DELETE /menus/:id` — soft delete; `CONFLICT` while any category/item assignment exists
+- `POST /menus/:id/restore` → `200 MenuDto`
+- `POST /menus/:id/publish` / `POST /menus/:id/unpublish` → `200 MenuDto`
+- `GET /menus/by-code/:code/tree` — resolved category → item → variant tree with resolved
+  primary media, for POS/MenuBoard-class consumers; `404` unless `status = ACTIVE` and published
+
+### 17.2 Menu category assignments
+
+- `GET /menus/:menuId/categories?includeInactive?` → `200 MenuCategoryAssignmentDto[]`
+- `POST /menus/:menuId/categories` — `MenuCategoryAssignmentWriteRequest` (references an
+  existing `menu_categories` row by `categoryId`; never creates one) → `201`
+- `PATCH /menu-category-assignments/:id` → `200`
+- `DELETE /menu-category-assignments/:id` — `CONFLICT` while any item assignment still uses it
+
+### 17.3 Menu item assignments
+
+- `GET /menu-item-assignments?menuId?&categoryAssignmentId?&availability?&...pageQuery` →
+  `200 Paginated<MenuItemAssignmentDto>`
+- `GET /menu-item-assignments/:id` → `200`
+- `POST /menus/:menuId/items` — `MenuItemAssignmentWriteRequest` (references an existing
+  `menu_items` row by `foodItemId`; never creates one) → `201`
+- `PATCH /menu-item-assignments/:id` → `200` (`foodItemId` is not patchable — remove and
+  re-add to change which food item an assignment offers)
+- `DELETE /menu-item-assignments/:id` — `CONFLICT` if any order has ever sold a variant under it
+
+### 17.4 Menu item variants
+
+- `GET /menu-item-assignments/:assignmentId/variants?includeInactive?` → `200 MenuItemVariantDto[]`
+- `POST /menu-item-assignments/:assignmentId/variants` — `MenuItemVariantWriteRequest` → `201`
+- `PATCH /menu-item-variants/:id` → `200`
+- `DELETE /menu-item-variants/:id` — `CONFLICT` if any order line references it
+
+### 17.5 Counters, printing groups, modifiers
+
+Counters/printing groups are flat masters (`GET/POST /counters`,
+`GET/POST /printing-groups`, `PATCH`/`DELETE :id` on both — deletion refused while any route
+references them). Routing is a join to a `MENU_ITEM_ASSIGNMENT` or `MENU_ITEM_VARIANT`:
+
+- `GET /counter-routes?entityType&entityId`, `POST /counter-routes`
+  (`CounterRouteWriteRequest`), `DELETE /counter-routes/:id`
+- `GET /printing-routes?entityType&entityId`, `POST /printing-routes`
+  (`PrintingRouteWriteRequest`, has `sortOrder` — an item may print to more than one group),
+  `DELETE /printing-routes/:id`
+
+Modifiers add one more level: `GET/POST /modifier-groups`, `PATCH`/`DELETE :id`;
+`POST /modifier-groups/:groupId/modifiers`, `PATCH`/`DELETE /modifiers/:id`; then
+`GET /modifier-assignments?entityType&entityId`, `POST /modifier-assignments`
+(`ModifierAssignmentWriteRequest`), `DELETE /modifier-assignments/:id`.
+
+### 17.6 Menu schedules
+
+- `GET /menus/:menuId/schedules` → `200 MenuScheduleDto[]`
+- `POST /menus/:menuId/schedules` — `MenuScheduleWriteRequest`
+  (`dayOfWeek: 0-6 | null` where null = every day; `startTime < endTime` or `VALIDATION_FAILED`)
+- `PATCH /menu-schedules/:id`, `DELETE /menu-schedules/:id`
+
+### 17.7 Media library
+
+Reusable image assets (JPEG/PNG/WebP, ≤8 MB — same limits as `MEDIA.IMAGE_*` used by
+attachments) plus polymorphic assignments to a `MENU` / `MENU_CATEGORY_ASSIGNMENT` /
+`MENU_ITEM_ASSIGNMENT` / `MENU_ITEM_VARIANT` row.
+
+- `GET /media?search?&unassignedOnly?&...pageQuery` → `200 Paginated<MediaAssetDto>`
+  (`MediaAssetDto.url` is a signed, time-limited download URL, same convention as
+  `AttachmentDto`)
+- `GET /media/:id` → `200 MediaAssetDto`
+- `POST /media/upload` — multipart, field `file` → `201 MediaAssetDto`
+- `PUT /media/:id` — `MediaAssetUpdateRequest` (`title`/`altText`/`status`) → `200`
+- `DELETE /media/:id` — `CONFLICT` while any assignment still references it; never deletes a
+  file that's still in use elsewhere
+- `GET /media/:id/file?expires&uid&sig` — public, signed download (mounted before
+  `authenticate`, same as `/attachments/:id/file`)
+- `GET /media/assignments/for-entity?entityType&entityId` → `200 MediaAssignmentDto[]`
+- `POST /media/assignments` — `MediaAssignmentWriteRequest`; the first assignment for an
+  entity becomes primary automatically, or set `isPrimary: true` explicitly (clears any
+  previous primary for that entity — at most one primary at a time)
+- `DELETE /media/assignments/:id` — unassigns only; the asset survives for reuse
+- `POST /media/assignments/:id/set-primary`, `POST /media/assignments/:id/reorder`
+  (`{ sortOrder: number }`)
+
+Media inheritance (variant → menu item → food item, first non-null primary image wins) is
+resolved server-side only inside `GET /menus/by-code/:code/tree`; the CRUD endpoints above
+return exactly what is assigned at each level with no fallback.
+
+---
+
+## 17a. Entities
+
+The party master: customers, employees, vendors and anything else a bill is raised for. One
+resource, discriminated by `type` — see
+[MENUBOARD_SPEC.md §3b](./MENUBOARD_SPEC.md#3b-point-of-sale-and-the-entity-master-extension).
+
+Reads require `ENTITY_READ` (held from `USER` up, so a counter operator can find their
+customer); writes require `ENTITY_WRITE` (`MANAGER` and above).
+
+- `GET /entities?search?&type?&status?&phone?&...pageQuery` → `200 Paginated<EntityDto>`
+- `GET /entities/lookup?phone=…` → `200 EntityDto | null`. **Null, not 404**: at a counter a
+  miss is an ordinary answer, not an error.
+- `GET /entities/:id` → `200 EntityDto`
+- `POST /entities` — `EntityWriteRequest` → `201 EntityDto`. `code` is optional; omitted, the
+  server allocates `CUS-0001` / `EMP-0001` / `VEN-0001` / `OTH-0001` per type.
+- `PATCH /entities/:id` — `Partial<EntityWriteRequest>` → `200 EntityDto`
+- `DELETE /entities/:id` → `204`. `CONFLICT` when the entity appears on any POS order, or
+  when its `accountBalance` is non-zero — deactivate instead.
+
+`accountBalance` is read-only over the API. It moves only as a side effect of `ACCOUNT`
+settlement and its reversal.
+
+## 17b. Point of Sale
+
+Four capabilities, deliberately separate: `POS_READ` (see the floor), `POS_OPERATE` (take an
+order), `POS_CHECKOUT` (take money), `POS_VOID` (reverse money already taken). All global —
+a till belongs to a counter, not a board.
+
+- `GET /pos/dashboard?businessDate?&stationId?&counterId?` → `200 PosDashboardDto`
+  (`{ summary, drafts, scheduled, takeaway, named, open }`). The five buckets are overlapping
+  views of the same active set, not a partition: a scheduled delivery raised in a customer's
+  name appears under both `scheduled` and `named`, because an operator will look in either.
+  DRAFT/SCHEDULED/OPEN tickets carry over across business dates; only the settled counts are
+  pinned to the date.
+- `GET /pos/orders?status?&orderType?&paymentStatus?&entityId?&stationId?&counterId?&named?&dateFrom?&dateTo?&search?&...pageQuery`
+  → `200 Paginated<PosOrderDto>`. `named=true|false` filters on
+  `entityId IS NOT NULL OR entityName IS NOT NULL`.
+- `GET /pos/orders/:posOrderId` → `200 PosOrderDetailDto` (header + `items` + `payments`)
+- `POST /pos/orders` — `CreatePosOrderRequest` → `201 PosOrderDetailDto`
+- `PATCH /pos/orders/:posOrderId` — `UpdatePosOrderRequest` → `200 PosOrderDetailDto`.
+  `FORBIDDEN` once the ticket is COMPLETED or CANCELLED. Honours `expectedRevision`
+  (`STALE_WRITE` when another terminal moved first).
+- `POST /pos/orders/:posOrderId/status` — `UpdatePosOrderStatusRequest` → `200`.
+  Transitions are validated by `canTransitionPosOrderStatus`
+  (`INVALID_STATUS_TRANSITION`). Setting `COMPLETED` by hand is refused with `CONFLICT` —
+  a ticket is completed by checking it out. `SCHEDULED` requires `scheduledFor`.
+- `POST /pos/orders/:posOrderId/checkout` — `PosCheckoutRequest` → `200 PosOrderDetailDto`
+- `POST /pos/orders/:posOrderId/void` — `PosVoidRequest` (`reason` required) → `200`
+
+**The client never sends money for a catalogue line.** A line is
+`{ menuItemId, variantId?, quantity }`; `PosService` resolves the price (per-menu catalogue
+price → variant price → food-item base price) and the tax (variant profile → food-item
+profile) and freezes every amount onto the row. Only an **ad-hoc** line sends `unitPrice`,
+alongside `customItemName` and never `menuItemId` — exactly one of the two names the dish.
+
+Other rules worth knowing before writing a client:
+
+- A `DRAFT` may have zero items; nothing else may.
+- `QUICK_SALE` is anonymous by definition — an `entityId` or `entityName` on one is a
+  `VALIDATION_FAILED`, enforced in Zod, in the service and by a DB `CHECK`.
+- Checkout payments must sum **exactly** to `totalAmount`. Under- and over-tender are both
+  refused; `tenderedAmount` on a `CASH` leg may exceed its amount and yields `changeAmount`.
+- `ACCOUNT` payments require an entity, and are refused when they would breach a non-zero
+  `creditLimit`.
+- **Void never edits or deletes a payment.** It writes offsetting negative `pos_payments`
+  rows, restores any `ACCOUNT` balance, and moves the ticket to `CANCELLED`/`VOIDED`. The
+  payment ledger is append-only.
+- Rounding to whole rupees happens once, at the bill total, and only when the
+  `pos.round_off_enabled` setting is on.
+- CGST+SGST is the default split; IGST applies only when `pos.home_state_code` is configured
+  and differs from the entity's `stateCode`.
+
+---
+
+## 18. Socket.IO
 
 The Socket.IO server is attached to the same HTTP listener as the REST API. It is a **hint
 channel only**; payloads never carry full entity bodies. Clients pull deltas through the normal

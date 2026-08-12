@@ -35,6 +35,34 @@ export const LIMITS = {
   INGREDIENT_NAME_MAX: 150,
   INGREDIENT_CATEGORY_NAME_MAX: 120,
 
+  ENTITY_CODE_MAX: 40,
+  ENTITY_NAME_MAX: 150,
+  ENTITY_PHONE_MAX: 30,
+  ENTITY_EMAIL_MAX: 200,
+  ENTITY_ADDRESS_MAX: 500,
+  ENTITY_CITY_MAX: 120,
+  ENTITY_DEPARTMENT_MAX: 120,
+  ENTITY_DESIGNATION_MAX: 120,
+  ENTITY_GSTIN_MAX: 15,
+  ENTITY_PAN_MAX: 10,
+  ENTITY_NOTES_MAX: 1000,
+
+  POS_TABLE_LABEL_MAX: 60,
+  POS_ORDER_NOTES_MAX: 1000,
+  POS_ORDER_ITEM_NOTES_MAX: 500,
+  POS_CANCEL_REASON_MAX: 300,
+  POS_PAYMENT_REFERENCE_MAX: 120,
+  POS_PAYMENT_NOTES_MAX: 300,
+  POS_ITEMS_PER_ORDER_MAX: 200,
+  POS_PAYMENTS_PER_ORDER_MAX: 10,
+  /** Percentage ceiling for a line or order discount. */
+  POS_DISCOUNT_PERCENT_MAX: 100,
+
+  TASK_TITLE_MAX: 200,
+  TASK_DESCRIPTION_MAX: 1000,
+  /** 24 hours. A longer estimate is a shift, not a task. */
+  TASK_ESTIMATE_MINUTES_MAX: 1440,
+
   TAX_PROFILE_CODE_MAX: 40,
   TAX_PROFILE_NAME_MAX: 120,
   TAX_PROFILE_DESCRIPTION_MAX: 500,
@@ -54,8 +82,61 @@ export const LIMITS = {
   THREAD_BODY_MAX: 4000,
   USER_NAME_MAX: 150,
   USERNAME_MAX: 100,
-  PASSWORD_MIN: 8,
+  PASSWORD_MIN: 6,
   PASSWORD_MAX: 128,
+
+  EQUIPMENT_NAME_MAX: 150,
+  EQUIPMENT_ASSET_ID_MAX: 40,
+  EQUIPMENT_TYPE_MAX: 120,
+  EQUIPMENT_BRAND_MAX: 120,
+  EQUIPMENT_MODEL_MAX: 120,
+  EQUIPMENT_SERIAL_MAX: 120,
+  EQUIPMENT_MANUFACTURER_MAX: 150,
+  EQUIPMENT_NOTES_MAX: 2000,
+  EQUIPMENT_STATUS_NOTE_MAX: 500,
+  EQUIPMENT_SPEC_VALUE_MAX: 120,
+  /** Free-form spec keys read off a plate; a plate never has more than a handful. */
+  EQUIPMENT_SPEC_KEYS_MAX: 20,
+  EQUIPMENT_INVOICE_NUMBER_MAX: 80,
+  EQUIPMENT_QR_CODE_MAX: 120,
+  EQUIPMENT_NFC_TAG_MAX: 120,
+  EQUIPMENT_TELEMETRY_DEVICE_MAX: 120,
+  /** Three letters, e.g. KIT / OVN. Longer segments make an asset id unreadable. */
+  ASSET_SEGMENT_MAX: 4,
+  EQUIPMENT_FLOOR_NAME_MAX: 120,
+  EQUIPMENT_AREA_NAME_MAX: 120,
+  EQUIPMENT_LOCATION_NAME_MAX: 120,
+  EQUIPMENT_ROOM_MAX: 120,
+  EQUIPMENT_SECTION_MAX: 120,
+  EQUIPMENT_POSITION_MAX: 120,
+  EQUIPMENT_CATEGORY_NAME_MAX: 120,
+  EQUIPMENT_CATEGORY_CODE_MAX: 60,
+  EQUIPMENT_DOCUMENT_TITLE_MAX: 200,
+  EQUIPMENT_DOCUMENTS_PER_ASSET_MAX: 60,
+
+  SUPPLIER_NAME_MAX: 150,
+  SUPPLIER_CODE_MAX: 40,
+  SUPPLIER_CONTACT_NAME_MAX: 150,
+  SUPPLIER_PHONE_MAX: 30,
+  SUPPLIER_EMAIL_MAX: 200,
+  SUPPLIER_SERVICE_CATEGORY_MAX: 150,
+  SUPPLIER_SERVICE_AREA_MAX: 200,
+  SUPPLIER_NOTES_MAX: 1000,
+
+  MAINTENANCE_TITLE_MAX: 200,
+  MAINTENANCE_DESCRIPTION_MAX: 2000,
+  MAINTENANCE_RESOLUTION_MAX: 2000,
+  MAINTENANCE_PARTS_MAX: 1000,
+  MAINTENANCE_NOTE_MAX: 1000,
+  MAINTENANCE_TECHNICIAN_NAME_MAX: 150,
+  MAINTENANCE_ATTACHMENTS_PER_TICKET_MAX: 30,
+  MAINTENANCE_TRANSCRIPT_MAX: 4000,
+  /** A WhatsApp message body; the composed maintenance message is far shorter. */
+  WHATSAPP_MESSAGE_MAX: 4000,
+  /** Longest sensible preventive interval. Anything beyond a year is a yearly schedule. */
+  MAINTENANCE_INTERVAL_DAYS_MAX: 3650,
+  MAINTENANCE_REMINDER_DAYS_MAX: 90,
+  MAINTENANCE_COST_MAX: 100_000_000,
 
   PAX_MIN: 0,
   PAX_MAX: 1_000_000,
@@ -99,6 +180,21 @@ export const ORDER_NUMBER = {
 
 /** Crockford base32 — excludes I, L, O and U to avoid transcription errors. */
 export const CROCKFORD_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+
+/**
+ * POS bill numbers, unlike operational order numbers, *are* server-sequential.
+ *
+ * The offline-creation constraint that forced `ORD-YYYYMMDD-XXXXXX` to be device-generated
+ * (docs/MENUBOARD_SPEC.md decision 1) does not apply here: a till is online by definition,
+ * and a counter has to hand the customer a bill number that reads as a countable sequence.
+ * The daily counter resets each business date, so `POS-20260811-0001` is the first sale of
+ * the day at every station.
+ */
+export const POS_ORDER_NUMBER = {
+  PREFIX: 'POS',
+  PATTERN: /^POS-\d{8}-\d{4,6}$/,
+  SEQUENCE_PAD: 4,
+} as const;
 
 /**
  * The authoritative HSN/SAC classification dataset.

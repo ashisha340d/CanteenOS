@@ -47,6 +47,23 @@ export const SETTING_DEFINITIONS = {
       typeof value === 'string' && value.trim().length > 0 && value.length <= 150,
     default: 'MenuBoard',
   },
+  'pos.default_menu_code': {
+    description: 'Code of the menu the POS prices against when the operator does not pick one',
+    validate: (value: unknown): boolean => typeof value === 'string' && value.length <= 60,
+    default: '',
+  },
+  'pos.home_state_code': {
+    description:
+      "Two-digit GST state code of this operation. A customer in another state is billed IGST; everyone else CGST+SGST. Blank means always CGST+SGST.",
+    validate: (value: unknown): boolean =>
+      typeof value === 'string' && (value === '' || /^\d{2}$/.test(value)),
+    default: '',
+  },
+  'pos.round_off_enabled': {
+    description: 'Round the POS bill total to the nearest whole rupee',
+    validate: (value: unknown): boolean => typeof value === 'boolean',
+    default: true,
+  },
 } as const;
 
 export type SettingKey = keyof typeof SETTING_DEFINITIONS;

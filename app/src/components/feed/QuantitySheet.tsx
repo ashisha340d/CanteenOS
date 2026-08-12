@@ -61,6 +61,7 @@ export function QuantitySheet({
             value={value}
             onChangeText={(text) => setValue(text.replace(/[^0-9.]/g, ''))}
             keyboardType="numeric"
+            returnKeyType="done"
             selectTextOnFocus
             autoFocus
           />
@@ -112,8 +113,11 @@ const styles = StyleSheet.create({
   value: {
     fontFamily: fonts.mono,
     fontSize: 32,
+    height: 40,
     color: colors.onSurface,
     textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
     padding: 0,
     minWidth: 100,
   },

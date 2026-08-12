@@ -11,7 +11,7 @@ import { DataTable, type DataTableColumn } from '../../components/DataTable/Data
 import { useViewMode } from '../../components/DataTable/gridState';
 import { EntityCardGrid } from '../../components/EntityCardGrid';
 import { ListToolbar } from '../../components/ListToolbar';
-import { PageHeader } from '../../components/ui/PageHeader';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusChip } from '../../components/StatusChip';
 import { IfCapable } from '../../services/CapabilityGate';
 import { useBillingList, useUpdateBillingStatus } from '../../hooks/useAdmin';
@@ -148,12 +148,14 @@ export function BillingPage(): JSX.Element {
   return (
     <>
       <PageHeader
+        eyebrow="Records"
         title="Billing"
-        subtitle="Immutable snapshots of completed work. Generating one never alters an earlier export."
+        subtitle="Generated billing snapshots. Each one freezes the figures at the moment it was produced."
       />
+
       <ListToolbar
         search=""
-        onSearchChange={() => {}}
+        onSearchChange={() => { }}
         hideSearch
         activeFilterCount={status ? 1 : 0}
         onClearFilters={() => {

@@ -100,6 +100,13 @@ export function useDeleteMenuCategory() {
 export function useMenuItems(query: MasterListQuery & { categoryId?: string }) {
   return useQuery({ queryKey: ['menu-items', query], queryFn: () => menuItemsApi.list(query), placeholderData: (p) => p });
 }
+export function useMenuItem(id: string | undefined) {
+  return useQuery({
+    queryKey: ['menu-item', id],
+    queryFn: () => menuItemsApi.get(id as string),
+    enabled: Boolean(id),
+  });
+}
 export function useCreateMenuItem() {
   const qc = useQueryClient();
   return useMutation({ mutationFn: (body: MenuItemWriteRequest) => menuItemsApi.create(body), onSuccess: () => qc.invalidateQueries({ queryKey: ['menu-items'] }) });

@@ -13,8 +13,8 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { TextField } from '@/components/form/fields';
 import { DataTable, type DataTableColumn } from '../../components/DataTable/DataTable';
-import { PageHeader } from '../../components/ui/PageHeader';
 import { StatusChip } from '../../components/StatusChip';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { useReport } from '../../hooks/useAdmin';
 
 const TABS: { kind: ReportKind; label: string }[] = [
@@ -78,8 +78,9 @@ export function ReportsPage(): JSX.Element {
   return (
     <>
       <PageHeader
+        eyebrow="Records"
         title="Reports"
-        subtitle="Read-only views over completed work. Pick a period, then a lens."
+        subtitle="Figures across orders, billing and consumption for a date range you choose."
       />
 
       <Tabs

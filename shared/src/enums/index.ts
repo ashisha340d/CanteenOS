@@ -3,6 +3,8 @@
  * travel over the wire unchanged — never renumber or rename an existing member.
  */
 
+export * from './equipment';
+
 export const UserRole = {
   SUPER_ADMIN: 'SUPER_ADMIN',
   ADMIN: 'ADMIN',
@@ -64,6 +66,72 @@ export const MasterStatus = {
   INACTIVE: 'INACTIVE',
 } as const;
 export type MasterStatus = (typeof MasterStatus)[keyof typeof MasterStatus];
+
+/* --------------------------------------------------------------- menu master */
+
+/** Sellable/orderable state for a menu item assignment or a variant. */
+export const AvailabilityStatus = {
+  AVAILABLE: 'AVAILABLE',
+  UNAVAILABLE: 'UNAVAILABLE',
+  SOLD_OUT: 'SOLD_OUT',
+} as const;
+export type AvailabilityStatus = (typeof AvailabilityStatus)[keyof typeof AvailabilityStatus];
+
+/** What a media asset physically is. */
+export const MediaType = {
+  IMAGE: 'IMAGE',
+  VIDEO: 'VIDEO',
+  DOCUMENT: 'DOCUMENT',
+} as const;
+export type MediaType = (typeof MediaType)[keyof typeof MediaType];
+
+/** The purpose a media assignment plays for its entity — drives which slot it fills in the UI. */
+export const MediaRole = {
+  PRIMARY: 'PRIMARY',
+  GALLERY: 'GALLERY',
+  BANNER: 'BANNER',
+  THUMBNAIL: 'THUMBNAIL',
+  COVER: 'COVER',
+} as const;
+export type MediaRole = (typeof MediaRole)[keyof typeof MediaRole];
+
+/** Every kind of Menu Master row a media asset, counter, printing group or modifier group can be
+ * attached to. Mirrors the polymorphic owner_type/owner_id pattern already used by attachments. */
+export const MediaEntityType = {
+  MENU: 'MENU',
+  MENU_CATEGORY_ASSIGNMENT: 'MENU_CATEGORY_ASSIGNMENT',
+  MENU_ITEM_ASSIGNMENT: 'MENU_ITEM_ASSIGNMENT',
+  MENU_ITEM_VARIANT: 'MENU_ITEM_VARIANT',
+  /** The food item itself — photography that follows the dish onto every menu it appears on. */
+  MENU_ITEM: 'MENU_ITEM',
+  COUNTER: 'COUNTER',
+  PRINTING_GROUP: 'PRINTING_GROUP',
+  RECIPE: 'RECIPE',
+} as const;
+export type MediaEntityType = (typeof MediaEntityType)[keyof typeof MediaEntityType];
+
+/** Routing tables (counters, printing groups, modifiers) target these levels — MENU_ITEM
+ * being the food item itself, global across every menu it is offered on. */
+export const RoutableEntityType = {
+  MENU_ITEM_ASSIGNMENT: 'MENU_ITEM_ASSIGNMENT',
+  MENU_ITEM_VARIANT: 'MENU_ITEM_VARIANT',
+  MENU_ITEM: 'MENU_ITEM',
+} as const;
+export type RoutableEntityType = (typeof RoutableEntityType)[keyof typeof RoutableEntityType];
+
+export const ModifierSelectionType = {
+  SINGLE: 'SINGLE',
+  MULTIPLE: 'MULTIPLE',
+} as const;
+export type ModifierSelectionType =
+  (typeof ModifierSelectionType)[keyof typeof ModifierSelectionType];
+
+/** The two shifts a food item's per-weekday availability is configured for. */
+export const ScheduleShift = {
+  MORNING: 'MORNING',
+  EVENING: 'EVENING',
+} as const;
+export type ScheduleShift = (typeof ScheduleShift)[keyof typeof ScheduleShift];
 
 /* ------------------------------------------------------------- order status */
 
@@ -300,6 +368,21 @@ export const NotificationType = {
   BOARD_INVITATION: 'BOARD_INVITATION',
   /** Raised by the alarm scheduler; carries an `alertType` in `data`. */
   ALERT: 'ALERT',
+
+  /**
+   * Equipment & maintenance. One inbox and one delivery path for everything, rather than a
+   * parallel notification system; `data` carries `equipmentId` / `ticketId` so tapping the
+   * notification lands on the right screen.
+   */
+  MAINTENANCE_DUE: 'MAINTENANCE_DUE',
+  MAINTENANCE_OVERDUE: 'MAINTENANCE_OVERDUE',
+  MAINTENANCE_CRITICAL: 'MAINTENANCE_CRITICAL',
+  MAINTENANCE_REPORTED: 'MAINTENANCE_REPORTED',
+  MAINTENANCE_ASSIGNED: 'MAINTENANCE_ASSIGNED',
+  MAINTENANCE_COMPLETED: 'MAINTENANCE_COMPLETED',
+  EQUIPMENT_OUT_OF_SERVICE: 'EQUIPMENT_OUT_OF_SERVICE',
+  WARRANTY_EXPIRING: 'WARRANTY_EXPIRING',
+  SUPPLIER_FOLLOW_UP: 'SUPPLIER_FOLLOW_UP',
 } as const;
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];
 
@@ -403,3 +486,224 @@ export const YOUTUBE_IMPORT_ACTIVE_STATUSES: readonly YoutubeImportStatus[] = [
   YoutubeImportStatus.OCR,
   YoutubeImportStatus.ANALYZING,
 ];
+
+/* ------------------------------------------------------------- GST / tax */
+
+/** HSN classifies goods, SAC classifies services. The official workbook ships one sheet each. */
+export const HsnSacCodeType = {
+  HSN: 'HSN',
+  SAC: 'SAC',
+} as const;
+export type HsnSacCodeType = (typeof HsnSacCodeType)[keyof typeof HsnSacCodeType];
+
+export const SupplyType = {
+  GOODS: 'GOODS',
+  SERVICE: 'SERVICE',
+} as const;
+export type SupplyType = (typeof SupplyType)[keyof typeof SupplyType];
+
+/**
+ * Why a supply is or is not taxed. EXEMPT/NIL_RATED/ZERO_RATED are legally distinct despite
+ * all three producing no tax, so they are not collapsed into one value.
+ */
+export const GstTaxability = {
+  TAXABLE: 'TAXABLE',
+  EXEMPT: 'EXEMPT',
+  NIL_RATED: 'NIL_RATED',
+  ZERO_RATED: 'ZERO_RATED',
+  NON_GST: 'NON_GST',
+} as const;
+export type GstTaxability = (typeof GstTaxability)[keyof typeof GstTaxability];
+
+/** Taxabilities for which a non-zero GST rate is a contradiction. */
+export const ZERO_TAX_TAXABILITIES: readonly GstTaxability[] = [
+  GstTaxability.EXEMPT,
+  GstTaxability.NIL_RATED,
+  GstTaxability.ZERO_RATED,
+  GstTaxability.NON_GST,
+];
+
+export const ItcEligibility = {
+  AVAILABLE: 'AVAILABLE',
+  NOT_AVAILABLE: 'NOT_AVAILABLE',
+  PARTIAL: 'PARTIAL',
+} as const;
+export type ItcEligibility = (typeof ItcEligibility)[keyof typeof ItcEligibility];
+
+/* ------------------------------------------------------------------ tasks */
+
+/** Ordinary work, or a volunteer marking themselves unavailable. */
+export const TaskKind = {
+  WORK: 'WORK',
+  OFF_TIME: 'OFF_TIME',
+} as const;
+export type TaskKind = (typeof TaskKind)[keyof typeof TaskKind];
+
+/**
+ * Where the work came from, as the volunteer sees it. Stamped at creation from the
+ * assigner's role — SELF is deliberately not an administrator role, so self-assigned work is
+ * never presented as an instruction from above.
+ */
+export const TaskSource = {
+  SUPER_ADMIN: 'SUPER_ADMIN',
+  ADMIN: 'ADMIN',
+  MANAGER: 'MANAGER',
+  SELF: 'SELF',
+} as const;
+export type TaskSource = (typeof TaskSource)[keyof typeof TaskSource];
+
+export const TASK_SOURCE_LABELS: Readonly<Record<TaskSource, string>> = {
+  SUPER_ADMIN: 'Super Admin',
+  ADMIN: 'Admin',
+  MANAGER: 'Manager',
+  SELF: 'Self Assigned',
+};
+
+export const TaskStatus = {
+  PENDING: 'PENDING',
+  IN_PROGRESS: 'IN_PROGRESS',
+  COMPLETED: 'COMPLETED',
+  CANCELLED: 'CANCELLED',
+} as const;
+export type TaskStatus = (typeof TaskStatus)[keyof typeof TaskStatus];
+
+export const TaskPriority = {
+  NORMAL: 'NORMAL',
+  HIGH: 'HIGH',
+} as const;
+export type TaskPriority = (typeof TaskPriority)[keyof typeof TaskPriority];
+
+/** Lifecycle of one "Sync GST Master" run. */
+export const GstSyncStatus = {
+  RUNNING: 'RUNNING',
+  SUCCESS: 'SUCCESS',
+  FAILED: 'FAILED',
+} as const;
+export type GstSyncStatus = (typeof GstSyncStatus)[keyof typeof GstSyncStatus];
+
+/* ---------------------------------------------------------------- entities */
+
+/**
+ * What kind of party an `entities` row describes.
+ *
+ * One master, not three: a canteen sells to a customer, charges an employee against payroll
+ * and buys from a vendor, and the same person is regularly two of those at once. Splitting
+ * them into separate tables would duplicate the person and lose the link between the roles.
+ */
+export const EntityType = {
+  CUSTOMER: 'CUSTOMER',
+  EMPLOYEE: 'EMPLOYEE',
+  VENDOR: 'VENDOR',
+  /** Departments, trusts, visiting groups — anything a bill may be raised in the name of. */
+  OTHER: 'OTHER',
+} as const;
+export type EntityType = (typeof EntityType)[keyof typeof EntityType];
+
+/* --------------------------------------------------------------------- POS */
+
+/** How the sale is fulfilled. Orthogonal to whether the order carries an entity. */
+export const PosOrderType = {
+  DINE_IN: 'DINE_IN',
+  TAKEAWAY: 'TAKEAWAY',
+  DELIVERY: 'DELIVERY',
+  /** Walk-up cash sale, deliberately anonymous — the only type that never names an entity. */
+  QUICK_SALE: 'QUICK_SALE',
+} as const;
+export type PosOrderType = (typeof PosOrderType)[keyof typeof PosOrderType];
+
+/**
+ * The POS order lifecycle.
+ *
+ * DRAFT and SCHEDULED are both "not yet on the counter", but for different reasons, and the
+ * dashboard has to be able to tell them apart: a DRAFT is an unfinished ticket someone parked
+ * mid-entry, a SCHEDULED order is a finished ticket deliberately dated forward.
+ */
+export const PosOrderStatus = {
+  DRAFT: 'DRAFT',
+  SCHEDULED: 'SCHEDULED',
+  OPEN: 'OPEN',
+  COMPLETED: 'COMPLETED',
+  CANCELLED: 'CANCELLED',
+} as const;
+export type PosOrderStatus = (typeof PosOrderStatus)[keyof typeof PosOrderStatus];
+
+/** Statuses still on the floor — everything the POS dashboard shows by default. */
+export const ACTIVE_POS_ORDER_STATUSES: readonly PosOrderStatus[] = [
+  PosOrderStatus.DRAFT,
+  PosOrderStatus.SCHEDULED,
+  PosOrderStatus.OPEN,
+];
+
+/** COMPLETED and CANCELLED end the ticket; only a void reopens neither. */
+export const TERMINAL_POS_ORDER_STATUSES: readonly PosOrderStatus[] = [
+  PosOrderStatus.COMPLETED,
+  PosOrderStatus.CANCELLED,
+];
+
+/**
+ * Whether `to` may follow `from`.
+ *
+ * - A DRAFT may be scheduled, opened or cancelled.
+ * - A SCHEDULED order may be pulled back to DRAFT, opened when its time comes, or cancelled.
+ * - An OPEN order may be completed or cancelled; it may not go back to DRAFT, because items
+ *   have already been committed against it.
+ * - COMPLETED and CANCELLED are terminal. Reversing a completed sale is `void`, which is an
+ *   explicit, audited action, not a status edit.
+ */
+export function canTransitionPosOrderStatus(from: PosOrderStatus, to: PosOrderStatus): boolean {
+  if (from === to) return true;
+  if (TERMINAL_POS_ORDER_STATUSES.includes(from)) return false;
+  if (to === PosOrderStatus.CANCELLED) return true;
+
+  switch (from) {
+    case PosOrderStatus.DRAFT:
+      return to === PosOrderStatus.SCHEDULED || to === PosOrderStatus.OPEN;
+    case PosOrderStatus.SCHEDULED:
+      return to === PosOrderStatus.DRAFT || to === PosOrderStatus.OPEN;
+    case PosOrderStatus.OPEN:
+      return to === PosOrderStatus.COMPLETED;
+    default:
+      return false;
+  }
+}
+
+/** A cancelled line stays on the ticket so the audit trail keeps its shape. */
+export const PosOrderItemStatus = {
+  ACTIVE: 'ACTIVE',
+  CANCELLED: 'CANCELLED',
+} as const;
+export type PosOrderItemStatus = (typeof PosOrderItemStatus)[keyof typeof PosOrderItemStatus];
+
+export const PosPaymentMethod = {
+  CASH: 'CASH',
+  CARD: 'CARD',
+  UPI: 'UPI',
+  WALLET: 'WALLET',
+  /** Charged to the entity's account — payroll deduction, vendor set-off, running tab. */
+  ACCOUNT: 'ACCOUNT',
+  /** Staff meal, prasad, complimentary — settles the ticket without money moving. */
+  COMPLIMENTARY: 'COMPLIMENTARY',
+} as const;
+export type PosPaymentMethod = (typeof PosPaymentMethod)[keyof typeof PosPaymentMethod];
+
+/** ACCOUNT settlement is only meaningful against a named entity. */
+export const ENTITY_REQUIRED_PAYMENT_METHODS: readonly PosPaymentMethod[] = [
+  PosPaymentMethod.ACCOUNT,
+];
+
+export const PosPaymentStatus = {
+  UNPAID: 'UNPAID',
+  PARTIAL: 'PARTIAL',
+  PAID: 'PAID',
+  /** A completed sale that was later voided; the offsetting payment rows carry the reversal. */
+  VOIDED: 'VOIDED',
+} as const;
+export type PosPaymentStatus = (typeof PosPaymentStatus)[keyof typeof PosPaymentStatus];
+
+/** Percentage of the line, or a flat amount off it. Nothing else discounts a POS line. */
+export const PosDiscountType = {
+  NONE: 'NONE',
+  PERCENT: 'PERCENT',
+  AMOUNT: 'AMOUNT',
+} as const;
+export type PosDiscountType = (typeof PosDiscountType)[keyof typeof PosDiscountType];

@@ -7,7 +7,7 @@ import { DataTable, type DataTableColumn } from '../../components/DataTable/Data
 import { useViewMode } from '../../components/DataTable/gridState';
 import { EntityCardGrid } from '../../components/EntityCardGrid';
 import { ListToolbar } from '../../components/ListToolbar';
-import { PageHeader } from '../../components/ui/PageHeader';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusChip } from '../../components/StatusChip';
 import {
   useDeleteIngredientCategory,
@@ -97,9 +97,11 @@ export function IngredientCategoriesPage(): JSX.Element {
   return (
     <>
       <PageHeader
-        title="Ingredient categories"
-        subtitle="Group the recipe-only ingredient master so it stays easy to browse."
+        eyebrow="Catalogue/Collection"
+        title="Ingredients Categories"
+        subtitle="How the ingredient master is grouped — produce, dairy, dry goods and the rest."
       />
+
       <ListToolbar
         search={search}
         onSearchChange={(v) => {

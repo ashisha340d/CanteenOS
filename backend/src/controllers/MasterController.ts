@@ -7,6 +7,7 @@ import type {
   UpdateStationRequest,
 } from '@menuboard/shared';
 import { masterService, type MasterQuery } from '../services/MasterService';
+import { requireAuth } from '../middleware/types';
 import { created, noContent, ok, paginated } from '../utils/http';
 import { actorFrom } from './context';
 
@@ -113,8 +114,13 @@ export const MasterController = {
       res,
       await masterService.listMenuItems(
         req.query as unknown as MasterQuery & { categoryId?: string },
+        requireAuth(req).userId,
       ),
     );
+  },
+
+  async getMenuItemById(req: Request, res: Response): Promise<void> {
+    ok(res, await masterService.getMenuItemById(req.params.id as string, requireAuth(req).userId));
   },
 
   async createMenuItem(req: Request, res: Response): Promise<void> {

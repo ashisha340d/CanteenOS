@@ -9,7 +9,7 @@ import { DataTable, type DataTableColumn } from '../../components/DataTable/Data
 import { useViewMode } from '../../components/DataTable/gridState';
 import { EntityCardGrid } from '../../components/EntityCardGrid';
 import { ListToolbar } from '../../components/ListToolbar';
-import { PageHeader } from '../../components/ui/PageHeader';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusChip } from '../../components/StatusChip';
 import { IfCapable } from '../../services/CapabilityGate';
 import { useAuth } from '../../services/AuthContext';
@@ -108,9 +108,11 @@ export function UsersPage(): JSX.Element {
   return (
     <>
       <PageHeader
+        eyebrow="People"
         title="Users"
-        subtitle="Everyone who can sign in, and what they are allowed to do."
+        subtitle="Accounts that can sign in, and the role each one acts under."
       />
+
       <ListToolbar
         search={search}
         onSearchChange={(v) => {

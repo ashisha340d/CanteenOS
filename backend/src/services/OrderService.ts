@@ -57,6 +57,7 @@ import { buildPage, resolvePaging } from '../utils/http';
 import { newId } from '../utils/ids';
 import { AuditAction, auditService, type AuditActor } from './AuditService';
 import { notificationService } from './NotificationService';
+import { taskService } from './TaskService';
 
 export interface OrderActor extends AuditActor {
   userId: string;
@@ -491,6 +492,20 @@ export class OrderService {
 
       const order = await orderRepository.updateAssignee(connection, orderId, input.assignedTo);
       if (order === null) throw new NotFoundError('Order', orderId);
+
+      // Mirror the handover into the assignee's task list, in the same transaction, so "My
+      // Tasks" and the order can never disagree about who owns this work.
+      await taskService.syncOrderAssignment(connection, {
+        orderId: order.id,
+        orderNumber: order.order_number,
+        boardId: order.board_id,
+        venue: order.venue,
+        requiredDate: order.required_date,
+        requiredTime: order.required_time,
+        priority: order.priority,
+        assignedTo: input.assignedTo,
+        assignerRole: actor.role,
+      });
 
       await this.writeSystemMessage(
         connection,
@@ -939,6 +954,12 @@ export class OrderService {
         menuItemId: item.menuItemId,
         customItemName: null,
         unit: item.unit ?? menuItem.unit,
+        // Menu Master reference is optional — an order line may still name a plain catalogued
+        // dish with no menu/variant context. When present, insertItems freezes the variant's
+        // current name/price into the line; nothing here is ever recomputed afterwards.
+        menuId: item.menuId ?? null,
+        variantId: item.variantId ?? null,
+        discountAmount: item.discountAmount ?? 0,
       };
     });
   }

@@ -144,6 +144,7 @@ CREATE TABLE IF NOT EXISTS menu_items (
   name              TEXT NOT NULL,
   unit              TEXT NOT NULL DEFAULT 'NOS',
   image_path        TEXT,
+  primary_media_id  TEXT,
   status            TEXT NOT NULL DEFAULT 'ACTIVE',
   sort_order        INTEGER NOT NULL DEFAULT 0,
   created_at        TEXT NOT NULL,

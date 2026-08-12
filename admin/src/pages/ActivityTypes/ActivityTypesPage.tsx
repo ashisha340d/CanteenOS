@@ -9,7 +9,7 @@ import { DataTable, type DataTableColumn } from '../../components/DataTable/Data
 import { useViewMode } from '../../components/DataTable/gridState';
 import { EntityCardGrid } from '../../components/EntityCardGrid';
 import { ListToolbar } from '../../components/ListToolbar';
-import { PageHeader } from '../../components/ui/PageHeader';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusChip } from '../../components/StatusChip';
 import {
   useActivityTypes,
@@ -119,9 +119,10 @@ export function ActivityTypesPage(): JSX.Element {
   return (
     <>
       <PageHeader
-        title="Activity types"
-        subtitle="The kinds of service an order can be for — breakfast, lunch, a function."
+        title="Activity Types"
+        subtitle="The occasions an order can belong to — breakfast, lunch, dinner, a festival. Drag a row to change the order they are offered in."
       />
+
       <ListToolbar
         search={search}
         onSearchChange={(v) => {

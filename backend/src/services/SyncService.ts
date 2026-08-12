@@ -806,8 +806,11 @@ export class SyncService {
       ).map(mapMenuCategory);
     }
     if (requested.has('menu_items')) {
+      // Deliberately without a user: a signed media URL expires long before the next change to
+      // this row would refresh the device's copy, so the device carries `primaryMediaId` and
+      // mints its own link when it actually renders the image.
       changes.menu_items = (await menuItemRepository.changedSince(pool, cursor, limit)).map(
-        mapMenuItem,
+        (row) => mapMenuItem(row),
       );
     }
     // The ingredient master, recipes and their ingredients/steps all ride down with the

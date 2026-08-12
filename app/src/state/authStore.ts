@@ -11,17 +11,23 @@ import { nowIso } from '../utils/date';
 import { useLanguageStore } from './languageStore';
 
 interface AuthState {
-  status: 'unknown' | 'signedOut' | 'signedIn';
+  status: 'unknown' | 'signedOut' | 'pinRequired' | 'signedIn';
   user: AuthenticatedUser | null;
   capabilities: string[];
   mustChangePassword: boolean;
   isBootstrapping: boolean;
   isSyncing: boolean;
   error: string | null;
+  hasPin: boolean;
+  pinIdentifier: string | null;
 
   bootstrap: () => Promise<void>;
   login: (identifier: string, password: string, rememberMe: boolean) => Promise<void>;
+  loginWithPin: (pin: string) => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  setPin: (currentPassword: string, pin: string) => Promise<void>;
+  removePin: (currentPassword: string) => Promise<void>;
+  usePasswordInstead: () => void;
   logout: () => Promise<void>;
   refreshLocalData: () => Promise<void>;
 }
@@ -37,6 +43,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   isBootstrapping: true,
   isSyncing: false,
   error: null,
+  hasPin: false,
+  pinIdentifier: null,
 
   bootstrap: async () => {
     setSessionExpiredHandler(() => {
@@ -48,11 +56,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // session means "signed out", not "never finish starting".
     let remember: boolean | null = null;
     let refreshToken: string | null = null;
+    let pinIdentifier: string | null = null;
     try {
       remember = await settingsRepository.get<boolean>(SETTINGS_KEYS.REMEMBER_LOGIN);
       refreshToken = await secureTokenStore.getRefreshToken();
+      pinIdentifier = await settingsRepository.get<string>(SETTINGS_KEYS.PIN_IDENTIFIER);
     } catch {
       set({ status: 'signedOut', isBootstrapping: false });
+      return;
+    }
+
+    // A PIN unlocks the app on every cold start, whether or not the underlying session is
+    // "remembered" — it is the lock screen, not a fallback for when remember-login is off.
+    if (pinIdentifier) {
+      set({ status: 'pinRequired', pinIdentifier, hasPin: true, isBootstrapping: false });
       return;
     }
 
@@ -76,6 +93,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
       void useLanguageStore.getState().load(me.user.role);
       void registerPushToken();
+      authApi
+        .pinStatus()
+        .then((s) => set({ hasPin: s.hasPin }))
+        .catch(() => undefined);
     } catch {
       await secureTokenStore.clear().catch(() => undefined);
       set({ status: 'signedOut', isBootstrapping: false });
@@ -119,11 +140,49 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       },
     ]);
 
+    const pinIdentifier = await settingsRepository.get<string>(SETTINGS_KEYS.PIN_IDENTIFIER);
     set({
       status: 'signedIn',
       user: response.user,
       capabilities: response.capabilities,
       mustChangePassword: response.user.mustChangePassword,
+      pinIdentifier: pinIdentifier ?? response.user.username,
+    });
+    void useLanguageStore.getState().load(response.user.role);
+    void registerPushToken();
+    authApi
+      .pinStatus()
+      .then((s) => set({ hasPin: s.hasPin }))
+      .catch(() => undefined);
+
+    if (!response.user.mustChangePassword) {
+      await get().refreshLocalData();
+    }
+  },
+
+  loginWithPin: async (pin) => {
+    set({ error: null });
+    const identifier = get().pinIdentifier;
+    if (!identifier) throw new Error('No account to unlock. Sign in with your password.');
+    const deviceId = await getOrCreateDeviceId();
+    const response = await authApi.loginWithPin({
+      identifier,
+      pin,
+      deviceId,
+      deviceName: 'MenuBoard Android',
+      clientType: 'ANDROID',
+    });
+    secureTokenStore.setAccessToken(response.tokens.accessToken);
+    await secureTokenStore.setRefreshToken(response.tokens.refreshToken);
+    await settingsRepository.set(SETTINGS_KEYS.REMEMBER_LOGIN, true);
+    await settingsRepository.set(SETTINGS_KEYS.CURRENT_USER_ID, response.user.id);
+
+    set({
+      status: 'signedIn',
+      user: response.user,
+      capabilities: response.capabilities,
+      mustChangePassword: response.user.mustChangePassword,
+      hasPin: true,
     });
     void useLanguageStore.getState().load(response.user.role);
     void registerPushToken();
@@ -131,6 +190,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (!response.user.mustChangePassword) {
       await get().refreshLocalData();
     }
+  },
+
+  usePasswordInstead: () => {
+    set({ status: 'signedOut' });
   },
 
   changePassword: async (currentPassword, newPassword) => {
@@ -142,6 +205,25 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     await get().refreshLocalData();
   },
 
+  setPin: async (currentPassword, pin) => {
+    await authApi.setPin({ currentPassword, pin });
+    const user = get().user;
+    await settingsRepository.set(SETTINGS_KEYS.PIN_ENABLED, true);
+    if (user) {
+      await settingsRepository.set(SETTINGS_KEYS.PIN_IDENTIFIER, user.username);
+      set({ hasPin: true, pinIdentifier: user.username });
+    } else {
+      set({ hasPin: true });
+    }
+  },
+
+  removePin: async (currentPassword) => {
+    await authApi.removePin({ currentPassword });
+    await settingsRepository.remove(SETTINGS_KEYS.PIN_ENABLED);
+    await settingsRepository.remove(SETTINGS_KEYS.PIN_IDENTIFIER);
+    set({ hasPin: false });
+  },
+
   logout: async () => {
     const refreshToken = await secureTokenStore.getRefreshToken();
     try {
@@ -151,7 +233,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
     await secureTokenStore.clear();
     await settingsRepository.remove(SETTINGS_KEYS.REMEMBER_LOGIN);
-    set({ status: 'signedOut', user: null, capabilities: [], mustChangePassword: false });
+    await settingsRepository.remove(SETTINGS_KEYS.PIN_ENABLED);
+    await settingsRepository.remove(SETTINGS_KEYS.PIN_IDENTIFIER);
+    set({ status: 'signedOut', user: null, capabilities: [], mustChangePassword: false, hasPin: false, pinIdentifier: null });
   },
 
   refreshLocalData: async () => {

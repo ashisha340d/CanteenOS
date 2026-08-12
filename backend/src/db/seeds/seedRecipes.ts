@@ -163,6 +163,7 @@ export async function seedImportedRecipes(connection: Db, createdBy: string): Pr
         unit: item.unit,
         unitHi: null,
         imagePath: null,
+        basePrice: null,
         status: MasterStatus.ACTIVE,
         sortOrder: index,
         createdBy,

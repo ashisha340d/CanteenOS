@@ -11,7 +11,7 @@ import { DataTable, type DataTableColumn } from '../../components/DataTable/Data
 import { useViewMode } from '../../components/DataTable/gridState';
 import { EntityCardGrid } from '../../components/EntityCardGrid';
 import { ListToolbar } from '../../components/ListToolbar';
-import { PageHeader } from '../../components/ui/PageHeader';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusChip } from '../../components/StatusChip';
 import { useDeleteStation, useStations } from '../../hooks/useMasters';
 import { enumOptions } from '@/lib/options';
@@ -106,8 +106,9 @@ export function StationsPage(): JSX.Element {
     <>
       <PageHeader
         title="Stations"
-        subtitle="The real-world sites a board operates at — e.g. Barsana, Mangarh. Each station holds any number of independent boards."
+        subtitle="The physical sites boards operate at. A station never carries membership, orders or a feed of its own — those belong to the boards inside it."
       />
+
       <ListToolbar
         search={search}
         onSearchChange={(v) => {

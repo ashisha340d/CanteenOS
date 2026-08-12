@@ -50,6 +50,7 @@ export const menuCategoriesApi = {
 export const menuItemsApi = {
   list: (query: MasterListQuery & { categoryId?: string }) =>
     unwrapPaged<MenuItemDto>(http.get('/menu-items', { params: query })),
+  get: (id: string) => unwrap<MenuItemDto>(http.get(`/menu-items/${id}`)),
   create: (body: MenuItemWriteRequest) => unwrap<MenuItemDto>(http.post('/menu-items', body)),
   update: (id: string, body: Partial<MenuItemWriteRequest>) =>
     unwrap<MenuItemDto>(http.patch(`/menu-items/${id}`, body)),

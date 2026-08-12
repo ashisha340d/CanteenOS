@@ -81,14 +81,29 @@ export function saveUser(user: AuthenticatedUser, capabilities: string[]): void 
   sessionStorage.setItem(CAPS_KEY, JSON.stringify(capabilities));
 }
 
+/**
+ * These run while AuthProvider is initialising, before anything is rendered. A half-written or
+ * hand-edited storage entry must therefore degrade to "signed out" rather than throw, or the
+ * admin is stuck on a blank page with no way to reach the login screen.
+ */
+function readJson<T>(key: string, fallback: T): T {
+  const raw = sessionStorage.getItem(key);
+  if (raw === null) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    sessionStorage.removeItem(key);
+    return fallback;
+  }
+}
+
 export function loadUser(): AuthenticatedUser | null {
-  const raw = sessionStorage.getItem(USER_KEY);
-  return raw ? (JSON.parse(raw) as AuthenticatedUser) : null;
+  return readJson<AuthenticatedUser | null>(USER_KEY, null);
 }
 
 export function loadCapabilities(): string[] {
-  const raw = sessionStorage.getItem(CAPS_KEY);
-  return raw ? (JSON.parse(raw) as string[]) : [];
+  const caps = readJson<unknown>(CAPS_KEY, []);
+  return Array.isArray(caps) ? caps.filter((c): c is string => typeof c === 'string') : [];
 }
 
 export function clearSession(): void {

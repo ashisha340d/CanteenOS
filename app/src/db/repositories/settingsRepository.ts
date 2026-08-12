@@ -49,4 +49,6 @@ export const SETTINGS_KEYS = {
   NOTIFICATION_SOUND_ENABLED: 'pref_notification_sound_enabled',
   /** Interface language, `'en' | 'hi'` — see `src/state/languageStore.ts`. */
   LANGUAGE: 'pref_language',
+  PIN_ENABLED: 'pref_pin_enabled',
+  PIN_IDENTIFIER: 'pref_pin_identifier',
 } as const;

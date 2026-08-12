@@ -11,6 +11,7 @@ import { enumOptions } from '@/lib/options';
 
 interface FormValues {
   name: string;
+  nameHi: string;
   description: string;
   status: MasterStatus;
   sortOrder: number;
@@ -30,12 +31,13 @@ export function MenuCategoryFormModal({
   const modalId = `menu-category-form-${editing?.id ?? 'new'}`;
   const initial: FormValues = editing
     ? {
-        name: editing.name,
-        description: editing.description ?? '',
-        status: editing.status,
-        sortOrder: editing.sortOrder,
-      }
-    : { name: '', description: '', status: MasterStatus.ACTIVE, sortOrder: 0 };
+      name: editing.name,
+      nameHi: editing.nameHi ?? '',
+      description: editing.description ?? '',
+      status: editing.status,
+      sortOrder: editing.sortOrder,
+    }
+    : { name: '', nameHi: '', description: '', status: MasterStatus.ACTIVE, sortOrder: 0 };
   const { value, setValue, clear } = usePersistedFormState<FormValues>(modalId, initial, open);
   const [error, setError] = useState<string | null>(null);
   const create = useCreateMenuCategory();
@@ -47,6 +49,7 @@ export function MenuCategoryFormModal({
     setError(null);
     const body = {
       name: value.name,
+      nameHi: value.nameHi || null,
       description: value.description || null,
       status: value.status,
       sortOrder: value.sortOrder,
@@ -83,6 +86,12 @@ export function MenuCategoryFormModal({
             required
             value={value.name}
             onChange={(e) => setValue({ ...value, name: e.target.value })}
+            maxLength={LIMITS.MENU_CATEGORY_NAME_MAX}
+          />
+          <TextField
+            label="Name (Hindi)"
+            value={value.nameHi}
+            onChange={(e) => setValue({ ...value, nameHi: e.target.value })}
             maxLength={LIMITS.MENU_CATEGORY_NAME_MAX}
           />
           <TextField

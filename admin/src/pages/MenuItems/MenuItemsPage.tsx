@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { MasterStatus, type MenuItemDto } from '@menuboard/shared';
-import { ChefHatIcon } from 'lucide-react';
+import { ChefHatIcon, EyeIcon, ImageIcon } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,13 +13,41 @@ import { DataTable, type DataTableColumn } from '../../components/DataTable/Data
 import { useViewMode } from '../../components/DataTable/gridState';
 import { EntityCardGrid } from '../../components/EntityCardGrid';
 import { ListToolbar } from '../../components/ListToolbar';
-import { PageHeader } from '../../components/ui/PageHeader';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusChip } from '../../components/StatusChip';
 import { useDeleteMenuItem, useMenuItems, useUpdateMenuItem } from '../../hooks/useMasters';
 import { readError } from '../../services/errorMessage';
 import { enumOptions } from '@/lib/options';
 import { notify } from '@/lib/notify';
-import { MenuItemFormModal } from './MenuItemFormModal';
+import { cn } from '@/lib/utils';
+
+/**
+ * The item's primary media-library image, falling back to the legacy `imagePath` column that
+ * predates the media library, and to a placeholder tile when the dish has no photo at all.
+ */
+export function ItemThumbnail({
+  item,
+  className,
+}: {
+  item: MenuItemDto;
+  className?: string;
+}): JSX.Element {
+  const src = item.primaryMediaUrl ?? item.imagePath;
+  return (
+    <div
+      className={cn(
+        'bg-muted text-muted-foreground flex items-center justify-center overflow-hidden rounded-md border',
+        className,
+      )}
+    >
+      {src ? (
+        <img src={src} alt={item.name} className="h-full w-full object-cover" />
+      ) : (
+        <ImageIcon className="size-4 opacity-50" />
+      )}
+    </div>
+  );
+}
 
 export function MenuItemsPage(): JSX.Element {
   const navigate = useNavigate();
@@ -30,7 +58,6 @@ export function MenuItemsPage(): JSX.Element {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [view, setView] = useViewMode('menu-items');
-  const [editing, setEditing] = useState<MenuItemDto | null | undefined>(undefined);
   const [deleting, setDeleting] = useState<MenuItemDto | null>(null);
   const [deleteBlocked, setDeleteBlocked] = useState<{ item: MenuItemDto; message: string } | null>(
     null,
@@ -52,8 +79,32 @@ export function MenuItemsPage(): JSX.Element {
   const filtersActive = Boolean(status) || search.trim() !== '';
 
   const columns: DataTableColumn<MenuItemDto>[] = [
-    { field: 'name', headerName: 'Name', width: 220 },
+    {
+      field: 'imagePath',
+      headerName: 'Image',
+      width: 64,
+      sortable: false,
+      renderCell: (r) => <ItemThumbnail item={r} className="size-10" />,
+    },
+    {
+      field: 'name',
+      headerName: 'Item Name',
+      width: 220,
+      renderCell: (r) => (
+        <div className="flex flex-col">
+          <span className="font-medium">{r.name}</span>
+          {r.nameHi && <span className="text-muted-foreground text-xs">{r.nameHi}</span>}
+        </div>
+      ),
+    },
     { field: 'unit', headerName: 'Unit', width: 100 },
+    {
+      field: 'basePrice',
+      headerName: 'Base Price',
+      width: 110,
+      align: 'right',
+      renderCell: (r) => (r.basePrice === null ? '—' : `₹${r.basePrice}`),
+    },
     { field: 'sortOrder', headerName: 'Order', width: 90, align: 'right' },
     {
       field: 'status',
@@ -75,6 +126,19 @@ export function MenuItemsPage(): JSX.Element {
               <Button
                 variant="ghost"
                 size="icon-sm"
+                onClick={() => navigate(`/menu-items/${r.id}`)}
+                aria-label={`View ${r.name}`}
+              >
+                <EyeIcon />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>View details</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
                 onClick={() => navigate(`/recipes?menuItemId=${r.id}`)}
                 aria-label={`View recipes for ${r.name}`}
               >
@@ -83,7 +147,7 @@ export function MenuItemsPage(): JSX.Element {
             </TooltipTrigger>
             <TooltipContent>View recipes</TooltipContent>
           </Tooltip>
-          <EditAction label={r.name} onClick={() => setEditing(r)} />
+          <EditAction label={r.name} onClick={() => navigate(`/menu-items/${r.id}/edit`)} />
           <DeleteAction
             label={r.name}
             tooltip="Delete — refused when referenced by orders"
@@ -141,15 +205,14 @@ export function MenuItemsPage(): JSX.Element {
   return (
     <>
       <PageHeader
+        eyebrow="Menu"
+        title="Menu Master File"
+        subtitle="Every item the kitchen can produce, defined once. Menus decide which of them are offered and at what price."
         {...(categoryId
-          ? {
-            leading: <BackButton to="/menu-categories" label="Back to Menu" />,
-            eyebrow: 'Filtered by category',
-          }
+          ? { leading: <BackButton to="/menu-categories" label="Back to Menu" /> }
           : {})}
-        title="Menu items"
-        subtitle="The individual dishes an order is built from, each with the unit it is counted in."
       />
+
       <ListToolbar
         search={search}
         onSearchChange={(v) => {
@@ -183,7 +246,7 @@ export function MenuItemsPage(): JSX.Element {
           setPageSize(size);
           setPage(1);
         }}
-        onCreate={() => setEditing(null)}
+        onCreate={() => navigate('/menu-items/new')}
         createLabel="New item"
       />
 
@@ -194,26 +257,27 @@ export function MenuItemsPage(): JSX.Element {
           rows={data?.items ?? []}
           getRowId={(r) => r.id}
           loading={isLoading}
-          onRowDoubleClick={(r) => setEditing(r)}
+          onRowDoubleClick={(r) => navigate(`/menu-items/${r.id}/edit`)}
           rowReorder
           onRowReorder={onRowReorder}
           filtered={filtersActive}
           emptyTitle="No menu items yet"
           emptyMessage="Add the dishes this operation prepares."
-          emptyAction={{ label: 'New item', onClick: () => setEditing(null) }}
+          emptyAction={{ label: 'New item', onClick: () => navigate('/menu-items/new') }}
         />
       ) : (
         <EntityCardGrid
           rows={data?.items ?? []}
           getRowId={(r) => r.id}
           loading={isLoading}
-          onCardDoubleClick={(r) => setEditing(r)}
+          onCardDoubleClick={(r) => navigate(`/menu-items/${r.id}/edit`)}
           filtered={filtersActive}
           emptyTitle="No menu items yet"
           emptyMessage="Add the dishes this operation prepares."
-          emptyAction={{ label: 'New item', onClick: () => setEditing(null) }}
+          emptyAction={{ label: 'New item', onClick: () => navigate('/menu-items/new') }}
           renderCard={(r) => (
             <div className="flex h-full flex-col gap-2.5">
+              <ItemThumbnail item={r} className="aspect-[4/3] w-full" />
               <div className="flex items-start justify-between gap-2">
                 <p className="min-w-0 text-[0.9375rem] leading-snug font-semibold">{r.name}</p>
                 <StatusChip status={r.status} />
@@ -223,15 +287,6 @@ export function MenuItemsPage(): JSX.Element {
               </Badge>
             </div>
           )}
-        />
-      )}
-
-      {editing !== undefined && (
-        <MenuItemFormModal
-          open={editing !== undefined}
-          editing={editing}
-          onClose={() => setEditing(undefined)}
-          defaultCategoryId={categoryId}
         />
       )}
 

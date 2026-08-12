@@ -7,7 +7,10 @@ temples, kitchens and event food service coordination.
 
 Its single responsibility is **operational communication and order collaboration**.
 
-It is not a POS, accounting system, inventory system, CRM or ERP. See
+It is not an accounting system, inventory system or ERP. It maintains a priced Menu Master
+(see MENUBOARD_SPEC.md §3a) and, as of §3b, an Admin-Portal point of sale with an Entity
+master — so it does now take payments and compute tax on a bill, while still never driving a
+printer or a cash drawer and never tracking stock. See
 [MENUBOARD_SPEC.md](./MENUBOARD_SPEC.md) for the product requirements and the enforced
 boundary list.
 
@@ -61,6 +64,8 @@ boundary list.
 | Reports | **Never** | Yes | API |
 | Settings / configuration | Device prefs only | Yes | API |
 | **Billing generation** | **Never** | Yes (explicit action) | Snapshot + audit |
+| **Point of sale / payments** | **Never** | Yes | Price, tax, settle, audit |
+| Entity master (customers/employees/vendors) | **Never** | Yes (CRUD) | API |
 | Audit logs | **Never** | Yes | Write + expose |
 
 The Android application contains **no** billing, pricing, tax, accounting, reporting,

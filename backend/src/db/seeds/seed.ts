@@ -1,14 +1,9 @@
-import { MasterStatus, UserRole, UserStatus } from '@menuboard/shared';
+import { UserRole, UserStatus } from '@menuboard/shared';
 import { getPool } from '../pool';
 import { withTransaction } from '../transaction';
 import type { Db } from '../types';
 import { selectOne } from '../types';
 import type { RowDataPacket } from '../types';
-import {
-  activityTypeRepository,
-  menuCategoryRepository,
-  menuItemRepository,
-} from '../../repositories/MasterRepository';
 import { userRepository } from '../../repositories/UserRepository';
 import { newId } from '../../utils/ids';
 import { hashPassword } from '../../utils/password';
@@ -16,7 +11,7 @@ import { logger } from '../../utils/logger';
 import { allocateSyncSeq } from '../syncSeq';
 import { mutate } from '../types';
 import { toDbDateTime } from '../../utils/time';
-import { seedImportedRecipes } from './seedRecipes';
+import { seedRealMenu } from './seedRealMenu';
 
 /**
  * Idempotent seed. Safe to run repeatedly: every insert is guarded by an existence check, so a
@@ -51,90 +46,6 @@ const ASHISH_PIYA = {
   name: 'Ashish Piya',
   role: UserRole.USER,
 } as const;
-
-/**
- * Seed catalogue, with the Devanagari spelling authored alongside the English one.
- *
- * These are the names the kitchen already uses; they are stored rather than translated at
- * runtime so the Hindi board reads the same way every time and matches what is written on
- * the counter. Units carry their own Hindi form because they are spoken aloud on the floor.
- */
-const MENU: readonly {
-  category: string;
-  categoryHi: string;
-  items: readonly { name: string; nameHi: string; unit: string; unitHi: string }[];
-}[] = [
-    {
-      category: 'Rice & Grains',
-      categoryHi: 'चावल एवं अनाज',
-      items: [
-        { name: 'Steamed Rice', nameHi: 'सादा चावल', unit: 'KG', unitHi: 'किलो' },
-        { name: 'Jeera Rice', nameHi: 'जीरा चावल', unit: 'KG', unitHi: 'किलो' },
-        { name: 'Pulao', nameHi: 'पुलाव', unit: 'KG', unitHi: 'किलो' },
-        { name: 'Khichdi', nameHi: 'खिचड़ी', unit: 'KG', unitHi: 'किलो' },
-      ],
-    },
-    {
-      category: 'Breads',
-      categoryHi: 'रोटी एवं ब्रेड',
-      items: [
-        { name: 'Roti', nameHi: 'रोटी', unit: 'NOS', unitHi: 'नग' },
-        { name: 'Puri', nameHi: 'पूरी', unit: 'NOS', unitHi: 'नग' },
-        { name: 'Paratha', nameHi: 'पराठा', unit: 'NOS', unitHi: 'नग' },
-        { name: 'Bhatura', nameHi: 'भटूरा', unit: 'NOS', unitHi: 'नग' },
-      ],
-    },
-    {
-      category: 'Dals & Curries',
-      categoryHi: 'दाल एवं सब्ज़ी रस',
-      items: [
-        { name: 'Dal Tadka', nameHi: 'दाल तड़का', unit: 'LTR', unitHi: 'लीटर' },
-        { name: 'Dal Fry', nameHi: 'दाल फ्राई', unit: 'LTR', unitHi: 'लीटर' },
-        { name: 'Kadhi', nameHi: 'कढ़ी', unit: 'LTR', unitHi: 'लीटर' },
-        { name: 'Chole', nameHi: 'छोले', unit: 'KG', unitHi: 'किलो' },
-      ],
-    },
-    {
-      category: 'Vegetables',
-      categoryHi: 'सब्ज़ियाँ',
-      items: [
-        { name: 'Mixed Vegetable', nameHi: 'मिक्स वेज', unit: 'KG', unitHi: 'किलो' },
-        { name: 'Aloo Gobi', nameHi: 'आलू गोभी', unit: 'KG', unitHi: 'किलो' },
-        { name: 'Paneer Butter Masala', nameHi: 'पनीर बटर मसाला', unit: 'KG', unitHi: 'किलो' },
-        { name: 'Bhindi Masala', nameHi: 'भिंडी मसाला', unit: 'KG', unitHi: 'किलो' },
-      ],
-    },
-    {
-      category: 'Sweets',
-      categoryHi: 'मिठाई',
-      items: [
-        { name: 'Halwa', nameHi: 'हलवा', unit: 'KG', unitHi: 'किलो' },
-        { name: 'Kheer', nameHi: 'खीर', unit: 'LTR', unitHi: 'लीटर' },
-        { name: 'Laddu', nameHi: 'लड्डू', unit: 'NOS', unitHi: 'नग' },
-        { name: 'Jalebi', nameHi: 'जलेबी', unit: 'KG', unitHi: 'किलो' },
-      ],
-    },
-    {
-      category: 'Beverages',
-      categoryHi: 'पेय पदार्थ',
-      items: [
-        { name: 'Tea', nameHi: 'चाय', unit: 'LTR', unitHi: 'लीटर' },
-        { name: 'Coffee', nameHi: 'कॉफ़ी', unit: 'LTR', unitHi: 'लीटर' },
-        { name: 'Buttermilk', nameHi: 'छाछ', unit: 'LTR', unitHi: 'लीटर' },
-        { name: 'Drinking Water', nameHi: 'पीने का पानी', unit: 'LTR', unitHi: 'लीटर' },
-      ],
-    },
-    {
-      category: 'Accompaniments',
-      categoryHi: 'साथ में',
-      items: [
-        { name: 'Papad', nameHi: 'पापड़', unit: 'NOS', unitHi: 'नग' },
-        { name: 'Pickle', nameHi: 'अचार', unit: 'KG', unitHi: 'किलो' },
-        { name: 'Salad', nameHi: 'सलाद', unit: 'KG', unitHi: 'किलो' },
-        { name: 'Raita', nameHi: 'रायता', unit: 'LTR', unitHi: 'लीटर' },
-      ],
-    },
-  ];
 
 async function findByName(db: Db, table: string, name: string): Promise<string | null> {
   // Table names come only from this file's literals, never from input.
@@ -217,51 +128,9 @@ export async function seed(): Promise<void> {
 
     /* -------------------------------------------------------------- menu */
 
-    for (const [categoryIndex, group] of MENU.entries()) {
-      let categoryId = await findByName(connection, 'menu_categories', group.category);
-
-      if (categoryId === null) {
-        const category = await menuCategoryRepository.insert(connection, {
-          id: newId(),
-          name: group.category,
-          nameHi: group.categoryHi,
-          description: null,
-          imagePath: null,
-          status: MasterStatus.ACTIVE,
-          sortOrder: categoryIndex,
-          createdBy: superAdminId,
-        });
-        categoryId = category.id;
-      }
-
-      for (const [itemIndex, item] of group.items.entries()) {
-        const existing = await selectOne<ExistsRow>(
-          connection,
-          'SELECT id FROM menu_items WHERE category_id = ? AND name = ? LIMIT 1',
-          [categoryId, item.name],
-        );
-        if (existing !== null) continue;
-
-        await menuItemRepository.insert(connection, {
-          id: newId(),
-          categoryId,
-          name: item.name,
-          nameHi: item.nameHi,
-          unit: item.unit,
-          unitHi: item.unitHi,
-          imagePath: null,
-          status: MasterStatus.ACTIVE,
-          sortOrder: itemIndex,
-          createdBy: superAdminId,
-        });
-      }
-    }
-
-    /* -------------------------------------------- ingredients & recipes (ported data) */
-
-    // Real dish/ingredient/recipe catalogue ported from the sibling "ashram_kitchen"
-    // system, additive alongside the curated MENU above — see seedRecipes.ts.
-    await seedImportedRecipes(connection, superAdminId);
+    // Real menu (Public Menu / Counter 1), ported from the printed menu card — see
+    // seedRealMenu.ts. No demo/placeholder categories or items are seeded.
+    await seedRealMenu(connection, superAdminId);
   });
 
   const pool = getPool();

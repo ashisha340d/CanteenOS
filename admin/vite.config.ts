@@ -34,7 +34,7 @@ export default defineConfig({
         manualChunks: {
           'vendor-react': ['react', 'react-dom', 'react-router-dom'],
           'vendor-ui': ['radix-ui', 'lucide-react', 'cmdk', 'sonner', 'vaul', 'react-resizable-panels'],
-          'vendor-table': ['@tanstack/react-table'],
+          'vendor-table': ['ag-grid-community', 'ag-grid-react'],
           'vendor-query': ['@tanstack/react-query', 'axios'],
           'vendor-forms': ['react-hook-form', '@hookform/resolvers', 'zod'],
         },

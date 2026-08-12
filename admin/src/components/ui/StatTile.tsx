@@ -45,10 +45,10 @@ export function StatTile({
           : undefined
       }
       className={cn(
-        'bg-card relative overflow-hidden rounded-xl border p-5 transition-[transform,box-shadow,border-color]',
+        'bg-card relative overflow-hidden rounded-xl border p-4 transition-[transform,box-shadow,border-color]',
         emphasis ? TONE_BORDER_CLASS[tone] : 'border-border',
         interactive &&
-          'focus-visible:ring-ring cursor-pointer hover:-translate-y-0.5 hover:border-border-strong hover:shadow-md focus-visible:ring-2 focus-visible:outline-none active:translate-y-0',
+          'focus-ring hover:border-border-strong cursor-pointer hover:-translate-y-0.5 hover:shadow-md active:translate-y-0',
       )}
     >
       {/* A tinted wash rather than a coloured card: the number stays the loudest thing. */}
@@ -61,7 +61,7 @@ export function StatTile({
       )}
 
       <div className="relative flex items-center justify-between gap-2">
-        <span className="text-muted-foreground text-xs font-medium tracking-[0.06em] uppercase">
+        <span className="text-muted-foreground min-w-0 truncate text-xs font-medium tracking-[0.06em] uppercase">
           {label}
         </span>
         {icon && (
@@ -81,7 +81,7 @@ export function StatTile({
       <p
         className={cn(
           'relative mt-1.5 font-bold tabular-nums',
-          'text-[clamp(1.75rem,1.4rem+1.2vw,2.4rem)] leading-[1.05] tracking-[-0.03em]',
+          'text-[clamp(1.5rem,1.1rem+1vw,2.25rem)] leading-[1.05] tracking-[-0.03em]',
           emphasis ? TONE_TEXT_CLASS[tone] : 'text-foreground',
         )}
       >

@@ -5,7 +5,8 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { colors, fonts, radii, spacing, typography } from '../src/theme/tokens';
+import { fonts, radii, spacing, typography } from '../src/theme/tokens';
+import { useThemeColors } from '../src/theme/useThemeColors';
 import { useAuthStore } from '../src/state/authStore';
 import { useUiStore } from '../src/state/uiStore';
 import { getDb } from '../src/db/client';
@@ -29,13 +30,15 @@ function useAuthGate(): { ready: boolean } {
   useEffect(() => {
     if (isBootstrapping) return;
     const top = segments[0];
-    const inAuthGroup = top === 'login' || top === 'change-password';
+    const publicRoute = top === 'login' || top === 'pin-login';
 
-    if (status !== 'signedIn' && !inAuthGroup) {
-      router.replace('/login');
-    } else if (status === 'signedIn' && mustChangePassword && top !== 'change-password') {
+    if (status === 'pinRequired') {
+      if (top !== 'pin-login') router.replace('/pin-login');
+    } else if (status !== 'signedIn') {
+      if (top !== 'login') router.replace('/login');
+    } else if (mustChangePassword && top !== 'change-password') {
       router.replace('/change-password');
-    } else if (status === 'signedIn' && !mustChangePassword && inAuthGroup) {
+    } else if (!mustChangePassword && publicRoute) {
       router.replace('/(tabs)/boards');
     }
   }, [status, mustChangePassword, isBootstrapping, segments, router]);
@@ -56,6 +59,8 @@ export function ErrorBoundary({
   error: Error;
   retry: () => Promise<void>;
 }): React.JSX.Element {
+  const { colors } = useThemeColors();
+  const errorStyles = React.useMemo(() => createErrorStyles(colors), [colors]);
   return (
     <View style={errorStyles.container}>
       <Ionicons name="warning-outline" size={44} color={colors.gray300} />
@@ -68,42 +73,44 @@ export function ErrorBoundary({
   );
 }
 
-const errorStyles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing[8],
-    backgroundColor: colors.background,
-  },
-  title: {
-    fontFamily: fonts.sansSemibold,
-    fontSize: typography.title3.size,
-    fontWeight: typography.title3.weight,
-    color: colors.textPrimary,
-    marginTop: spacing[3],
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontFamily: fonts.sans,
-    fontSize: typography.callout.size,
-    color: colors.textSecondary,
-    marginTop: spacing[2],
-    textAlign: 'center',
-  },
-  button: {
-    marginTop: spacing[6],
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[6],
-    borderRadius: radii.lg,
-    backgroundColor: colors.primary600,
-  },
-  buttonLabel: {
-    fontFamily: fonts.sansSemibold,
-    fontSize: typography.callout.size,
-    color: colors.white,
-  },
-});
+function createErrorStyles(colors: ReturnType<typeof useThemeColors>['colors']) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: spacing[8],
+      backgroundColor: colors.background,
+    },
+    title: {
+      fontFamily: fonts.sansSemibold,
+      fontSize: typography.title3.size,
+      fontWeight: typography.title3.weight,
+      color: colors.textPrimary,
+      marginTop: spacing[3],
+      textAlign: 'center',
+    },
+    subtitle: {
+      fontFamily: fonts.sans,
+      fontSize: typography.callout.size,
+      color: colors.textSecondary,
+      marginTop: spacing[2],
+      textAlign: 'center',
+    },
+    button: {
+      marginTop: spacing[6],
+      paddingVertical: spacing[3],
+      paddingHorizontal: spacing[6],
+      borderRadius: radii.lg,
+      backgroundColor: colors.taskBar,
+    },
+    buttonLabel: {
+      fontFamily: fonts.sansSemibold,
+      fontSize: typography.callout.size,
+      color: colors.white,
+    },
+  });
+}
 
 export default function RootLayout(): React.JSX.Element {
   const bootstrap = useAuthStore((s) => s.bootstrap);
@@ -146,17 +153,19 @@ export default function RootLayout(): React.JSX.Element {
   // Gate the first paint on the brand faces. Rendering a frame in Roboto and then reflowing
   // into Inter is more jarring than a beat longer on the splash.
   const fontsReady = useAppFonts();
+  const { mode } = useThemeColors();
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <StatusBar style="dark" />
+        <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
         {!ready || !fontsReady ? (
           <LoadingScreen label="Starting MenuBoard…" />
         ) : (
           <Stack screenOptions={{ headerTitleAlign: 'center' }}>
             <Stack.Screen name="index" options={{ headerShown: false }} />
             <Stack.Screen name="login" options={{ headerShown: false }} />
+            <Stack.Screen name="pin-login" options={{ headerShown: false }} />
             <Stack.Screen name="change-password" options={{ title: 'Change Password' }} />
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="settings" options={{ headerShown: false }} />

@@ -165,6 +165,23 @@ export function signMediaUrl(attachmentId: string, userId: string): string {
   return `${config.publicUrl}/api/v1/attachments/${attachmentId}/file?${query.toString()}`;
 }
 
+/**
+ * Same signed-URL scheme as {@link signMediaUrl}, for the Menu Master media library
+ * (`media_assets`) rather than order/thread `attachments`. Kept as a separate function because
+ * the two tables have separate ownership/visibility rules even though the signature mechanics
+ * are identical — a menu media asset has no board membership to re-check on download.
+ */
+export function signMenuMediaUrl(mediaId: string, userId: string): string {
+  const expiresAt = Math.floor(Date.now() / 1000) + config.media.urlTtlMinutes * 60;
+  const signature = mediaSignature(mediaId, userId, expiresAt);
+  const query = new URLSearchParams({
+    expires: String(expiresAt),
+    uid: userId,
+    sig: signature,
+  });
+  return `${config.publicUrl}/api/v1/media/${mediaId}/file?${query.toString()}`;
+}
+
 export function verifyMediaSignature(input: {
   attachmentId: string;
   userId: string;

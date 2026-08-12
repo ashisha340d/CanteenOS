@@ -4,6 +4,7 @@ export * from './permissions';
 export * from './dto/common';
 export * from './dto/auth';
 export * from './dto/domain';
+export * from './dto/equipment';
 export * from './dto/reports';
 export * from './sync';
 export * from './utils/orderNumber';

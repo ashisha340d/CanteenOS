@@ -10,6 +10,8 @@ const TONE_MAP: Record<string, StatusToneName> = {
   PENDING: 'progress',
   INVITED: 'progress',
   QUEUED: 'progress',
+  SCHEDULED: 'progress',
+  UNPAID: 'progress',
   /* moving */
   ACKNOWLEDGED: 'info',
   WORK_IN_PROGRESS: 'info',
@@ -18,20 +20,25 @@ const TONE_MAP: Record<string, StatusToneName> = {
   TRANSCRIBING: 'info',
   OCR: 'info',
   ANALYZING: 'info',
+  OPEN: 'info',
+  PARTIAL: 'info',
   /* done / healthy */
   ACTIVE: 'success',
   COMPLETED: 'success',
   FINALIZED: 'success',
   READY: 'success',
+  PAID: 'success',
   /* stopped */
   CANCELLED: 'danger',
   SUSPENDED: 'danger',
   FAILED: 'danger',
+  VOIDED: 'danger',
   /* dormant */
   INACTIVE: 'muted',
   ARCHIVED: 'muted',
   REMOVED: 'muted',
   SAVED: 'muted',
+  DRAFT: 'muted',
 };
 
 /** Statuses that describe a live, moving thing get a pulsing dot; settled ones stay still. */
@@ -43,6 +50,8 @@ const LIVE_STATUSES = new Set([
   'TRANSCRIBING',
   'OCR',
   'ANALYZING',
+  // A ticket on the counter is the definition of a live thing.
+  'OPEN',
 ]);
 
 export function StatusChip({ status, className }: { status: string; className?: string }): JSX.Element {

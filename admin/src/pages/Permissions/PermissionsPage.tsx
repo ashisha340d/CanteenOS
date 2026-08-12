@@ -6,7 +6,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { PageHeader } from '../../components/ui/PageHeader';
 import { TableSkeleton } from '../../components/ui/Skeletons';
 import { useAuth } from '@/services/AuthContext';
 import {
@@ -14,6 +13,7 @@ import {
   useSetBoardRoleCapability,
   useSetRoleCapability,
 } from '../../hooks/useAdmin';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { humanise } from '@/lib/options';
 import { notify } from '@/lib/notify';
 
@@ -31,12 +31,7 @@ export function PermissionsPage(): JSX.Element {
   const setBoardRoleCapability = useSetBoardRoleCapability();
 
   if (isLoading || !data) {
-    return (
-      <>
-        <PageHeader title="Permissions" subtitle="What each role is allowed to do." />
-        <TableSkeleton rows={10} columns={5} />
-      </>
-    );
+    return <TableSkeleton rows={10} columns={5} />;
   }
 
   const allCapabilities = Array.from(
@@ -80,9 +75,11 @@ export function PermissionsPage(): JSX.Element {
   return (
     <>
       <PageHeader
+        eyebrow="People"
         title="Permissions"
-        subtitle="What each role is allowed to do. Enforced by the server on every request."
+        subtitle="What each role can do, as enforced by the server. This is the matrix the whole portal reads its visibility from."
       />
+
       <div className="flex flex-col gap-6">
         <Alert>
           <InfoIcon />

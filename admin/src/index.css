@@ -390,11 +390,48 @@ html[data-text-size='large'] {
     min-width: 2.75rem;
   }
 
+  /*
+   * The one keyboard-focus treatment, matching `Button`'s 3px ring. Anything clickable that is
+   * not a `Button` — an image tile, a chip that opens an editor, a suggestion row — wears this,
+   * so a keyboard user never loses the caret and every ring in the portal looks the same.
+   *
+   * Deliberately an `outline` rather than a `box-shadow` ring: several of the things wearing it
+   * are cards that also carry `hover:shadow-md`, and a shadow utility would overwrite a
+   * shadow-based ring at exactly the moment the element is both hovered and focused. `outline`
+   * follows `border-radius` in every browser this targets and cannot be clobbered.
+   */
+  .focus-ring:focus-visible {
+    outline: 3px solid color-mix(in oklch, var(--ring) 50%, transparent);
+    outline-offset: 0;
+  }
+
   .safe-bottom {
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
   .safe-top {
     padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  /* A line just landed in the cart. A faint tint that fades straight out — enough to catch the
+     eye and say "this row", not enough to be a light show on every tap. */
+  @keyframes pos-line-flash {
+    from {
+      background-color: color-mix(in oklch, var(--primary) 14%, transparent);
+    }
+
+    to {
+      background-color: transparent;
+    }
+  }
+
+  .pos-line-flash {
+    animation: pos-line-flash 600ms ease-out forwards;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pos-line-flash {
+      animation-duration: 0.01ms;
+    }
   }
 }

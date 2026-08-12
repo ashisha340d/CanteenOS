@@ -67,7 +67,12 @@ export function Modal({
         x: Math.min(Math.max(0, g.x), maxX),
         y: Math.min(Math.max(0, g.y), maxY),
         width: Math.max(minWidth, Math.min(g.width, window.innerWidth - 16)),
-        height: Math.max(minHeight, Math.min(g.height, window.innerHeight - 16)),
+        // A null height is "fit the content" and needs no clamping — the max-height below
+        // keeps it inside the viewport.
+        height:
+          g.height === null
+            ? null
+            : Math.max(minHeight, Math.min(g.height, window.innerHeight - 16)),
       };
     },
     [minWidth, minHeight],
@@ -116,7 +121,9 @@ export function Modal({
         startX: e.clientX,
         startY: e.clientY,
         origW: geometryRef.current.width,
-        origH: geometryRef.current.height,
+        // Still content-sized: start from whatever it currently measures, so the first drag
+        // continues from the height on screen rather than jumping to a default.
+        origH: geometryRef.current.height ?? containerRef.current?.offsetHeight ?? minHeight,
       };
       const onMove = (ev: MouseEvent): void => {
         if (!resizeRef.current) return;
@@ -250,14 +257,18 @@ export function Modal({
           left: geometry.x,
           top: geometry.y,
           width: geometry.width,
-          height: geometry.height,
+          // Content-sized until the user resizes; either way it can never grow past the
+          // viewport, so the footer stays reachable and the body scrolls instead.
+          ...(geometry.height === null
+            ? { minHeight, maxHeight: 'calc(100dvh - 2rem)' }
+            : { height: geometry.height, maxHeight: 'calc(100dvh - 2rem)' }),
         }}
       >
         <div
           ref={containerRef}
           onKeyDownCapture={onKeyDownCapture}
           onFocusCapture={onFocusCapture}
-          className="flex h-full min-h-0 flex-col"
+          className="flex min-h-0 flex-1 flex-col"
         >
           {/* The whole bar is the drag handle; the grip only appears when the pointer is
               over it, so the chrome stays quiet while the form is being filled in. */}

@@ -52,7 +52,11 @@ export function PageHeader({
           )}
         </div>
         {actions && (
-          <div className="flex shrink-0 flex-wrap items-center gap-2 *:max-sm:flex-1">{actions}</div>
+          /* On a narrow screen these stretch *and* grow to a thumb-sized target — the default
+             control height is tuned for a dense desktop grid and is too small to hit reliably. */
+          <div className="flex shrink-0 flex-wrap items-center gap-2 *:max-sm:min-h-11 *:max-sm:flex-1">
+            {actions}
+          </div>
         )}
       </div>
     </header>

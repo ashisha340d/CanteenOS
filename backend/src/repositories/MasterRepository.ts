@@ -468,8 +468,14 @@ export class MenuCategoryRepository {
 /* -------------------------------------------------------------------- menu items */
 
 const ITEM_COLUMNS = `
-  id, category_id, name, name_hi, unit, unit_hi, image_path, status, sort_order, created_by,
-  created_at, updated_at, deleted_at, revision, sync_seq`;
+  id, category_id, name, name_hi, unit, unit_hi, image_path, base_price, tax_profile_id,
+  always_available,
+  status, sort_order, created_by, created_at, updated_at, deleted_at, revision, sync_seq,
+  (SELECT ma.media_id FROM media_assignments ma
+     WHERE ma.entity_type = 'MENU_ITEM' AND ma.entity_id = menu_items.id
+       AND ma.deleted_at IS NULL AND ma.status = 'ACTIVE'
+     ORDER BY ma.is_primary DESC, ma.sort_order ASC, ma.created_at ASC
+     LIMIT 1) AS primary_media_id`;
 
 export class MenuItemRepository {
   async findById(db: Db, id: string) {
@@ -524,6 +530,9 @@ export class MenuItemRepository {
       unit: string;
       unitHi: string | null;
       imagePath: string | null;
+      basePrice: number | null;
+      taxProfileId?: string | null;
+      alwaysAvailable?: boolean;
       status: MasterStatus;
       sortOrder: number;
       createdBy: string | null;
@@ -534,9 +543,10 @@ export class MenuItemRepository {
     await mutate(
       db,
       `INSERT INTO menu_items
-        (id, category_id, name, name_hi, unit, unit_hi, image_path, status, sort_order, created_by,
-         created_at, updated_at, revision, sync_seq)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
+        (id, category_id, name, name_hi, unit, unit_hi, image_path, base_price, tax_profile_id,
+         always_available,
+         status, sort_order, created_by, created_at, updated_at, revision, sync_seq)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
       [
         input.id,
         input.categoryId,
@@ -545,6 +555,9 @@ export class MenuItemRepository {
         input.unit,
         input.unitHi ?? null,
         input.imagePath,
+        input.basePrice ?? null,
+        input.taxProfileId ?? null,
+        input.alwaysAvailable === false ? 0 : 1,
         input.status,
         input.sortOrder,
         input.createdBy,
@@ -568,6 +581,9 @@ export class MenuItemRepository {
       unit?: string;
       unitHi?: string | null;
       imagePath?: string | null;
+      basePrice?: number | null;
+      taxProfileId?: string | null;
+      alwaysAvailable?: boolean;
       status?: MasterStatus;
       sortOrder?: number;
     },
@@ -597,6 +613,18 @@ export class MenuItemRepository {
     if (input.imagePath !== undefined) {
       assignments.push('image_path = ?');
       params.push(input.imagePath);
+    }
+    if (input.basePrice !== undefined) {
+      assignments.push('base_price = ?');
+      params.push(input.basePrice);
+    }
+    if (input.taxProfileId !== undefined) {
+      assignments.push('tax_profile_id = ?');
+      params.push(input.taxProfileId);
+    }
+    if (input.alwaysAvailable !== undefined) {
+      assignments.push('always_available = ?');
+      params.push(input.alwaysAvailable ? 1 : 0);
     }
     if (input.status !== undefined) {
       assignments.push('status = ?');

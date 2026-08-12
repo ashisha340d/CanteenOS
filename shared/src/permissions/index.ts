@@ -94,6 +94,48 @@ export const Capability = {
   SHOPPING_LIST_READ: 'shopping.read',
   SHOPPING_LIST_GENERATE: 'shopping.generate',
 
+  /* ------------------------------- equipment monitoring & maintenance ------- */
+
+  /** See equipment, floor plans and their maintenance state. Everyone. */
+  EQUIPMENT_VIEW: 'equipment.view',
+  /** Register a new asset (photo -> AI -> confirm). Manager and above. */
+  EQUIPMENT_CREATE: 'equipment.create',
+  EQUIPMENT_EDIT: 'equipment.edit',
+  /** Retire is the normal end of life; deletion erases the asset. Admin only. */
+  EQUIPMENT_DELETE: 'equipment.delete',
+  /**
+   * Raise a problem/fault against an asset. Held by *every* role including Employee: the
+   * person standing in front of the broken oven is the one who must be able to report it,
+   * and withholding this is the single fastest way to make the module useless.
+   */
+  EQUIPMENT_REPORT_PROBLEM: 'equipment.report_problem',
+  EQUIPMENT_UPLOAD_DOCUMENT: 'equipment.upload_document',
+  /** Create/edit floors, areas and locations, and move an asset between them. */
+  EQUIPMENT_MANAGE_LOCATION: 'equipment.manage_location',
+  /** Upload a floor plan and pin equipment onto it. Admin and Manager. */
+  EQUIPMENT_MANAGE_FLOORPLAN: 'equipment.manage_floorplan',
+
+  MAINTENANCE_VIEW: 'maintenance.view',
+  /** Open a maintenance/inspection request. Everyone. */
+  MAINTENANCE_CREATE: 'maintenance.create',
+  /** Hand a ticket to a person or a supplier. Manager and above. */
+  MAINTENANCE_ASSIGN: 'maintenance.assign',
+  /** Verify that a resolved ticket actually holds. Manager and above. */
+  MAINTENANCE_APPROVE: 'maintenance.approve',
+  MAINTENANCE_CLOSE: 'maintenance.close',
+  /** Create and edit preventive maintenance schedules. Manager and above. */
+  MAINTENANCE_SCHEDULE: 'maintenance.schedule',
+  MAINTENANCE_DELETE: 'maintenance.delete',
+
+  SUPPLIER_VIEW: 'supplier.view',
+  /** Maintain the supplier master and set an asset's default supplier. Manager and above. */
+  SUPPLIER_MANAGE: 'supplier.manage',
+  /**
+   * Place the call or send the WhatsApp. Separate from SUPPLIER_MANAGE because contacting a
+   * supplier is a floor action, while editing the master is an office one.
+   */
+  SUPPLIER_CONTACT: 'supplier.contact',
+
   SYNC_USE: 'sync.use',
 
   REPORT_READ: 'report.read',
@@ -132,6 +174,12 @@ const EMPLOYEE_CAPABILITIES: readonly Capability[] = [
   Capability.TAX_READ,
   Capability.TASK_READ,
   Capability.TASK_WORK,
+  // Equipment monitoring starts at the bottom of the roster, not the top: whoever is standing
+  // in front of the equipment must be able to see it and report what is wrong with it.
+  Capability.EQUIPMENT_VIEW,
+  Capability.EQUIPMENT_REPORT_PROBLEM,
+  Capability.MAINTENANCE_VIEW,
+  Capability.MAINTENANCE_CREATE,
   Capability.SYNC_USE,
 ];
 
@@ -147,6 +195,11 @@ const USER_CAPABILITIES: readonly Capability[] = [
   // A User raises their own to-dos and may hand work to an Employee, same as a Manager.
   Capability.TASK_SELF,
   Capability.TASK_ASSIGN,
+  // A User attaches the warranty card they were just handed, and rings the supplier — but
+  // does not maintain the supplier master or register assets.
+  Capability.EQUIPMENT_UPLOAD_DOCUMENT,
+  Capability.SUPPLIER_VIEW,
+  Capability.SUPPLIER_CONTACT,
 ];
 
 const MANAGER_CAPABILITIES: readonly Capability[] = [
@@ -160,6 +213,17 @@ const MANAGER_CAPABILITIES: readonly Capability[] = [
   Capability.SHOPPING_LIST_GENERATE,
   Capability.ENTITY_WRITE,
   Capability.POS_VOID,
+  // The Manager runs the floor: registers what arrives, positions it, routes the ticket and
+  // signs the fix off. Everything except erasing an asset or a ticket outright.
+  Capability.EQUIPMENT_CREATE,
+  Capability.EQUIPMENT_EDIT,
+  Capability.EQUIPMENT_MANAGE_LOCATION,
+  Capability.EQUIPMENT_MANAGE_FLOORPLAN,
+  Capability.MAINTENANCE_ASSIGN,
+  Capability.MAINTENANCE_APPROVE,
+  Capability.MAINTENANCE_CLOSE,
+  Capability.MAINTENANCE_SCHEDULE,
+  Capability.SUPPLIER_MANAGE,
 ];
 
 const ADMIN_CAPABILITIES: readonly Capability[] = [
@@ -196,6 +260,10 @@ const ADMIN_CAPABILITIES: readonly Capability[] = [
   Capability.SETTINGS_READ,
   Capability.SETTINGS_WRITE,
   Capability.ALERT_CONFIG,
+  // Destroying an asset record or a maintenance ticket destroys its history with it, so both
+  // stop at Admin. Retiring an asset and cancelling a ticket are the Manager-level equivalents.
+  Capability.EQUIPMENT_DELETE,
+  Capability.MAINTENANCE_DELETE,
 ];
 
 /**

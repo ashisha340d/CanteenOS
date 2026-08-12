@@ -1,6 +1,7 @@
 import { BrowserRouter } from 'react-router-dom';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Toaster } from '@/components/ui/sonner';
+import { RootErrorBoundary } from './components/ErrorBoundary';
 import { AppRoutes } from './routes';
 import { AuthProvider } from './services/AuthContext';
 import { ThemeProvider } from './theme/ThemeProvider';
@@ -10,9 +11,11 @@ export function App(): JSX.Element {
     <ThemeProvider>
       <TooltipProvider delayDuration={350}>
         <BrowserRouter>
-          <AuthProvider>
-            <AppRoutes />
-          </AuthProvider>
+          <RootErrorBoundary>
+            <AuthProvider>
+              <AppRoutes />
+            </AuthProvider>
+          </RootErrorBoundary>
         </BrowserRouter>
         {/* Bottom-centre on mobile keeps toasts clear of the thumb bar and the sticky
             header; top-right is the desktop convention. */}

@@ -15,9 +15,12 @@ import { FormInput } from '../src/components/FormInput';
 import { PrimaryButton } from '../src/components/PrimaryButton';
 import { PressableScale } from '../src/components/PressableScale';
 import { Card } from '../src/components/Card';
-import { colors, radii, spacing, typography, fonts } from '../src/theme/tokens';
+import { radii, spacing, typography, fonts } from '../src/theme/tokens';
+import { useThemeColors } from '../src/theme/useThemeColors';
 
 export default function LoginScreen(): React.JSX.Element {
+  const { colors } = useThemeColors();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const login = useAuthStore((s) => s.login);
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -103,45 +106,47 @@ export default function LoginScreen(): React.JSX.Element {
   );
 }
 
-const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.background },
-  container: { flexGrow: 1, justifyContent: 'center', padding: spacing[6] },
-  brand: { alignItems: 'center', marginBottom: spacing[8] },
-  logo: {
-    width: 72,
-    height: 72,
-    borderRadius: radii['2xl'],
-    backgroundColor: colors.taskBar,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing[4],
-  },
-  title: {
-    fontFamily: fonts.sansBold,
-    fontSize: typography.title1.size,
-    lineHeight: typography.title1.lineHeight,
-    fontWeight: typography.title1.weight,
-    color: colors.textPrimary,
-    letterSpacing: typography.title1.letterSpacing,
-  },
-  subtitle: {
-    fontFamily: fonts.sans,
-    fontSize: typography.body.size,
-    color: colors.textMuted,
-    marginTop: spacing[1],
-  },
-  formCard: { padding: spacing[6] },
-  rememberRow: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing[5], gap: spacing[3] },
-  checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: radii.sm,
-    borderWidth: 2,
-    borderColor: colors.gray300,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxChecked: { backgroundColor: colors.taskBar, borderColor: colors.taskBar },
-  rememberLabel: { fontFamily: fonts.sansSemibold, fontSize: typography.body.size, color: colors.textSecondary, fontWeight: '600' },
-  error: { color: colors.danger500, marginBottom: spacing[4], textAlign: 'center', fontWeight: '600' },
-});
+function createStyles(colors: ReturnType<typeof useThemeColors>['colors']) {
+  return StyleSheet.create({
+    flex: { flex: 1, backgroundColor: colors.background },
+    container: { flexGrow: 1, justifyContent: 'center', padding: spacing[6] },
+    brand: { alignItems: 'center', marginBottom: spacing[8] },
+    logo: {
+      width: 72,
+      height: 72,
+      borderRadius: radii['2xl'],
+      backgroundColor: colors.taskBar,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: spacing[4],
+    },
+    title: {
+      fontFamily: fonts.sansBold,
+      fontSize: typography.title1.size,
+      lineHeight: typography.title1.lineHeight,
+      fontWeight: typography.title1.weight,
+      color: colors.textPrimary,
+      letterSpacing: typography.title1.letterSpacing,
+    },
+    subtitle: {
+      fontFamily: fonts.sans,
+      fontSize: typography.body.size,
+      color: colors.textMuted,
+      marginTop: spacing[1],
+    },
+    formCard: { padding: spacing[6] },
+    rememberRow: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing[5], gap: spacing[3] },
+    checkbox: {
+      width: 22,
+      height: 22,
+      borderRadius: radii.sm,
+      borderWidth: 2,
+      borderColor: colors.gray300,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    checkboxChecked: { backgroundColor: colors.taskBar, borderColor: colors.taskBar },
+    rememberLabel: { fontFamily: fonts.sansSemibold, fontSize: typography.body.size, color: colors.textSecondary, fontWeight: '600' },
+    error: { color: colors.danger500, marginBottom: spacing[4], textAlign: 'center', fontWeight: '600' },
+  });
+}

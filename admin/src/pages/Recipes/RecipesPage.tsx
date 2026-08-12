@@ -13,7 +13,7 @@ import { DataTable, type DataTableColumn } from '../../components/DataTable/Data
 import { useViewMode } from '../../components/DataTable/gridState';
 import { EntityCardGrid } from '../../components/EntityCardGrid';
 import { ListToolbar } from '../../components/ListToolbar';
-import { PageHeader } from '../../components/ui/PageHeader';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusChip } from '../../components/StatusChip';
 import { useDeleteRecipe, useRecipes, useSetDefaultRecipe } from '../../hooks/useRecipes';
 import { enumOptions, humanise } from '@/lib/options';
@@ -27,15 +27,21 @@ export function RecipesPage(): JSX.Element {
   const [status, setStatus] = useState<MasterStatus | ''>('');
   const [view, setView] = useViewMode('recipes');
   const [deleting, setDeleting] = useState<RecipeDto | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   const query = useMemo(
     () => ({ q: search || undefined, status: status || undefined, menuItemId }),
     [search, status, menuItemId],
   );
-  const { data: rows = [], isLoading } = useRecipes(query);
+  const { data: allRows = [], isLoading } = useRecipes(query);
   const del = useDeleteRecipe();
   const setDefault = useSetDefaultRecipe();
   const filtersActive = Boolean(status) || search.trim() !== '';
+  const rows = useMemo(
+    () => allRows.slice((page - 1) * pageSize, page * pageSize),
+    [allRows, page, pageSize],
+  );
 
   const columns: DataTableColumn<RecipeDto>[] = [
     { field: 'menuItemName', headerName: 'Menu item', width: 220, valueGetter: (r) => r.menuItemName ?? '—' },
@@ -136,36 +142,47 @@ export function RecipesPage(): JSX.Element {
   return (
     <>
       <PageHeader
-        {...(menuItemId
-          ? {
-              leading: <BackButton to="/menu-items" label="Back to menu items" />,
-              eyebrow: 'Filtered by menu item',
-            }
-          : {})}
+        eyebrow="Catalogue/Collection"
         title="Recipes"
-        subtitle="Every authored recipe variant, each stating ingredients and method for a base serving count."
+        subtitle="Method and quantities per menu item variant, stated for a base serving count and scaled automatically to the pax an order asks for."
+        {...(menuItemId
+          ? { leading: <BackButton to="/menu-items" label="Back to menu items" /> }
+          : {})}
       />
+
       <ListToolbar
         search={search}
-        onSearchChange={setSearch}
+        onSearchChange={(v) => {
+          setSearch(v);
+          setPage(1);
+        }}
         activeFilterCount={status ? 1 : 0}
-        onClearFilters={() => setStatus('')}
+        onClearFilters={() => {
+          setStatus('');
+          setPage(1);
+        }}
         filters={
           <SelectField
             label="Status"
             value={status}
-            onChange={(v) => setStatus(v as MasterStatus | '')}
+            onChange={(v) => {
+              setStatus(v as MasterStatus | '');
+              setPage(1);
+            }}
             emptyLabel="All statuses"
             options={enumOptions(MasterStatus)}
           />
         }
         view={view}
         onViewChange={setView}
-        page={1}
-        pageSize={rows.length || 1}
-        total={rows.length}
-        onPageChange={() => undefined}
-        onPageSizeChange={() => undefined}
+        page={page}
+        pageSize={pageSize}
+        total={allRows.length}
+        onPageChange={setPage}
+        onPageSizeChange={(size) => {
+          setPageSize(size);
+          setPage(1);
+        }}
         onCreate={() => navigate(newRecipeHref)}
         createLabel="New recipe"
       />
@@ -220,11 +237,10 @@ export function RecipesPage(): JSX.Element {
       <ConfirmDialog
         open={Boolean(deleting)}
         title="Delete recipe variant"
-        message={`Delete this variant of "${deleting?.menuItemName ?? 'this menu item'}"? ${
-          deleting?.isDefault
-            ? 'It is the default variant — another variant will be promoted automatically if one exists.'
-            : ''
-        }`}
+        message={`Delete this variant of "${deleting?.menuItemName ?? 'this menu item'}"? ${deleting?.isDefault
+          ? 'It is the default variant — another variant will be promoted automatically if one exists.'
+          : ''
+          }`}
         confirmLabel="Delete"
         danger
         loading={del.isPending}

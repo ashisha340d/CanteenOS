@@ -1,0 +1,42 @@
+/*
+ * Maps AG Grid's legacy CSS-variable theme onto the portal's own design tokens, so a grid
+ * looks like part of this app rather than a vendor widget dropped on top of it. Only the
+ * Quartz theme is loaded (see DataTable.tsx) — this file overrides its variables, it does
+ * not replace them.
+ */
+.ag-theme-quartz {
+  --ag-foreground-color: var(--foreground);
+  --ag-background-color: var(--card);
+  --ag-header-foreground-color: var(--muted-foreground);
+  --ag-header-background-color: var(--card);
+  --ag-odd-row-background-color: var(--card);
+  --ag-row-hover-color: var(--muted);
+  --ag-selected-row-background-color: var(--sidebar-accent);
+  --ag-border-color: var(--border);
+  --ag-row-border-color: var(--border);
+  --ag-secondary-border-color: var(--border);
+  --ag-input-border-color: var(--border);
+  --ag-checkbox-checked-color: var(--primary);
+  --ag-range-selection-border-color: var(--primary);
+  --ag-font-family: var(--font-sans);
+  --ag-font-size: 0.8125rem;
+  --ag-header-height: 40px;
+  --ag-row-height: 40px;
+  --ag-cell-horizontal-padding: 10px;
+  --ag-borders: solid 1px;
+  --ag-header-column-resize-handle-color: var(--border);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+}
+
+.ag-theme-quartz .ag-header-cell-text {
+  font-weight: 500;
+  text-transform: none;
+}
+
+/* Keyboard focus has to be visible on a grid a keyboard user is tabbing through. */
+.ag-theme-quartz .ag-header-cell:focus-visible,
+.ag-theme-quartz .ag-cell:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}

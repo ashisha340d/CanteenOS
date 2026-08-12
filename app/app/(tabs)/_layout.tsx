@@ -19,6 +19,7 @@ export default function TabsLayout(): React.JSX.Element {
       tabBar={(props) => <TabBar {...props} />}
       screenOptions={{ headerShown: false }}
     >
+      <Tabs.Screen name="tasks" options={{ title: 'Tasks' }} />
       <Tabs.Screen name="boards" options={{ title: 'Boards' }} />
       <Tabs.Screen name="orders" options={{ title: 'Orders' }} />
       <Tabs.Screen name="users" options={{ title: 'Users' }} />

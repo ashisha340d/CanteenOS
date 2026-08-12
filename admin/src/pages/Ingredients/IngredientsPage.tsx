@@ -8,7 +8,7 @@ import { DataTable, type DataTableColumn } from '../../components/DataTable/Data
 import { useViewMode } from '../../components/DataTable/gridState';
 import { EntityCardGrid } from '../../components/EntityCardGrid';
 import { ListToolbar } from '../../components/ListToolbar';
-import { PageHeader } from '../../components/ui/PageHeader';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusChip } from '../../components/StatusChip';
 import { ingredientCategoriesApi } from '../../api/ingredients';
 import {
@@ -136,9 +136,11 @@ export function IngredientsPage(): JSX.Element {
   return (
     <>
       <PageHeader
+        eyebrow="Catalogue/Collection"
         title="Ingredients"
-        subtitle="The recipe-only ingredient master every recipe's ingredient list is built from."
+        subtitle="The raw materials recipes are written against, each with the unit it is measured in."
       />
+
       <ListToolbar
         search={search}
         onSearchChange={(v) => {

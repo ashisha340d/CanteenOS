@@ -262,6 +262,7 @@ export function OrderItemsEditor({
                       style={styles.stepperValue}
                       value={String(line.quantity)}
                       keyboardType="numeric"
+                      returnKeyType="done"
                       selectTextOnFocus
                       onChangeText={(text) => {
                         const parsed = Number(text.replace(/[^0-9.]/g, ''));
@@ -507,7 +508,10 @@ const styles = StyleSheet.create({
   },
   stepperValue: {
     minWidth: 40,
+    height: 30,
     textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
     fontFamily: fonts.mono,
     fontSize: typography.dataMono.size,
     color: colors.textPrimary,

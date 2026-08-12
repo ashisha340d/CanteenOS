@@ -2,19 +2,34 @@ import { z } from 'zod';
 import {
   AlertSoundSlot,
   AlertType,
+  AvailabilityStatus,
   BillingStatus,
   BoardRole,
   BoardStatus,
   Capability,
   ClientType,
+  EntityType,
+  GstTaxability,
+  HsnSacCodeType,
+  ItcEligibility,
   LIMITS,
   MasterStatus,
   OrderPriority,
   OrderStatus,
+  PosDiscountType,
+  PosOrderStatus,
+  PosOrderType,
+  PosPaymentMethod,
+  PosPaymentStatus,
   RecipeDifficulty,
   RecipeIngredientScaling,
   ReportKind,
   ShoppingListStatus,
+  SupplyType,
+  TaskKind,
+  TaskPriority,
+  TaskSource,
+  TaskStatus,
   UserRole,
   UserStatus,
   YoutubeImportStatus,
@@ -68,6 +83,64 @@ export const changePasswordSchema = z
 
 export const pushTokenSchema = z
   .object({ deviceId: text(120, 'Device id'), pushToken: text(255, 'Push token') })
+  .strict();
+
+/* ----------------------------------------------------------------- fast auth */
+
+export const pinLoginSchema = z
+  .object({
+    identifier: text(190, 'Username, phone or email'),
+    pin: z.string().regex(/^\d{4}$/, 'PIN must be exactly 4 digits'),
+    deviceId: text(120, 'Device id'),
+    deviceName: optionalText(150),
+    clientType: enumOf(ClientType),
+    rememberMe: z.boolean().optional(),
+  })
+  .strict();
+
+export const pinManageSchema = z
+  .object({
+    currentPassword: z.string().min(1, 'Current password is required'),
+    pin: z.string().regex(/^\d{4}$/, 'PIN must be exactly 4 digits'),
+  })
+  .strict();
+
+export const passkeyLoginOptionsSchema = z
+  .object({
+    identifier: text(190, 'Username, phone or email'),
+  })
+  .strict();
+
+export const passkeyLoginSchema = z
+  .object({
+    response: z.record(z.unknown()),
+    deviceId: text(120, 'Device id'),
+    deviceName: optionalText(150),
+    clientType: enumOf(ClientType),
+    rememberMe: z.boolean().optional(),
+  })
+  .strict();
+
+export const passkeyRegisterOptionsSchema = z
+  .object({
+    currentPassword: z.string().min(1, 'Current password is required'),
+    deviceName: optionalText(150),
+  })
+  .strict();
+
+export const passkeyRegisterSchema = z
+  .object({
+    currentPassword: z.string().min(1, 'Current password is required'),
+    response: z.record(z.unknown()),
+    deviceName: optionalText(150),
+  })
+  .strict();
+
+export const passkeyRemoveSchema = z
+  .object({
+    credentialId: z.string().min(1, 'Credential id is required'),
+    currentPassword: z.string().min(1, 'Current password is required'),
+  })
   .strict();
 
 /* ------------------------------------------------------------------------ users */
@@ -219,6 +292,7 @@ export const createMenuCategorySchema = z
   .object({
     ...masterBase,
     name: text(LIMITS.MENU_CATEGORY_NAME_MAX, 'Category name'),
+    nameHi: optionalText(LIMITS.MENU_CATEGORY_NAME_MAX),
     imagePath: optionalText(500),
   })
   .strict();
@@ -234,12 +308,320 @@ export const createMenuItemSchema = z
     ...masterBase,
     categoryId: uuid,
     name: text(LIMITS.MENU_ITEM_NAME_MAX, 'Item name'),
+    nameHi: optionalText(LIMITS.MENU_ITEM_NAME_MAX),
     unit: text(LIMITS.UNIT_MAX, 'Unit'),
+    unitHi: optionalText(LIMITS.UNIT_MAX),
     imagePath: optionalText(500),
+    basePrice: z.coerce.number().min(LIMITS.PRICE_MIN).max(LIMITS.PRICE_MAX).nullable().optional(),
+    taxProfileId: uuid.nullable().optional(),
+    alwaysAvailable: z.boolean().optional(),
   })
   .strict();
 
 export const updateMenuItemSchema = createMenuItemSchema.partial().strict();
+
+/* ------------------------------------------------------------------- menu master */
+
+export const menuListQuerySchema = masterListQuerySchema;
+
+export const createMenuSchema = z
+  .object({
+    id: uuid.optional(),
+    code: text(LIMITS.MENU_CODE_MAX, 'Menu code').regex(
+      /^[A-Za-z0-9_-]+$/,
+      'Use letters, digits, underscore or hyphen only',
+    ),
+    name: text(LIMITS.MENU_NAME_MAX, 'Menu name'),
+    description: optionalText(LIMITS.MENU_DESCRIPTION_MAX),
+    status: enumOf(MasterStatus).optional(),
+    sortOrder: z.coerce.number().int().min(0).max(100_000).optional(),
+    priority: z.coerce.number().int().min(0).max(100_000).optional(),
+    effectiveFrom: isoDate.nullable().optional(),
+    effectiveUntil: isoDate.nullable().optional(),
+  })
+  .strict();
+
+export const updateMenuSchema = createMenuSchema
+  .partial()
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, 'Provide at least one field to update');
+
+export const menuCategoryAssignmentListQuerySchema = z
+  .object({ includeInactive: z.coerce.boolean().optional() })
+  .strict();
+
+export const assignMenuCategorySchema = z
+  .object({
+    id: uuid.optional(),
+    categoryId: uuid,
+    displayName: optionalText(LIMITS.MENU_DISPLAY_NAME_MAX),
+    displayNameHi: optionalText(LIMITS.MENU_DISPLAY_NAME_MAX),
+    description: optionalText(LIMITS.MENU_DESCRIPTION_OVERRIDE_MAX),
+    descriptionHi: optionalText(LIMITS.MENU_DESCRIPTION_OVERRIDE_MAX),
+    status: enumOf(MasterStatus).optional(),
+    sortOrder: z.coerce.number().int().min(0).max(100_000).optional(),
+    posVisible: z.boolean().optional(),
+    boardVisible: z.boolean().optional(),
+  })
+  .strict();
+
+export const updateMenuCategoryAssignmentSchema = assignMenuCategorySchema
+  .omit({ categoryId: true, id: true })
+  .partial()
+  .strict();
+
+export const menuItemAssignmentListQuerySchema = masterListQuerySchema.extend({
+  menuId: uuid.optional(),
+  categoryAssignmentId: uuid.optional(),
+  availability: enumOf(AvailabilityStatus).optional(),
+});
+
+export const assignMenuItemSchema = z
+  .object({
+    id: uuid.optional(),
+    foodItemId: uuid,
+    categoryAssignmentId: uuid.nullable().optional(),
+    displayName: optionalText(LIMITS.MENU_DISPLAY_NAME_MAX),
+    displayNameHi: optionalText(LIMITS.MENU_DISPLAY_NAME_MAX),
+    description: optionalText(LIMITS.MENU_DESCRIPTION_OVERRIDE_MAX),
+    descriptionHi: optionalText(LIMITS.MENU_DESCRIPTION_OVERRIDE_MAX),
+    preparationMethod: optionalText(LIMITS.PREPARATION_METHOD_MAX),
+    preparationMethodHi: optionalText(LIMITS.PREPARATION_METHOD_MAX),
+    preparationTimeMinutes: z.coerce.number().int().min(0).max(1440).nullable().optional(),
+    unit: optionalText(LIMITS.UNIT_MAX),
+    status: enumOf(MasterStatus).optional(),
+    availability: enumOf(AvailabilityStatus).optional(),
+    sortOrder: z.coerce.number().int().min(0).max(100_000).optional(),
+    posVisible: z.boolean().optional(),
+    boardVisible: z.boolean().optional(),
+    qrVisible: z.boolean().optional(),
+    webVisible: z.boolean().optional(),
+    appVisible: z.boolean().optional(),
+    dineInAvailable: z.boolean().optional(),
+    takeawayAvailable: z.boolean().optional(),
+    deliveryAvailable: z.boolean().optional(),
+    allowDecimalQuantity: z.boolean().optional(),
+  })
+  .strict();
+
+export const updateMenuItemAssignmentSchema = assignMenuItemSchema
+  .omit({ foodItemId: true, id: true })
+  .partial()
+  .strict();
+
+export const createVariantSchema = z
+  .object({
+    id: uuid.optional(),
+    variantCode: optionalText(LIMITS.VARIANT_CODE_MAX),
+    name: text(LIMITS.VARIANT_NAME_MAX, 'Variant name'),
+    nameHi: optionalText(LIMITS.VARIANT_NAME_MAX),
+    description: optionalText(LIMITS.MENU_DESCRIPTION_OVERRIDE_MAX),
+    descriptionHi: optionalText(LIMITS.MENU_DESCRIPTION_OVERRIDE_MAX),
+    portionName: optionalText(LIMITS.PORTION_NAME_MAX),
+    portionNameHi: optionalText(LIMITS.PORTION_NAME_MAX),
+    quantity: z.coerce.number().min(0).nullable().optional(),
+    unit: optionalText(LIMITS.UNIT_MAX),
+    price: z.coerce.number().min(LIMITS.PRICE_MIN).max(LIMITS.PRICE_MAX),
+    /** Null/absent means inherit the food item's profile; a value is an explicit override. */
+    taxProfileId: uuid.nullable().optional(),
+    status: enumOf(MasterStatus).optional(),
+    availability: enumOf(AvailabilityStatus).optional(),
+    sortOrder: z.coerce.number().int().min(0).max(100_000).optional(),
+    preparationMethod: optionalText(LIMITS.PREPARATION_METHOD_MAX),
+    preparationMethodHi: optionalText(LIMITS.PREPARATION_METHOD_MAX),
+    preparationTimeMinutes: z.coerce.number().int().min(0).max(1440).nullable().optional(),
+    isDefault: z.boolean().optional(),
+    allowDecimalQuantity: z.boolean().optional(),
+  })
+  .strict();
+
+export const updateVariantSchema = createVariantSchema
+  .omit({ id: true })
+  .partial()
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, 'Provide at least one field to update');
+
+export const createCounterSchema = z
+  .object({
+    ...masterBase,
+    name: text(LIMITS.COUNTER_NAME_MAX, 'Counter name'),
+    code: optionalText(60),
+  })
+  .strict();
+
+export const updateCounterSchema = createCounterSchema.partial().strict();
+
+export const createItemGroupSchema = z
+  .object({
+    ...masterBase,
+    name: text(LIMITS.COUNTER_NAME_MAX, 'Item group name'),
+    code: optionalText(60),
+  })
+  .strict();
+
+export const updateItemGroupSchema = createItemGroupSchema.partial().strict();
+
+export const assignItemGroupSchema = z
+  .object({
+    foodItemId: uuid,
+    groupId: uuid,
+    status: enumOf(MasterStatus).optional(),
+  })
+  .strict();
+
+export const menuItemScheduleBulkSchema = z
+  .object({
+    alwaysAvailable: z.boolean(),
+    slots: z.array(
+      z
+        .object({
+          dayOfWeek: z.coerce.number().int().min(0).max(6),
+          shift: z.enum(['MORNING', 'EVENING']),
+          isAvailable: z.boolean(),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+
+export const variantCatalogPriceSchema = z
+  .object({
+    menuId: uuid,
+    price: z.coerce.number().min(LIMITS.PRICE_MIN).max(LIMITS.PRICE_MAX).nullable(),
+  })
+  .strict();
+
+export const createPrintingGroupSchema = z
+  .object({
+    ...masterBase,
+    name: text(LIMITS.PRINTING_GROUP_NAME_MAX, 'Printing group name'),
+    code: optionalText(60),
+  })
+  .strict();
+
+export const updatePrintingGroupSchema = createPrintingGroupSchema.partial().strict();
+
+export const routableEntityRefSchema = z
+  .object({
+    entityType: z.enum(['MENU_ITEM_ASSIGNMENT', 'MENU_ITEM_VARIANT', 'MENU_ITEM']),
+    entityId: uuid,
+  })
+  .strict();
+
+export const assignCounterRouteSchema = routableEntityRefSchema.extend({
+  counterId: uuid,
+  status: enumOf(MasterStatus).optional(),
+});
+
+export const assignPrintingRouteSchema = routableEntityRefSchema.extend({
+  printingGroupId: uuid,
+  sortOrder: z.coerce.number().int().min(0).max(100_000).optional(),
+  status: enumOf(MasterStatus).optional(),
+});
+
+export const createModifierGroupSchema = z
+  .object({
+    ...masterBase,
+    name: text(LIMITS.MODIFIER_GROUP_NAME_MAX, 'Modifier group name'),
+    selectionType: z.enum(['SINGLE', 'MULTIPLE']).optional(),
+    minSelect: z.coerce.number().int().min(0).max(50).optional(),
+    maxSelect: z.coerce.number().int().min(0).max(50).nullable().optional(),
+  })
+  .strict();
+
+export const updateModifierGroupSchema = createModifierGroupSchema.partial().strict();
+
+export const createModifierSchema = z
+  .object({
+    id: uuid.optional(),
+    name: text(LIMITS.MODIFIER_NAME_MAX, 'Modifier name'),
+    nameHi: optionalText(LIMITS.MODIFIER_NAME_MAX),
+    priceDelta: z.coerce.number().min(-LIMITS.PRICE_MAX).max(LIMITS.PRICE_MAX).optional(),
+    status: enumOf(MasterStatus).optional(),
+    sortOrder: z.coerce.number().int().min(0).max(100_000).optional(),
+  })
+  .strict();
+
+export const updateModifierSchema = createModifierSchema.omit({ id: true }).partial().strict();
+
+export const assignModifierGroupSchema = routableEntityRefSchema.extend({
+  modifierGroupId: uuid,
+  isRequired: z.boolean().optional(),
+  sortOrder: z.coerce.number().int().min(0).max(100_000).optional(),
+  status: enumOf(MasterStatus).optional(),
+});
+
+export const createScheduleSchema = z
+  .object({
+    id: uuid.optional(),
+    dayOfWeek: z.coerce.number().int().min(0).max(6).nullable().optional(),
+    startTime: clockTime,
+    endTime: clockTime,
+    status: enumOf(MasterStatus).optional(),
+  })
+  .strict();
+
+export const updateScheduleSchema = createScheduleSchema.omit({ id: true }).partial().strict();
+
+export const menuCodeParam = z.object({ code: text(LIMITS.MENU_CODE_MAX, 'Menu code') }).strict();
+
+/* --------------------------------------------------------------------- media library */
+
+export const mediaListQuerySchema = pageQuery.extend({
+  unassignedOnly: z.coerce.boolean().optional(),
+});
+
+export const updateMediaAssetSchema = z
+  .object({
+    title: optionalText(LIMITS.MEDIA_TITLE_MAX),
+    altText: optionalText(LIMITS.MEDIA_ALT_TEXT_MAX),
+    status: enumOf(MasterStatus).optional(),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, 'Provide at least one field to update');
+
+export const assignMediaSchema = z
+  .object({
+    mediaId: uuid,
+    entityType: z.enum([
+      'MENU',
+      'MENU_CATEGORY_ASSIGNMENT',
+      'MENU_ITEM_ASSIGNMENT',
+      'MENU_ITEM_VARIANT',
+      'MENU_ITEM',
+      'COUNTER',
+      'PRINTING_GROUP',
+      'RECIPE',
+    ]),
+    entityId: uuid,
+    role: z.enum(['PRIMARY', 'GALLERY', 'BANNER', 'THUMBNAIL', 'COVER']).optional(),
+    isPrimary: z.boolean().optional(),
+    sortOrder: z.coerce.number().int().min(0).max(100_000).optional(),
+  })
+  .strict();
+
+export const mediaEntityQuerySchema = z
+  .object({
+    entityType: z.enum([
+      'MENU',
+      'MENU_CATEGORY_ASSIGNMENT',
+      'MENU_ITEM_ASSIGNMENT',
+      'MENU_ITEM_VARIANT',
+      'MENU_ITEM',
+      'COUNTER',
+      'PRINTING_GROUP',
+      'RECIPE',
+    ]),
+    entityId: uuid,
+  })
+  .strict();
+
+export const reorderMediaSchema = z.object({ sortOrder: z.coerce.number().int().min(0) }).strict();
+
+/** Same shape as `attachmentFileQuerySchema` below — signed download URL query string. */
+export const mediaFileQuerySchema = z
+  .object({ expires: z.string(), uid: uuid, sig: z.string() })
+  .strict();
 
 /* ----------------------------------------------------------------------- orders */
 
@@ -281,6 +663,10 @@ const orderItemSchema = z
     notes: optionalText(LIMITS.ORDER_ITEM_NOTES_MAX),
     mentionedUserIds: idList.optional(),
     sortOrder: z.coerce.number().int().min(0).optional(),
+    // Menu Master reference, optional — see CreateOrderItemRequest in shared.
+    menuId: uuid.nullable().optional(),
+    variantId: uuid.nullable().optional(),
+    discountAmount: z.coerce.number().min(0).max(LIMITS.PRICE_MAX).optional(),
   })
   .strict()
   .superRefine(refineDishNaming);
@@ -787,5 +1173,409 @@ export const youtubeImportListQuerySchema = z
   .strict();
 
 export const youtubeImportMarkSavedSchema = z.object({ recipeId: uuid }).strict();
+
+/* --------------------------------------------------------------- GST / tax */
+
+export const hsnSacSearchQuerySchema = z
+  .object({
+    q: z.string().trim().max(200).optional(),
+    codeType: enumOf(HsnSacCodeType).optional(),
+    activeOnly: z
+      .union([z.boolean(), z.enum(['true', 'false'])])
+      .transform((value) => value === true || value === 'true')
+      .optional(),
+    page: z.coerce.number().int().min(1).optional(),
+    pageSize: z.coerce.number().int().min(1).max(LIMITS.PAGE_SIZE_MAX).optional(),
+  })
+  .strict();
+
+export const gstSyncRunListQuerySchema = z
+  .object({
+    page: z.coerce.number().int().min(1).optional(),
+    pageSize: z.coerce.number().int().min(1).max(LIMITS.PAGE_SIZE_MAX).optional(),
+  })
+  .strict();
+
+export const taxProfileListQuerySchema = pageQuery
+  .extend({ status: enumOf(MasterStatus).optional() })
+  .strict();
+
+/** Percentages, stored as DECIMAL(6,3) — three decimal places is the column's own precision. */
+const taxRate = z
+  .number()
+  .min(0, 'A rate cannot be negative')
+  .max(LIMITS.TAX_RATE_MAX, `A rate cannot exceed ${LIMITS.TAX_RATE_MAX}%`)
+  .multipleOf(0.001, 'A rate may have at most three decimal places');
+
+const taxProfileShape = {
+  id: uuid.optional(),
+  code: text(LIMITS.TAX_PROFILE_CODE_MAX, 'Code'),
+  name: text(LIMITS.TAX_PROFILE_NAME_MAX, 'Name'),
+  description: optionalText(LIMITS.TAX_PROFILE_DESCRIPTION_MAX),
+  hsnSacId: uuid.nullable().optional(),
+  supplyType: enumOf(SupplyType),
+  gstTaxability: enumOf(GstTaxability).optional(),
+  gstRate: taxRate.optional(),
+  cgstRate: taxRate.optional(),
+  sgstRate: taxRate.optional(),
+  igstRate: taxRate.optional(),
+  cessRate: taxRate.optional(),
+  priceIsInclusive: z.boolean().optional(),
+  itcEligibility: enumOf(ItcEligibility).optional(),
+  effectiveFrom: isoDate.nullable().optional(),
+  effectiveTo: isoDate.nullable().optional(),
+  exemptionReason: optionalText(LIMITS.TAX_EXEMPTION_REASON_MAX),
+  regulatoryNotes: optionalText(LIMITS.TAX_REGULATORY_NOTES_MAX),
+  status: enumOf(MasterStatus).optional(),
+  sortOrder: z.number().int().optional(),
+};
+
+/** An open-ended period is normal; a closed one must not end before it begins. */
+function effectiveRangeIsSane(value: {
+  effectiveFrom?: string | null;
+  effectiveTo?: string | null;
+}): boolean {
+  if (!value.effectiveFrom || !value.effectiveTo) return true;
+  return value.effectiveFrom <= value.effectiveTo;
+}
+
+export const createTaxProfileSchema = z
+  .object(taxProfileShape)
+  .strict()
+  .refine(effectiveRangeIsSane, {
+    message: 'Effective To cannot be earlier than Effective From',
+    path: ['effectiveTo'],
+  });
+
+export const updateTaxProfileSchema = z
+  .object(taxProfileShape)
+  .partial()
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, 'No changes supplied')
+  .refine(effectiveRangeIsSane, {
+    message: 'Effective To cannot be earlier than Effective From',
+    path: ['effectiveTo'],
+  });
+
+/* ------------------------------------------------------------------ entities */
+
+const entityShape = {
+  id: uuid.optional(),
+  // Optional on create: the service allocates CUS-0001 / EMP-0001 / VEN-0001 per type.
+  code: z.string().trim().max(LIMITS.ENTITY_CODE_MAX).optional(),
+  type: enumOf(EntityType),
+  name: text(LIMITS.ENTITY_NAME_MAX, 'Name'),
+  nameHi: optionalText(LIMITS.ENTITY_NAME_MAX),
+  phone: optionalText(LIMITS.ENTITY_PHONE_MAX),
+  email: z
+    .string()
+    .trim()
+    .max(LIMITS.ENTITY_EMAIL_MAX)
+    .email('Must be a valid email address')
+    .nullable()
+    .optional()
+    .or(z.literal('').transform(() => null)),
+  address: optionalText(LIMITS.ENTITY_ADDRESS_MAX),
+  city: optionalText(LIMITS.ENTITY_CITY_MAX),
+  stateCode: z
+    .string()
+    .trim()
+    .regex(/^\d{2}$/, 'Must be a two-digit GST state code')
+    .nullable()
+    .optional()
+    .or(z.literal('').transform(() => null)),
+  gstin: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^\d{2}[A-Z]{5}\d{4}[A-Z]{1}[A-Z\d]{1}Z[A-Z\d]{1}$/, 'Must be a valid 15-character GSTIN')
+    .nullable()
+    .optional()
+    .or(z.literal('').transform(() => null)),
+  pan: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z]{5}\d{4}[A-Z]$/, 'Must be a valid 10-character PAN')
+    .nullable()
+    .optional()
+    .or(z.literal('').transform(() => null)),
+  department: optionalText(LIMITS.ENTITY_DEPARTMENT_MAX),
+  designation: optionalText(LIMITS.ENTITY_DESIGNATION_MAX),
+  linkedUserId: uuid.nullable().optional(),
+  discountPercent: z.coerce
+    .number()
+    .min(0)
+    .max(LIMITS.POS_DISCOUNT_PERCENT_MAX)
+    .multipleOf(0.001, 'A discount may have at most three decimal places')
+    .optional(),
+  creditLimit: z.coerce.number().min(0).max(LIMITS.PRICE_MAX).optional(),
+  notes: optionalText(LIMITS.ENTITY_NOTES_MAX),
+  status: enumOf(MasterStatus).optional(),
+  sortOrder: z.coerce.number().int().optional(),
+};
+
+export const entityListQuerySchema = pageQuery
+  .extend({
+    type: enumOf(EntityType).optional(),
+    status: enumOf(MasterStatus).optional(),
+    phone: z.string().trim().max(LIMITS.ENTITY_PHONE_MAX).optional(),
+  })
+  .strict();
+
+export const createEntitySchema = z.object(entityShape).strict();
+
+export const updateEntitySchema = z
+  .object(entityShape)
+  .partial()
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, 'No changes supplied');
+
+/* ----------------------------------------------------------------------- POS */
+
+const posMoney = z.coerce.number().min(0).max(LIMITS.PRICE_MAX);
+
+/**
+ * Only the *shape* of a line is validated here. Price, tax and every derived amount are
+ * resolved server-side from the Menu Master and the line's tax profile — a client that could
+ * post its own `lineTotal` could post its own discount too.
+ */
+const posOrderItemSchema = z
+  .object({
+    id: uuid.optional(),
+    menuItemId: uuid.nullable().optional(),
+    variantId: uuid.nullable().optional(),
+    customItemName: optionalText(LIMITS.CUSTOM_ITEM_NAME_MAX),
+    unitPrice: posMoney.optional(),
+    quantity: z.coerce
+      .number()
+      .gt(0, 'Quantity must be greater than zero')
+      .max(LIMITS.QUANTITY_MAX)
+      .refine((value) => Number.isInteger(value * 1000), 'At most 3 decimal places'),
+    unit: z.string().trim().max(LIMITS.UNIT_MAX).optional(),
+    discountType: enumOf(PosDiscountType).optional(),
+    discountValue: posMoney.optional(),
+    notes: optionalText(LIMITS.POS_ORDER_ITEM_NOTES_MAX),
+    sortOrder: z.coerce.number().int().min(0).optional(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    const hasCatalogue = value.menuItemId !== null && value.menuItemId !== undefined;
+    const hasCustom =
+      typeof value.customItemName === 'string' && value.customItemName.trim() !== '';
+    if (hasCatalogue === hasCustom) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['menuItemId'],
+        message: 'Provide either a menu item or a custom item name, not both',
+      });
+    }
+    if (hasCustom && value.unitPrice === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['unitPrice'],
+        message: 'A custom line needs a unit price — there is no catalogue price to resolve',
+      });
+    }
+    if (value.discountType === PosDiscountType.PERCENT && (value.discountValue ?? 0) > LIMITS.POS_DISCOUNT_PERCENT_MAX) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['discountValue'],
+        message: `A percentage discount cannot exceed ${LIMITS.POS_DISCOUNT_PERCENT_MAX}%`,
+      });
+    }
+  });
+
+const posOrderShape = {
+  orderType: enumOf(PosOrderType),
+  stationId: uuid.nullable().optional(),
+  counterId: uuid.nullable().optional(),
+  menuId: uuid.nullable().optional(),
+  entityId: uuid.nullable().optional(),
+  entityName: optionalText(LIMITS.ENTITY_NAME_MAX),
+  entityPhone: optionalText(LIMITS.ENTITY_PHONE_MAX),
+  entityAddress: optionalText(LIMITS.ENTITY_ADDRESS_MAX),
+  tableLabel: optionalText(LIMITS.POS_TABLE_LABEL_MAX),
+  pax: z.coerce.number().int().min(LIMITS.PAX_MIN).max(LIMITS.PAX_MAX).optional(),
+  scheduledFor: isoDateTime.nullable().optional(),
+  notes: optionalText(LIMITS.POS_ORDER_NOTES_MAX),
+  discountType: enumOf(PosDiscountType).optional(),
+  discountValue: posMoney.optional(),
+};
+
+/** A ticket may only be created in one of the three non-terminal states. */
+const creatablePosStatus = z.enum([
+  PosOrderStatus.DRAFT,
+  PosOrderStatus.SCHEDULED,
+  PosOrderStatus.OPEN,
+]);
+
+export const createPosOrderSchema = z
+  .object({
+    id: uuid.optional(),
+    ...posOrderShape,
+    status: creatablePosStatus.optional(),
+    items: z
+      .array(posOrderItemSchema)
+      .max(LIMITS.POS_ITEMS_PER_ORDER_MAX)
+      .default([]),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.status === PosOrderStatus.SCHEDULED && !value.scheduledFor) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['scheduledFor'],
+        message: 'A scheduled order needs the time the food is wanted',
+      });
+    }
+    // A DRAFT is allowed to be empty — that is what makes it a draft. Anything else is a
+    // ticket, and a ticket with no lines is not a sale.
+    if (value.status !== PosOrderStatus.DRAFT && value.items.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['items'],
+        message: 'Add at least one item, or save the order as a draft',
+      });
+    }
+    if (
+      value.orderType === PosOrderType.QUICK_SALE &&
+      (value.entityId || (value.entityName ?? null) !== null)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['orderType'],
+        message: 'A quick sale is anonymous — choose Takeaway, Dine-in or Delivery to name it',
+      });
+    }
+  });
+
+export const updatePosOrderSchema = z
+  .object({
+    ...posOrderShape,
+    items: z.array(posOrderItemSchema).max(LIMITS.POS_ITEMS_PER_ORDER_MAX),
+    expectedRevision: z.coerce.number().int().min(1),
+  })
+  .partial()
+  .strict()
+  .refine(
+    (value) => Object.keys(value).some((key) => key !== 'expectedRevision'),
+    'Provide at least one field to update',
+  );
+
+export const updatePosOrderStatusSchema = z
+  .object({
+    status: enumOf(PosOrderStatus),
+    scheduledFor: isoDateTime.nullable().optional(),
+    reason: optionalText(LIMITS.POS_CANCEL_REASON_MAX),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.status === PosOrderStatus.SCHEDULED && !value.scheduledFor) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['scheduledFor'],
+        message: 'A scheduled order needs the time the food is wanted',
+      });
+    }
+  });
+
+const posPaymentSchema = z
+  .object({
+    method: enumOf(PosPaymentMethod),
+    amount: z.coerce.number().min(0).max(LIMITS.PRICE_MAX),
+    tenderedAmount: posMoney.nullable().optional(),
+    reference: optionalText(LIMITS.POS_PAYMENT_REFERENCE_MAX),
+    notes: optionalText(LIMITS.POS_PAYMENT_NOTES_MAX),
+    entityId: uuid.nullable().optional(),
+  })
+  .strict();
+
+export const posCheckoutSchema = z
+  .object({
+    payments: z.array(posPaymentSchema).min(1).max(LIMITS.POS_PAYMENTS_PER_ORDER_MAX),
+    discountType: enumOf(PosDiscountType).optional(),
+    discountValue: posMoney.optional(),
+    expectedRevision: z.coerce.number().int().min(1).optional(),
+  })
+  .strict();
+
+export const posVoidSchema = z
+  .object({ reason: text(LIMITS.POS_CANCEL_REASON_MAX, 'Reason') })
+  .strict();
+
+export const posOrderListQuerySchema = pageQuery
+  .extend({
+    status: enumList(Object.values(PosOrderStatus) as [string, ...string[]]),
+    orderType: enumList(Object.values(PosOrderType) as [string, ...string[]]),
+    paymentStatus: enumList(Object.values(PosPaymentStatus) as [string, ...string[]]),
+    entityId: uuid.optional(),
+    stationId: uuid.optional(),
+    counterId: uuid.optional(),
+    named: z
+      .union([z.boolean(), z.enum(['true', 'false'])])
+      .transform((value) => value === true || value === 'true')
+      .optional(),
+    dateFrom: isoDate.optional(),
+    dateTo: isoDate.optional(),
+  })
+  .strict();
+
+export const posDashboardQuerySchema = z
+  .object({
+    businessDate: isoDate.optional(),
+    stationId: uuid.optional(),
+    counterId: uuid.optional(),
+  })
+  .strict();
+
+export const posOrderIdParam = z.object({ posOrderId: uuid }).strict();
+
+/* ------------------------------------------------------------------ tasks */
+
+export const taskListQuerySchema = pageQuery
+  .extend({
+    assignedTo: uuid.optional(),
+    status: enumOf(TaskStatus).optional(),
+    source: enumOf(TaskSource).optional(),
+    kind: enumOf(TaskKind).optional(),
+  })
+  .strict();
+
+export const createTaskSchema = z
+  .object({
+    title: text(LIMITS.TASK_TITLE_MAX, 'Task name'),
+    description: optionalText(LIMITS.TASK_DESCRIPTION_MAX),
+    kind: enumOf(TaskKind).optional(),
+    priority: enumOf(TaskPriority).optional(),
+    assignedTo: uuid.optional(),
+    boardId: uuid.nullable().optional(),
+    estimatedMinutes: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(LIMITS.TASK_ESTIMATE_MINUTES_MAX)
+      .nullable()
+      .optional(),
+  })
+  .strict();
+
+export const updateTaskSchema = z
+  .object({
+    title: text(LIMITS.TASK_TITLE_MAX, 'Task name').optional(),
+    description: optionalText(LIMITS.TASK_DESCRIPTION_MAX),
+    priority: enumOf(TaskPriority).optional(),
+    assignedTo: uuid.optional(),
+    estimatedMinutes: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(LIMITS.TASK_ESTIMATE_MINUTES_MAX)
+      .nullable()
+      .optional(),
+    status: enumOf(TaskStatus).optional(),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, 'No changes supplied');
 
 export { idParam, boardIdParam, orderIdParam };

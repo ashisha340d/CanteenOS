@@ -11,7 +11,7 @@ import { DataTable, type DataTableColumn } from '../../components/DataTable/Data
 import { useViewMode } from '../../components/DataTable/gridState';
 import { EntityCardGrid } from '../../components/EntityCardGrid';
 import { ListToolbar } from '../../components/ListToolbar';
-import { PageHeader } from '../../components/ui/PageHeader';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusChip } from '../../components/StatusChip';
 import { IfCapable } from '../../services/CapabilityGate';
 import { useArchiveBoard, useBoards } from '../../hooks/useBoards';
@@ -171,8 +171,9 @@ export function BoardsPage(): JSX.Element {
     <>
       <PageHeader
         title="Boards"
-        subtitle="Each board is a place where a team coordinates its orders."
+        subtitle="Where coordination actually happens. Each board sits inside a station and carries its own members, orders and feed."
       />
+
       <ListToolbar
         search={search}
         onSearchChange={(v) => {

@@ -29,6 +29,7 @@
     "seed": "npm run seed --workspace @menuboard/backend",
     "smoke": "npm run smoke --workspace @menuboard/backend",
     "smoke:socket": "npm run smoke:socket --workspace @menuboard/backend",
+    "smoke:pos": "npm run smoke:pos --workspace @menuboard/backend",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "test": "npm run test --workspaces --if-present"

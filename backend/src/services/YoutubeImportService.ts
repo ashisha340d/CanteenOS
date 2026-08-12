@@ -155,7 +155,7 @@ interface VideoMetadata {
 
 async function fetchMetadata(url: string): Promise<VideoMetadata> {
   const { stdout } = await runYtdlp(['--dump-single-json', '--no-download', '--no-warnings', url], 90_000);
-  const info = JSON.parse(stdout) as {
+  interface YtdlpInfo {
     title?: string;
     channel?: string;
     uploader?: string;
@@ -164,7 +164,16 @@ async function fetchMetadata(url: string): Promise<VideoMetadata> {
     description?: string;
     subtitles?: Record<string, unknown>;
     automatic_captions?: Record<string, unknown>;
-  };
+  }
+  // yt-dlp can exit 0 and still emit something that is not JSON (a warning banner, truncated
+  // output). Failing here as a YtdlpError keeps the import in FAILED with a readable reason
+  // instead of throwing a raw SyntaxError out of the worker.
+  let info: YtdlpInfo;
+  try {
+    info = JSON.parse(stdout) as YtdlpInfo;
+  } catch {
+    throw new YtdlpError('yt-dlp returned malformed video metadata', stdout.slice(0, 500));
+  }
   const subtitleLanguages = [
     ...Object.keys(info.subtitles ?? {}),
     ...Object.keys(info.automatic_captions ?? {}),

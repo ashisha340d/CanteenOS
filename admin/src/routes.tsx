@@ -1,5 +1,5 @@
 import { Capability } from '@menuboard/shared';
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, type ReactNode } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from './layouts/AppShell';
 import { RequireCapability } from './services/CapabilityGate';
@@ -28,6 +28,26 @@ const MenuCategoriesPage = lazy(() =>
   import('./pages/MenuCategories/MenuCategoriesPage').then((m) => ({ default: m.MenuCategoriesPage })),
 );
 const MenuItemsPage = lazy(() => import('./pages/MenuItems/MenuItemsPage').then((m) => ({ default: m.MenuItemsPage })));
+const MenuItemFormPage = lazy(() =>
+  import('./pages/MenuItems/MenuItemFormPage').then((m) => ({ default: m.MenuItemFormPage })),
+);
+const MenuItemDetailPage = lazy(() =>
+  import('./pages/MenuItems/MenuItemDetailPage').then((m) => ({ default: m.MenuItemDetailPage })),
+);
+const MenusPage = lazy(() => import('./pages/Menus/MenusPage').then((m) => ({ default: m.MenusPage })));
+const MenuDetailPage = lazy(() =>
+  import('./pages/Menus/MenuDetailPage').then((m) => ({ default: m.MenuDetailPage })),
+);
+const ItemGroupsPage = lazy(() =>
+  import('./pages/ItemGroups/ItemGroupsPage').then((m) => ({ default: m.ItemGroupsPage })),
+);
+const CountersPage = lazy(() => import('./pages/Counters/CountersPage').then((m) => ({ default: m.CountersPage })));
+const PrintingGroupsPage = lazy(() =>
+  import('./pages/PrintingGroups/PrintingGroupsPage').then((m) => ({ default: m.PrintingGroupsPage })),
+);
+const ModifierGroupsPage = lazy(() =>
+  import('./pages/Modifiers/ModifierGroupsPage').then((m) => ({ default: m.ModifierGroupsPage })),
+);
 const IngredientCategoriesPage = lazy(() =>
   import('./pages/IngredientCategories/IngredientCategoriesPage').then((m) => ({
     default: m.IngredientCategoriesPage,
@@ -43,6 +63,23 @@ const RecipeFormPage = lazy(() =>
 const YoutubeImportsPage = lazy(() =>
   import('./pages/YoutubeImports/YoutubeImportsPage').then((m) => ({ default: m.YoutubeImportsPage })),
 );
+const TasksPage = lazy(() => import('./pages/Tasks/TasksPage').then((m) => ({ default: m.TasksPage })));
+const HsnSacMasterPage = lazy(() =>
+  import('./pages/Tax/HsnSacMasterPage').then((m) => ({ default: m.HsnSacMasterPage })),
+);
+const TaxProfilesPage = lazy(() =>
+  import('./pages/Tax/TaxProfilesPage').then((m) => ({ default: m.TaxProfilesPage })),
+);
+const EntitiesPage = lazy(() =>
+  import('./pages/Entities/EntitiesPage').then((m) => ({ default: m.EntitiesPage })),
+);
+const PosDashboardPage = lazy(() =>
+  import('./pages/Pos/PosDashboardPage').then((m) => ({ default: m.PosDashboardPage })),
+);
+const PosEntryPage = lazy(() => import('./pages/Pos/PosEntryPage').then((m) => ({ default: m.PosEntryPage })));
+const PosMargEntryPage = lazy(() =>
+  import('./pages/Pos/PosMargEntryPage').then((m) => ({ default: m.PosMargEntryPage })),
+);
 const PermissionsPage = lazy(() =>
   import('./pages/Permissions/PermissionsPage').then((m) => ({ default: m.PermissionsPage })),
 );
@@ -51,6 +88,9 @@ const BillingPage = lazy(() => import('./pages/Billing/BillingPage').then((m) =>
 const AuditPage = lazy(() => import('./pages/Audit/AuditPage').then((m) => ({ default: m.AuditPage })));
 const SettingsPage = lazy(() => import('./pages/Settings/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 const AlertsPage = lazy(() => import('./pages/Alerts/AlertsPage').then((m) => ({ default: m.AlertsPage })));
+const SecuritySettingsPage = lazy(() =>
+  import('./pages/Account/SecuritySettingsPage').then((m) => ({ default: m.SecuritySettingsPage })),
+);
 
 /** Blocking full-window state, used only while the session itself is being resolved. */
 function LoadingScreen(): JSX.Element {
@@ -60,6 +100,15 @@ function LoadingScreen(): JSX.Element {
       <span className="sr-only">Loading</span>
     </div>
   );
+}
+
+/**
+ * The chrome a full-bleed page still needs — safe-area padding and a max width — without
+ * AppShell's sidebar, topbar or breadcrumbs. A counter screen has no use for navigation
+ * chrome, and on the small screen a till usually runs on, the sidebar is real space.
+ */
+function FullBleedPage({ children }: { children: ReactNode }): JSX.Element {
+  return <div className="min-h-dvh w-full overflow-x-hidden">{children}</div>;
 }
 
 export function AppRoutes(): JSX.Element {
@@ -93,6 +142,40 @@ export function AppRoutes(): JSX.Element {
     <Suspense fallback={<PageSkeleton />}>
       <Routes>
         <Route path="/login" element={<Navigate to="/" replace />} />
+
+        {/* The till runs full-bleed, outside AppShell: a counter screen has no use for the
+            sidebar, breadcrumbs or command palette, and the sidebar's width is real space on
+            what is usually a small screen at the register. */}
+        <Route
+          path="/pos"
+          element={
+            <RequireCapability capability={Capability.POS_READ}>
+              <FullBleedPage>
+                <PosDashboardPage />
+              </FullBleedPage>
+            </RequireCapability>
+          }
+        />
+        <Route
+          path="/pos/entry"
+          element={
+            <RequireCapability capability={Capability.POS_OPERATE}>
+              <FullBleedPage>
+                <PosEntryPage />
+              </FullBleedPage>
+            </RequireCapability>
+          }
+        />
+        <Route
+          path="/pos/marg"
+          element={
+            <RequireCapability capability={Capability.POS_OPERATE}>
+              <FullBleedPage>
+                <PosMargEntryPage />
+              </FullBleedPage>
+            </RequireCapability>
+          }
+        />
         <Route element={<AppShell />}>
           <Route path="/" element={<DashboardPage />} />
           <Route
@@ -145,6 +228,78 @@ export function AppRoutes(): JSX.Element {
             }
           />
           <Route
+            path="/menu-items/new"
+            element={
+              <RequireCapability capability={Capability.MASTER_WRITE}>
+                <MenuItemFormPage />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/menu-items/:id"
+            element={
+              <RequireCapability capability={Capability.MASTER_READ}>
+                <MenuItemDetailPage />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/menu-items/:id/edit"
+            element={
+              <RequireCapability capability={Capability.MASTER_WRITE}>
+                <MenuItemFormPage />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/menus"
+            element={
+              <RequireCapability capability={Capability.MASTER_READ}>
+                <MenusPage />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/menus/:id"
+            element={
+              <RequireCapability capability={Capability.MASTER_READ}>
+                <MenuDetailPage />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/item-groups"
+            element={
+              <RequireCapability capability={Capability.MASTER_READ}>
+                <ItemGroupsPage />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/counters"
+            element={
+              <RequireCapability capability={Capability.MASTER_READ}>
+                <CountersPage />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/printing-groups"
+            element={
+              <RequireCapability capability={Capability.MASTER_READ}>
+                <PrintingGroupsPage />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/modifiers"
+            element={
+              <RequireCapability capability={Capability.MASTER_READ}>
+                <ModifierGroupsPage />
+              </RequireCapability>
+            }
+          />
+          <Route
             path="/ingredient-categories"
             element={
               <RequireCapability capability={Capability.RECIPE_READ}>
@@ -189,6 +344,38 @@ export function AppRoutes(): JSX.Element {
             element={
               <RequireCapability capability={Capability.RECIPE_WRITE}>
                 <YoutubeImportsPage />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/tasks"
+            element={
+              <RequireCapability capability={Capability.TASK_READ}>
+                <TasksPage />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/hsn-sac"
+            element={
+              <RequireCapability capability={Capability.TAX_READ}>
+                <HsnSacMasterPage />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/tax-profiles"
+            element={
+              <RequireCapability capability={Capability.TAX_READ}>
+                <TaxProfilesPage />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/entities"
+            element={
+              <RequireCapability capability={Capability.ENTITY_READ}>
+                <EntitiesPage />
               </RequireCapability>
             }
           />
@@ -240,6 +427,7 @@ export function AppRoutes(): JSX.Element {
               </RequireCapability>
             }
           />
+          <Route path="/account/security" element={<SecuritySettingsPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>

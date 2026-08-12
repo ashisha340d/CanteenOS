@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   LIMITS,
   MasterStatus,
+  MediaEntityType,
   RecipeDifficulty,
   RecipeIngredientScaling,
   isLikelyTypoOf,
@@ -30,10 +31,12 @@ import {
   SelectField,
   TextField,
 } from '@/components/form/fields';
+import { Field, FieldLabel } from '@/components/ui/field';
 import { BackButton } from '../../components/BackButton';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { PageSkeleton } from '../../components/ui/Skeletons';
 import { SearchPickerField, type PickerOption } from '../../components/SearchPickerField';
+import { MediaStrip } from '../Menus/MediaStrip';
 import { menuItemsApi } from '../../api/masters';
 import { ingredientsApi } from '../../api/ingredients';
 import { recipesApi, type ParsedRecipe } from '../../api/recipes';
@@ -777,6 +780,13 @@ export function RecipeFormPage(): JSX.Element {
                 options={enumOptions(MasterStatus)}
               />
             )}
+
+            {isEditing && id && (
+              <Field>
+                <FieldLabel>Images</FieldLabel>
+                <MediaStrip entityType={MediaEntityType.RECIPE} entityId={id} />
+              </Field>
+            )}
           </FieldGroup>
         </section>
 
@@ -1001,7 +1011,7 @@ function IngredientRowEditor({
                 })
               }
               className={cn(
-                'text-left text-xs font-medium underline underline-offset-2',
+                'focus-ring rounded-sm text-left text-xs font-medium underline underline-offset-2',
                 TONE_TEXT_CLASS.progress,
               )}
             >

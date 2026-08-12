@@ -2,11 +2,13 @@ import { Fragment, Suspense, useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   ALargeSmallIcon,
+  ChevronRightIcon,
   ContrastIcon,
   EllipsisIcon,
   LogOutIcon,
   MoonIcon,
   SearchIcon,
+  ShieldIcon,
   SunIcon,
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -19,6 +21,7 @@ import {
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -56,6 +59,7 @@ import {
 } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { PageSkeleton } from '@/components/ui/Skeletons';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import { useAuth } from '@/services/AuthContext';
 import { useDeviceProfile } from '@/hooks/useDeviceProfile';
 import {
@@ -92,7 +96,7 @@ export function AppShell(): JSX.Element {
   // Keeps the browser tab honest about where you are — and gives the back/forward stack
   // readable entries.
   useEffect(() => {
-    document.title = `${titleFor(location.pathname)} · MenuBoard`;
+    document.title = `${titleFor(location.pathname)} · Canteen OS`;
   }, [location.pathname]);
 
   return (
@@ -134,35 +138,43 @@ function DesktopShell({ sections, onOpenPalette }: ShellProps): JSX.Element {
               className="bg-primary ring-sidebar-accent size-2.5 shrink-0 rounded-full ring-4"
             />
             <span className="font-heading truncate text-[0.9375rem] font-semibold tracking-[-0.02em] group-data-[collapsible=icon]:hidden">
-              MenuBoard
+              Canteen OS
             </span>
           </div>
         </SidebarHeader>
 
         <SidebarContent>
-          {sections.map((section, index) => (
-            <SidebarGroup key={section.heading ?? `primary-${index}`}>
-              {section.heading && <SidebarGroupLabel>{section.heading}</SidebarGroupLabel>}
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {section.items.map((item) => (
-                    <SidebarMenuItem key={item.to}>
-                      <SidebarMenuButton
-                        asChild
-                        isActive={isActivePath(location.pathname, item.to)}
-                        tooltip={item.label}
-                      >
-                        <NavLink to={item.to} end={item.to === '/'}>
-                          <item.icon />
-                          <span>{item.label}</span>
-                        </NavLink>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          ))}
+          {sections.map((section, index) =>
+            section.heading ? (
+              <CollapsibleNavGroup
+                key={section.heading}
+                heading={section.heading}
+                items={section.items}
+                pathname={location.pathname}
+              />
+            ) : (
+              <SidebarGroup key={`primary-${index}`}>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {section.items.map((item) => (
+                      <SidebarMenuItem key={item.to}>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={isActivePath(location.pathname, item.to)}
+                          tooltip={item.label}
+                        >
+                          <NavLink to={item.to} end={item.to === '/'}>
+                            <item.icon />
+                            <span>{item.label}</span>
+                          </NavLink>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            ),
+          )}
         </SidebarContent>
 
         <SidebarFooter>
@@ -227,14 +239,69 @@ function DesktopShell({ sections, onOpenPalette }: ShellProps): JSX.Element {
         <main className="min-w-0 flex-1 overflow-x-hidden px-4 py-6 md:px-8 md:py-8">
           <div className="mx-auto w-full max-w-[1440px]">
             {/* Innermost boundary wins, so a lazily-loaded page replaces only the content
-                area — the sidebar and header stay where they are. */}
-            <Suspense fallback={<PageSkeleton />}>
-              <Outlet />
-            </Suspense>
+                area — the sidebar and header stay where they are. The error boundary is scoped
+                the same way, and resets on navigation, so a page that throws leaves the
+                sidebar usable rather than blanking the window. */}
+            <ErrorBoundary resetKey={location.pathname}>
+              <Suspense fallback={<PageSkeleton />}>
+                <Outlet />
+              </Suspense>
+            </ErrorBoundary>
           </div>
         </main>
       </SidebarInset>
     </SidebarProvider>
+  );
+}
+
+function CollapsibleNavGroup({
+  heading,
+  items,
+  pathname,
+}: {
+  heading: string;
+  items: NavItem[];
+  pathname: string;
+}): JSX.Element {
+  const [open, setOpen] = useState(() => items.some((item) => isActivePath(pathname, item.to)));
+
+  useEffect(() => {
+    if (items.some((item) => isActivePath(pathname, item.to))) setOpen(true);
+  }, [pathname, items]);
+
+  return (
+    <SidebarGroup>
+      <Collapsible open={open} onOpenChange={setOpen}>
+        <CollapsibleTrigger asChild>
+          <SidebarGroupLabel className="flex w-full cursor-pointer items-center justify-between gap-2 hover:text-sidebar-foreground">
+            <span>{heading}</span>
+            <ChevronRightIcon
+              className={cn('size-3.5 shrink-0 transition-transform', open && 'rotate-90')}
+            />
+          </SidebarGroupLabel>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {items.map((item) => (
+                <SidebarMenuItem key={item.to}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isActivePath(pathname, item.to)}
+                    tooltip={item.label}
+                  >
+                    <NavLink to={item.to} end={item.to === '/'}>
+                      <item.icon />
+                      <span>{item.label}</span>
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </CollapsibleContent>
+      </Collapsible>
+    </SidebarGroup>
   );
 }
 
@@ -273,9 +340,11 @@ function MobileShell({ sections, onOpenPalette }: ShellProps): JSX.Element {
 
       {/* Bottom padding clears the fixed nav bar so the last row is never trapped under it. */}
       <main className="min-w-0 flex-1 px-4 pt-5 pb-24">
-        <Suspense fallback={<PageSkeleton />}>
-          <Outlet />
-        </Suspense>
+        <ErrorBoundary resetKey={location.pathname}>
+          <Suspense fallback={<PageSkeleton />}>
+            <Outlet />
+          </Suspense>
+        </ErrorBoundary>
       </main>
 
       <nav className="bg-background/95 safe-bottom fixed inset-x-0 bottom-0 z-40 flex items-stretch border-t backdrop-blur-md">
@@ -433,6 +502,10 @@ function UserMenu(): JSX.Element {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
+          <DropdownMenuItem onSelect={() => navigate('/account/security')}>
+            <ShieldIcon data-icon="inline-start" />
+            Security
+          </DropdownMenuItem>
           <DropdownMenuItem
             onSelect={() => {
               void logout().then(() => navigate('/login', { replace: true }));

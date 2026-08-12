@@ -1,20 +1,17 @@
-import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { AgGridReact } from 'ag-grid-react';
+import type {
+  ColDef,
+  ColumnMovedEvent,
+  ColumnResizedEvent,
+  GetRowIdParams,
+  GridReadyEvent,
+  ICellRendererParams,
+  RowDragEndEvent,
+  SelectionChangedEvent,
+  SortChangedEvent,
+} from 'ag-grid-community';
 import {
-  flexRender,
-  getCoreRowModel,
-  useReactTable,
-  type ColumnDef,
-  type ColumnOrderState,
-  type ColumnPinningState,
-  type ColumnSizingState,
-  type RowSelectionState,
-  type VisibilityState,
-} from '@tanstack/react-table';
-import {
-  ArrowDownIcon,
-  ArrowUpIcon,
-  ChevronsUpDownIcon,
-  GripVerticalIcon,
   PinIcon,
   PinOffIcon,
   RotateCcwIcon,
@@ -32,20 +29,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { EmptyState } from '../ui/EmptyState';
 import { TableSkeleton } from '../ui/Skeletons';
 import { useDeviceProfile } from '@/hooks/useDeviceProfile';
 import { cn } from '@/lib/utils';
 import { useGridState } from './gridState';
+// AG Grid ships its layout and theme as plain CSS, not CSS-in-JS — without these the grid has
+// no structural styling at all and every cell just stacks as block-level HTML.
+import 'ag-grid-community/styles/ag-grid.css';
+import 'ag-grid-community/styles/ag-theme-quartz.css';
+import './agGridTheme.css';
 
 export interface DataTableColumn<T> {
   field: string;
@@ -88,6 +81,7 @@ export interface DataTableProps<T> {
 
 const DEFAULT_WIDTH = 160;
 const MIN_WIDTH = 60;
+const SELECT_COL = '__select';
 
 /**
  * A column that declares neither `renderCell` nor `valueGetter` reads its value straight off
@@ -106,21 +100,21 @@ function cellContent<T>(column: DataTableColumn<T>, row: T): ReactNode {
 }
 
 const ALIGN_CLASS = {
-  left: 'text-left',
-  right: 'text-right',
-  center: 'text-center',
+  left: '',
+  right: 'text-right justify-end',
+  center: 'text-center justify-center',
 } as const;
 
 /**
- * The portal's one data grid, built on TanStack Table.
+ * The portal's one data grid, built on AG Grid Community.
  *
- * Sorting is deliberately *manual*: every listing page pages and sorts on the server, so the
- * table reports the intent through `onSortChange` and renders exactly the rows it is handed.
- * Letting TanStack sort locally would silently re-order only the current page and disagree
- * with the totals in the toolbar.
+ * Sorting is deliberately *manual*: every listing page pages and sorts on the server, so a
+ * sortable column carries a no-op comparator — AG Grid still shows the arrow and fires
+ * `onSortChange`, but never reorders the page it was handed. Letting it sort locally would
+ * silently re-order only the current page and disagree with the totals in the toolbar.
  *
- * On a narrow screen the whole table is abandoned rather than scaled down — a squeezed grid
- * is unreadable and untappable — and the same rows render as cards instead.
+ * On a narrow screen the grid is abandoned rather than scaled down — a squeezed grid is
+ * unreadable and untappable — and the same rows render as cards instead.
  */
 export function DataTable<T>({
   gridId,
@@ -144,82 +138,162 @@ export function DataTable<T>({
   filtered = false,
   renderMobileCard,
 }: DataTableProps<T>): JSX.Element {
-  const { isMobile, supportsPointerAffordances } = useDeviceProfile();
+  const { isMobile } = useDeviceProfile();
   const fields = useMemo(() => columns.map((column) => column.field), [columns]);
   const { state: persisted, update, reset } = useGridState(gridId, fields);
-  const dragFieldRef = useRef<string | null>(null);
-  const dragRowIdRef = useRef<string | null>(null);
-  const [dragOverRowId, setDragOverRowId] = useState<string | null>(null);
+  const gridApiRef = useRef<GridReadyEvent['api'] | null>(null);
+  const selectedIds = useMemo(() => selected ?? [], [selected]);
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
 
-  const columnDefs = useMemo<ColumnDef<T>[]>(
-    () =>
-      columns.map((column) => ({
-        id: column.field,
-        header: column.headerName,
-        size: column.width ?? DEFAULT_WIDTH,
-        minSize: column.minWidth ?? MIN_WIDTH,
-        enableSorting: column.sortable !== false,
-        enableHiding: column.alwaysVisible !== true,
-        cell: ({ row }) => cellContent(column, row.original),
-        meta: { align: column.align ?? 'left' },
-      })),
-    [columns],
+  const getRowIdFn = useCallback(
+    (params: GetRowIdParams<T>) => getRowId(params.data),
+    [getRowId],
   );
 
-  const rowSelection = useMemo<RowSelectionState>(
-    () => Object.fromEntries((selected ?? []).map((id) => [id, true])),
-    [selected],
-  );
+  const columnDefs = useMemo<ColDef<T>[]>(() => {
+    const defs: ColDef<T>[] = [];
+    if (selectable) {
+      defs.push({
+        colId: SELECT_COL,
+        headerCheckboxSelection: true,
+        checkboxSelection: true,
+        width: 40,
+        minWidth: 40,
+        maxWidth: 40,
+        pinned: 'left',
+        lockPosition: true,
+        suppressMovable: true,
+        sortable: false,
+        resizable: false,
+        rowDrag: false,
+        headerName: '',
+      });
+    }
+    const ordered = [...columns].sort((a, b) => {
+      const orderA = persisted.order.indexOf(a.field);
+      const orderB = persisted.order.indexOf(b.field);
+      return (orderA === -1 ? Infinity : orderA) - (orderB === -1 ? Infinity : orderB);
+    });
 
-  const columnVisibility = useMemo<VisibilityState>(
-    () => Object.fromEntries(persisted.hidden.map((field) => [field, false])),
-    [persisted.hidden],
-  );
+    ordered.forEach((column, index) => {
+      const isFirst = index === 0;
+      defs.push({
+        colId: column.field,
+        field: column.field as never,
+        headerName: column.headerName,
+        width: persisted.widths[column.field] ?? column.width ?? DEFAULT_WIDTH,
+        minWidth: column.minWidth ?? MIN_WIDTH,
+        sortable: column.sortable !== false && Boolean(onSortChange),
+        sortingOrder: ['asc', 'desc'],
+        comparator: () => 0, // manual sort — never let AG Grid re-order the page itself
+        sort: sortBy === column.field ? sortDir ?? null : null,
+        hide: persisted.hidden.includes(column.field),
+        pinned: persisted.pinned.includes(column.field) ? 'left' : undefined,
+        rowDrag: rowReorder && isFirst && !selectable,
+        suppressHeaderMenuButton: true,
+        headerClass: column.align ? ALIGN_CLASS[column.align] : undefined,
+        cellClass: cn(
+          'truncate',
+          column.align ? ALIGN_CLASS[column.align] : undefined,
+          index === 0 ? 'font-medium text-foreground' : 'text-muted-foreground',
+        ),
+        cellRenderer: (params: ICellRendererParams<T>) =>
+          params.data === undefined ? null : cellContent(column, params.data),
+      });
+    });
+    return defs;
+  }, [
+    columns,
+    onSortChange,
+    persisted.hidden,
+    persisted.order,
+    persisted.pinned,
+    persisted.widths,
+    rowReorder,
+    selectable,
+    sortBy,
+    sortDir,
+  ]);
 
-  const columnPinning = useMemo<ColumnPinningState>(
-    () => ({ left: persisted.pinned, right: [] }),
-    [persisted.pinned],
-  );
-
-  const table = useReactTable({
-    data: rows,
-    columns: columnDefs,
-    getCoreRowModel: getCoreRowModel(),
-    getRowId,
-    manualSorting: true,
-    enableColumnResizing: true,
-    columnResizeMode: 'onChange',
-    enableRowSelection: Boolean(selectable),
-    state: {
-      columnSizing: persisted.widths as ColumnSizingState,
-      columnOrder: persisted.order as ColumnOrderState,
-      columnVisibility,
-      columnPinning,
-      rowSelection,
+  const handleSortChanged = useCallback(
+    (event: SortChangedEvent<T>) => {
+      if (!onSortChange || event.source === 'api') return;
+      const sorted = event.api
+        .getColumnState()
+        .find((state) => state.sort != null && state.colId !== SELECT_COL);
+      const dir = sorted?.sort;
+      if (!sorted || dir !== 'asc' && dir !== 'desc') return;
+      update({ sortBy: sorted.colId, sortDir: dir });
+      onSortChange(sorted.colId, dir);
     },
-    onColumnSizingChange: (updater) => {
-      const next = typeof updater === 'function' ? updater(persisted.widths) : updater;
-      update({ widths: next });
+    [onSortChange, update],
+  );
+
+  const handleColumnResized = useCallback(
+    (event: ColumnResizedEvent<T>) => {
+      if (!event.finished || event.source === 'api') return;
+      const widths = { ...persisted.widths };
+      for (const column of event.columns ?? []) {
+        if (column.getColId() === SELECT_COL) continue;
+        widths[column.getColId()] = column.getActualWidth();
+      }
+      update({ widths });
     },
-    onColumnOrderChange: (updater) => {
-      const next = typeof updater === 'function' ? updater(persisted.order) : updater;
-      update({ order: next });
+    [persisted.widths, update],
+  );
+
+  const handleColumnMoved = useCallback(
+    (event: ColumnMovedEvent<T>) => {
+      if (event.source === 'api') return;
+      const order = event.api
+        .getColumnState()
+        .map((state) => state.colId)
+        .filter((id) => id !== SELECT_COL);
+      update({ order });
     },
-    onRowSelectionChange: (updater) => {
+    [update],
+  );
+
+  const handleSelectionChanged = useCallback(
+    (event: SelectionChangedEvent<T>) => {
       if (!onSelectedChange) return;
-      const next = typeof updater === 'function' ? updater(rowSelection) : updater;
-      onSelectedChange(Object.keys(next).filter((id) => next[id]));
+      onSelectedChange(event.api.getSelectedRows().map(getRowId));
     },
-  });
+    [getRowId, onSelectedChange],
+  );
 
-  const handleSort = useCallback(
-    (field: string) => {
-      if (!onSortChange) return;
-      const nextDir: 'asc' | 'desc' = sortBy === field && sortDir === 'asc' ? 'desc' : 'asc';
-      update({ sortBy: field, sortDir: nextDir });
-      onSortChange(field, nextDir);
+  const handleRowDragEnd = useCallback(
+    (event: RowDragEndEvent<T>) => {
+      if (!onRowReorder) return;
+      const ids: string[] = [];
+      event.api.forEachNode((node) => {
+        if (node.data) ids.push(getRowId(node.data));
+      });
+      onRowReorder(ids);
     },
-    [onSortChange, sortBy, sortDir, update],
+    [getRowId, onRowReorder],
+  );
+
+  const handleGridReady = useCallback((event: GridReadyEvent<T>) => {
+    gridApiRef.current = event.api;
+  }, []);
+
+  // The grid owns its own selection model; this keeps it obedient to a controlled `selected`
+  // prop (e.g. a "clear" button elsewhere in the page) without fighting the user's own clicks.
+  useEffect(() => {
+    const api = gridApiRef.current;
+    if (!api || !selectable) return;
+    api.forEachNode((node) => {
+      const shouldBeSelected = node.data !== undefined && selectedSet.has(getRowId(node.data));
+      if (node.isSelected() !== shouldBeSelected) node.setSelected(shouldBeSelected, false, 'api');
+    });
+  }, [selectedSet, selectable, getRowId, rows]);
+
+  const handleRowDoubleClicked = useCallback(
+    (event: { data?: T }) => {
+      if (event.data) onRowDoubleClick?.(event.data);
+    },
+    [onRowDoubleClick],
   );
 
   const toggleVisibility = useCallback(
@@ -242,55 +316,7 @@ export function DataTable<T>({
     [persisted.pinned, update],
   );
 
-  /* --------------------------------------------------------------- column drag/drop */
-
-  const onHeaderDragStart = (field: string) => (event: React.DragEvent) => {
-    dragFieldRef.current = field;
-    event.dataTransfer.effectAllowed = 'move';
-  };
-  const onHeaderDragOver = (event: React.DragEvent): void => event.preventDefault();
-  const onHeaderDrop = (targetField: string) => (event: React.DragEvent) => {
-    event.preventDefault();
-    const source = dragFieldRef.current;
-    dragFieldRef.current = null;
-    if (!source || source === targetField) return;
-    const order = [...persisted.order];
-    const from = order.indexOf(source);
-    const to = order.indexOf(targetField);
-    if (from === -1 || to === -1) return;
-    order.splice(from, 1);
-    order.splice(to, 0, source);
-    update({ order });
-  };
-
-  /* ------------------------------------------------------------------ row drag/drop */
-
-  const onRowDragStart = (id: string) => (event: React.DragEvent) => {
-    dragRowIdRef.current = id;
-    event.dataTransfer.effectAllowed = 'move';
-  };
-  const onRowDragOver = (id: string) => (event: React.DragEvent) => {
-    event.preventDefault();
-    setDragOverRowId(id);
-  };
-  const onRowDrop = (targetId: string) => (event: React.DragEvent) => {
-    event.preventDefault();
-    setDragOverRowId(null);
-    const sourceId = dragRowIdRef.current;
-    dragRowIdRef.current = null;
-    if (!sourceId || sourceId === targetId || !onRowReorder) return;
-    const ids = rows.map(getRowId);
-    const from = ids.indexOf(sourceId);
-    const to = ids.indexOf(targetId);
-    if (from === -1 || to === -1) return;
-    ids.splice(from, 1);
-    ids.splice(to, 0, sourceId);
-    onRowReorder(ids);
-  };
-
-  /* ----------------------------------------------------------------------- states */
-
-  // Loading and empty are page-level states, not a row inside the table. Rendering them as a
+  // Loading and empty are page-level states, not a row inside the grid. Rendering them as a
   // giant colspan cell was what made the grid look broken rather than busy.
   if (loading) {
     return <TableSkeleton columns={Math.min(fields.length || 5, 7)} />;
@@ -313,8 +339,6 @@ export function DataTable<T>({
     );
   }
 
-  const selectedIds = selected ?? [];
-
   /* ------------------------------------------------------------------ mobile cards */
 
   if (isMobile) {
@@ -333,12 +357,12 @@ export function DataTable<T>({
     );
   }
 
-  /* ---------------------------------------------------------------- desktop table */
+  /* ---------------------------------------------------------------- desktop grid */
 
   const hideableColumns = columns.filter((column) => column.alwaysVisible !== true);
 
   return (
-    <div className="bg-card overflow-hidden rounded-xl border">
+    <div className="bg-card flex h-full min-h-0 flex-col overflow-hidden rounded-xl border">
       {/* Table chrome: bulk actions on the left as soon as something is selected, column
           controls on the right. Kept inside the table's own frame so it reads as belonging
           to the grid rather than to the page. */}
@@ -376,19 +400,37 @@ export function DataTable<T>({
               Columns
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuContent align="end" className="w-60">
             <DropdownMenuLabel>Visible columns</DropdownMenuLabel>
             <DropdownMenuGroup>
-              {hideableColumns.map((column) => (
-                <DropdownMenuCheckboxItem
-                  key={column.field}
-                  checked={!persisted.hidden.includes(column.field)}
-                  onCheckedChange={(checked) => toggleVisibility(column.field, checked)}
-                  onSelect={(event) => event.preventDefault()}
-                >
-                  {column.headerName}
-                </DropdownMenuCheckboxItem>
-              ))}
+              {hideableColumns.map((column) => {
+                const isPinned = persisted.pinned.includes(column.field);
+                return (
+                  <DropdownMenuCheckboxItem
+                    key={column.field}
+                    checked={!persisted.hidden.includes(column.field)}
+                    onCheckedChange={(checked) => toggleVisibility(column.field, checked)}
+                    onSelect={(event) => event.preventDefault()}
+                    className="pr-1"
+                  >
+                    <span className="min-w-0 flex-1 truncate">{column.headerName}</span>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        togglePinned(column.field);
+                      }}
+                      aria-label={isPinned ? 'Unpin column' : 'Pin column to the left'}
+                      className={cn(
+                        'focus-ring ml-2 shrink-0 rounded-sm p-0.5',
+                        isPinned ? 'text-primary' : 'text-muted-foreground/60 hover:text-foreground',
+                      )}
+                    >
+                      {isPinned ? <PinOffIcon className="size-3.5" /> : <PinIcon className="size-3.5" />}
+                    </button>
+                  </DropdownMenuCheckboxItem>
+                );
+              })}
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
@@ -401,199 +443,26 @@ export function DataTable<T>({
         </DropdownMenu>
       </div>
 
-      <div className="max-h-[calc(100dvh-20rem)] overflow-auto">
-        <Table style={{ width: table.getTotalSize(), tableLayout: 'fixed' }}>
-          <TableHeader className="bg-card sticky top-0 z-20">
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id} className="hover:bg-transparent">
-                {rowReorder && <TableHead className="w-8" />}
-                {selectable && (
-                  <TableHead className="w-10">
-                    <Checkbox
-                      checked={
-                        table.getIsAllRowsSelected()
-                          ? true
-                          : table.getIsSomeRowsSelected()
-                            ? 'indeterminate'
-                            : false
-                      }
-                      onCheckedChange={(checked) =>
-                        onSelectedChange?.(checked === true ? rows.map(getRowId) : [])
-                      }
-                      aria-label="Select all rows"
-                    />
-                  </TableHead>
-                )}
-                {headerGroup.headers.map((header) => {
-                  const column = columns.find((entry) => entry.field === header.column.id);
-                  const isSorted = sortBy === header.column.id;
-                  const canSort = header.column.getCanSort();
-                  const isPinned = header.column.getIsPinned() === 'left';
-                  const align = column?.align ?? 'left';
-
-                  return (
-                    <TableHead
-                      key={header.id}
-                      colSpan={header.colSpan}
-                      draggable={supportsPointerAffordances}
-                      onDragStart={onHeaderDragStart(header.column.id)}
-                      onDragOver={onHeaderDragOver}
-                      onDrop={onHeaderDrop(header.column.id)}
-                      aria-sort={isSorted ? (sortDir === 'asc' ? 'ascending' : 'descending') : undefined}
-                      className={cn(
-                        'group/head relative select-none',
-                        ALIGN_CLASS[align],
-                        isSorted && 'text-foreground',
-                        isPinned && 'bg-card sticky z-10',
-                      )}
-                      style={{
-                        width: header.getSize(),
-                        ...(isPinned ? { left: header.column.getStart('left') } : {}),
-                      }}
-                    >
-                      <div
-                        className={cn(
-                          'flex items-center gap-0.5 overflow-hidden',
-                          align === 'right' && 'justify-end',
-                          align === 'center' && 'justify-center',
-                        )}
-                      >
-                        {supportsPointerAffordances && (
-                          <GripVerticalIcon
-                            aria-hidden
-                            className="-ml-1.5 size-3.5 shrink-0 opacity-0 transition-opacity group-hover/head:opacity-40"
-                          />
-                        )}
-                        {canSort ? (
-                          <button
-                            type="button"
-                            onClick={() => handleSort(header.column.id)}
-                            className="hover:text-foreground focus-visible:ring-ring flex min-w-0 items-center gap-1 rounded-sm focus-visible:ring-2 focus-visible:outline-none"
-                          >
-                            <span className="truncate">
-                              {flexRender(header.column.columnDef.header, header.getContext())}
-                            </span>
-                            {isSorted ? (
-                              sortDir === 'asc' ? (
-                                <ArrowUpIcon className="text-primary size-3.5 shrink-0" />
-                              ) : (
-                                <ArrowDownIcon className="text-primary size-3.5 shrink-0" />
-                              )
-                            ) : (
-                              <ChevronsUpDownIcon className="size-3.5 shrink-0 opacity-0 transition-opacity group-hover/head:opacity-40" />
-                            )}
-                          </button>
-                        ) : (
-                          <span className="truncate">
-                            {flexRender(header.column.columnDef.header, header.getContext())}
-                          </span>
-                        )}
-
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button
-                              type="button"
-                              onClick={() => togglePinned(header.column.id)}
-                              aria-label={isPinned ? 'Unpin column' : 'Pin column to the left'}
-                              className={cn(
-                                'hover:text-foreground ml-auto shrink-0 rounded-sm p-0.5 transition-opacity',
-                                isPinned ? 'text-primary opacity-100' : 'opacity-0 group-hover/head:opacity-50',
-                              )}
-                            >
-                              {isPinned ? (
-                                <PinOffIcon className="size-3.5" />
-                              ) : (
-                                <PinIcon className="size-3.5" />
-                              )}
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent>{isPinned ? 'Unpin' : 'Pin left'}</TooltipContent>
-                        </Tooltip>
-                      </div>
-
-                      {header.column.getCanResize() && (
-                        <div
-                          onMouseDown={header.getResizeHandler()}
-                          onTouchStart={header.getResizeHandler()}
-                          onClick={(event) => event.stopPropagation()}
-                          role="separator"
-                          aria-orientation="vertical"
-                          className={cn(
-                            'hover:bg-primary absolute top-1.5 right-0 bottom-1.5 w-[5px] cursor-col-resize rounded-sm transition-colors',
-                            header.column.getIsResizing() && 'bg-primary',
-                          )}
-                        />
-                      )}
-                    </TableHead>
-                  );
-                })}
-              </TableRow>
-            ))}
-          </TableHeader>
-
-          <TableBody>
-            {table.getRowModel().rows.map((row) => {
-              const id = row.id;
-              return (
-                <TableRow
-                  key={id}
-                  data-state={row.getIsSelected() ? 'selected' : undefined}
-                  onDoubleClick={() => onRowDoubleClick?.(row.original)}
-                  draggable={rowReorder && supportsPointerAffordances}
-                  onDragStart={rowReorder ? onRowDragStart(id) : undefined}
-                  onDragOver={rowReorder ? onRowDragOver(id) : undefined}
-                  onDrop={rowReorder ? onRowDrop(id) : undefined}
-                  className={cn(
-                    'group/row',
-                    onRowDoubleClick && 'cursor-pointer',
-                    // A drop target should be unmistakable, so it gets a line, not a tint.
-                    dragOverRowId === id && 'shadow-[inset_0_2px_0_var(--primary)]',
-                  )}
-                >
-                  {rowReorder && (
-                    <TableCell className="w-8 cursor-grab">
-                      <GripVerticalIcon
-                        aria-hidden
-                        className="size-4 opacity-0 transition-opacity group-hover/row:opacity-50"
-                      />
-                    </TableCell>
-                  )}
-                  {selectable && (
-                    <TableCell className="w-10">
-                      <Checkbox
-                        checked={row.getIsSelected()}
-                        onCheckedChange={(checked) => row.toggleSelected(checked === true)}
-                        aria-label="Select row"
-                      />
-                    </TableCell>
-                  )}
-                  {row.getVisibleCells().map((cell, cellIndex) => {
-                    const column = columns.find((entry) => entry.field === cell.column.id);
-                    const isPinned = cell.column.getIsPinned() === 'left';
-                    return (
-                      <TableCell
-                        key={cell.id}
-                        className={cn(
-                          'truncate',
-                          ALIGN_CLASS[column?.align ?? 'left'],
-                          // The first column is the row's identity; it carries the weight.
-                          cellIndex === 0 ? 'text-foreground font-medium' : 'text-muted-foreground',
-                          isPinned && 'bg-card sticky z-10',
-                        )}
-                        style={{
-                          width: cell.column.getSize(),
-                          ...(isPinned ? { left: cell.column.getStart('left') } : {}),
-                        }}
-                      >
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </TableCell>
-                    );
-                  })}
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
+      <div className="ag-theme-quartz w-full">
+        <AgGridReact<T>
+          rowData={rows}
+          columnDefs={columnDefs}
+          getRowId={getRowIdFn}
+          domLayout="autoHeight"
+          suppressCellFocus
+          suppressMovableColumns={false}
+          rowSelection={selectable ? 'multiple' : undefined}
+          suppressRowClickSelection
+          rowDragManaged={Boolean(rowReorder)}
+          animateRows={Boolean(rowReorder)}
+          onGridReady={handleGridReady}
+          onSortChanged={handleSortChanged}
+          onColumnResized={handleColumnResized}
+          onColumnMoved={handleColumnMoved}
+          onSelectionChanged={selectable ? handleSelectionChanged : undefined}
+          onRowDragEnd={rowReorder ? handleRowDragEnd : undefined}
+          onRowDoubleClicked={onRowDoubleClick ? handleRowDoubleClicked : undefined}
+        />
       </div>
     </div>
   );
@@ -693,7 +562,7 @@ function MobileRows<T>({
                 type="button"
                 onClick={() => onRowActivate?.(row)}
                 disabled={!onRowActivate}
-                className="min-w-0 flex-1 text-left disabled:cursor-default"
+                className="focus-ring min-w-0 flex-1 rounded-md text-left disabled:cursor-default"
               >
                 {primary && (
                   <p className="truncate font-semibold">{cellContent(primary, row)}</p>

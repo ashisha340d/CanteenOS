@@ -1,15 +1,25 @@
 import {
   BellRingIcon,
+  BookOpenIcon,
   CarrotIcon,
   ChartNoAxesCombinedIcon,
   ChefHatIcon,
+  ContactIcon,
   HistoryIcon,
+  LayersIcon,
   LayoutDashboardIcon,
   LayoutGridIcon,
+  ListChecksIcon,
   MapPinIcon,
+  PercentIcon,
+  PrinterIcon,
   ReceiptTextIcon,
+  ScrollTextIcon,
   Settings2Icon,
   ShieldIcon,
+  ScanBarcodeIcon,
+  SlidersHorizontalIcon,
+  StoreIcon,
   TagsIcon,
   TicketIcon,
   MonitorPlayIcon,
@@ -53,7 +63,7 @@ export const NAV_SECTIONS: NavSection[] = [
       },
       {
         to: '/stations',
-        label: 'Station',
+        label: 'Stations',
         icon: MapPinIcon,
         capability: Capability.MASTER_READ,
         primary: true,
@@ -61,7 +71,7 @@ export const NAV_SECTIONS: NavSection[] = [
       },
       {
         to: '/boards',
-        label: 'Board',
+        label: 'Boards',
         icon: LayoutDashboardIcon,
         capability: Capability.BOARD_READ_ALL,
         primary: true,
@@ -69,50 +79,136 @@ export const NAV_SECTIONS: NavSection[] = [
       },
       {
         to: '/activity-types',
-        label: 'Activity Type',
+        label: 'Activity Types',
         icon: TicketIcon,
         capability: Capability.MASTER_READ,
         keywords: 'breakfast lunch dinner festival event',
       },
+    ],
+  },
+  {
+    heading: 'Menu',
+    items: [
       {
         to: '/menu-categories',
-        label: 'Menu',
+        label: 'Menu Categories',
+        icon: TagsIcon,
+        capability: Capability.MASTER_READ,
+        keywords: 'categories food dishes',
+      },
+      {
+        to: '/item-groups',
+        label: 'Menu Groups',
+        icon: LayersIcon,
+        capability: Capability.MASTER_READ,
+        keywords: 'a la carte combo set menu tags item groups',
+      },
+      {
+        to: '/menus',
+        label: 'Menu Catalogue',
+        icon: BookOpenIcon,
+        capability: Capability.MASTER_READ,
+        keywords: 'vsk public satsangee menu master variants pricing catalogues',
+      },
+      {
+        to: '/modifiers',
+        label: 'Menu Modifiers',
+        icon: SlidersHorizontalIcon,
+        capability: Capability.MASTER_READ,
+        keywords: 'extra cheese no onion toppings size upgrade',
+      },
+      {
+        to: '/menu-items',
+        label: 'Menu Master File',
         icon: UtensilsIcon,
         capability: Capability.MASTER_READ,
-        keywords: 'categories items food dishes',
+        keywords: 'items food dishes master file',
+      },
+      {
+        to: '/counters',
+        label: 'Service Counters',
+        icon: StoreIcon,
+        capability: Capability.MASTER_READ,
+        keywords: 'service routing pickup',
+      },
+      {
+        to: '/printing-groups',
+        label: 'Kitchen Groups',
+        icon: PrinterIcon,
+        capability: Capability.MASTER_READ,
+        keywords: 'kitchen bakery coffee bar ticket routing',
       },
     ],
   },
   {
-    heading: 'Recipes',
+    heading: 'Counter',
     items: [
       {
-        to: '/recipes',
-        label: 'Recipe',
-        icon: ChefHatIcon,
-        capability: Capability.RECIPE_READ,
-        keywords: 'method steps variants cooking',
+        to: '/pos',
+        label: 'Point of Sale',
+        icon: ScanBarcodeIcon,
+        capability: Capability.POS_READ,
+        primary: true,
+        keywords: 'pos till counter sale bill checkout draft scheduled takeaway named order',
       },
       {
-        to: '/ingredients',
-        label: 'Ingredient',
-        icon: CarrotIcon,
-        capability: Capability.RECIPE_READ,
-        keywords: 'recipe master unit',
+        to: '/entities',
+        label: 'Entities',
+        icon: ContactIcon,
+        capability: Capability.ENTITY_READ,
+        keywords: 'customer employee vendor supplier party contact account ledger',
       },
+    ],
+  },
+  {
+    heading: 'Tax & Compliance',
+    items: [
+      {
+        to: '/tax-profiles',
+        label: 'Tax Profiles',
+        icon: PercentIcon,
+        capability: Capability.TAX_READ,
+        keywords: 'gst cgst sgst igst cess rate tax treatment restaurant service inclusive',
+      },
+      {
+        to: '/hsn-sac',
+        label: 'HSN/SAC Master',
+        icon: ScrollTextIcon,
+        capability: Capability.TAX_READ,
+        keywords: 'gst gstn classification hsn sac code sync goods services chapter heading',
+      },
+    ],
+  },
+  {
+    heading: 'Catalogue/Collection',
+    items: [
       {
         to: '/ingredient-categories',
-        label: 'Ingredient Category',
+        label: 'Ingredients Categories',
         icon: TagsIcon,
         capability: Capability.RECIPE_READ,
         keywords: 'group ingredients',
       },
       {
+        to: '/ingredients',
+        label: 'Ingredients',
+        icon: CarrotIcon,
+        capability: Capability.RECIPE_READ,
+        keywords: 'recipe master unit',
+      },
+      {
         to: '/youtube-imports',
-        label: 'YouTube Downloader',
+        label: 'Youtube Recipe Downloader',
         icon: MonitorPlayIcon,
         capability: Capability.RECIPE_WRITE,
         keywords: 'video import extract recipe download youtube',
+      },
+      {
+        to: '/recipes',
+        label: 'Recipes',
+        icon: ChefHatIcon,
+        capability: Capability.RECIPE_READ,
+        keywords: 'method steps variants cooking',
       },
     ],
   },
@@ -126,6 +222,13 @@ export const NAV_SECTIONS: NavSection[] = [
         capability: Capability.USER_READ,
         primary: true,
         keywords: 'accounts staff sign in',
+      },
+      {
+        to: '/tasks',
+        label: 'Tasks',
+        icon: ListChecksIcon,
+        capability: Capability.TASK_READ,
+        keywords: 'assign work volunteer duty job self assigned off time activity',
       },
       {
         to: '/permissions',
@@ -183,10 +286,11 @@ export const NAV_SECTIONS: NavSection[] = [
  * header can still name where you are.
  */
 const EXTRA_TITLES: Record<string, string> = {
-  '/menu-items': 'Menu items',
   '/change-password': 'Change password',
+  '/account/security': 'Security',
   '/recipes/new': 'New recipe',
   '/recipes/:id/edit': 'Edit recipe',
+  '/pos/entry': 'Sale',
 };
 
 const NAV_TITLES: Record<string, string> = Object.fromEntries(
@@ -235,7 +339,7 @@ export function crumbsFor(pathname: string): Crumb[] {
 /** The page name on its own — used for the mobile header and the document title. */
 export function titleFor(pathname: string): string {
   const crumbs = crumbsFor(pathname);
-  return crumbs[crumbs.length - 1]?.label ?? 'MenuBoard';
+  return crumbs[crumbs.length - 1]?.label ?? 'Canteen OS';
 }
 
 function titleCase(segment: string): string {

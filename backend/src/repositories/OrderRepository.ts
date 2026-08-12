@@ -1,9 +1,15 @@
 import type { OrderPriority, OrderStatus } from '@menuboard/shared';
 import { allocateSyncSeq, allocateSyncSeqBlock } from '../db/syncSeq';
-import { mutate, selectOne, selectRows, type Db } from '../db/types';
+import { mutate, selectOne, selectRows, type Db, type RowDataPacket } from '../db/types';
 import type { CountRow, OrderItemRow, OrderRow } from '../models/rows';
 import { toJsonColumn } from '../utils/json';
 import { toDbDateTime, toDbTime } from '../utils/time';
+
+interface VariantSnapshotRow extends RowDataPacket {
+  id: string;
+  name: string;
+  price: string;
+}
 
 export interface OrderListFilter {
   boardIds?: readonly string[];
@@ -47,6 +53,19 @@ export interface OrderItemInput {
   notes: string | null;
   mentionedUserIds: string[];
   sortOrder: number;
+  /**
+   * Menu Master sellable-configuration reference, optional. When `variantId` is set the
+   * insert resolves and freezes that variant's current name/price into the line — see
+   * `resolveVariantSnapshots` below. Never recomputed after insertion.
+   */
+  menuId?: string | null;
+  variantId?: string | null;
+  discountAmount?: number;
+}
+
+interface VariantSnapshot {
+  name: string;
+  price: number;
 }
 
 const ORDER_COLUMNS = `
@@ -59,6 +78,7 @@ const ORDER_COLUMNS = `
 const ITEM_COLUMNS = `
   id, order_id, menu_item_id, custom_item_name, quantity, unit, notes, mentioned_user_ids,
   sort_order, cancelled_at, cancelled_by, replaced_by_item_id,
+  menu_id, variant_id, variant_name, unit_price, tax_amount, discount_amount, line_total,
   created_at, updated_at, deleted_at, revision, sync_seq`;
 
 export class OrderRepository {
@@ -403,16 +423,46 @@ export class OrderRepository {
     ]);
   }
 
+  /**
+   * Freezes each variant's *current* name and price for the given ids. Called once per batch of
+   * items so an order with several catalogued lines costs one extra round trip, not one per
+   * line. Anything not found (bad id, or no `variantId` on the line) is simply absent from the
+   * map, and the caller leaves that line's snapshot columns null.
+   */
+  private async resolveVariantSnapshots(
+    db: Db,
+    variantIds: readonly string[],
+  ): Promise<Map<string, VariantSnapshot>> {
+    if (variantIds.length === 0) return new Map();
+    const placeholders = variantIds.map(() => '?').join(', ');
+    const rows = await selectRows<VariantSnapshotRow>(
+      db,
+      `SELECT id, name, price FROM menu_item_variants WHERE id IN (${placeholders})`,
+      [...variantIds],
+    );
+    return new Map(rows.map((row) => [row.id, { name: row.name, price: Number(row.price) }]));
+  }
+
   /** One cursor per row, allocated as a block so a 30-item order costs one round trip. */
   async insertItems(db: Db, orderId: string, items: readonly OrderItemInput[]): Promise<void> {
     if (items.length === 0) return;
 
     const firstSeq = await allocateSyncSeqBlock(db, items.length);
     const now = toDbDateTime();
+    const variantIds = items
+      .map((item) => item.variantId)
+      .filter((id): id is string => Boolean(id));
+    const snapshots = await this.resolveVariantSnapshots(db, variantIds);
 
-    const placeholders = items.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)').join(', ');
+    const placeholders = items
+      .map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)')
+      .join(', ');
     const params: unknown[] = [];
     items.forEach((item, index) => {
+      const snapshot = item.variantId ? snapshots.get(item.variantId) ?? null : null;
+      const discountAmount = item.discountAmount ?? 0;
+      const unitPrice = snapshot?.price ?? null;
+      const lineTotal = unitPrice === null ? null : unitPrice * item.quantity - discountAmount;
       params.push(
         item.id,
         orderId,
@@ -423,6 +473,13 @@ export class OrderRepository {
         item.notes,
         toJsonColumn(item.mentionedUserIds),
         item.sortOrder,
+        item.menuId ?? null,
+        item.variantId ?? null,
+        snapshot?.name ?? null,
+        unitPrice,
+        0,
+        discountAmount,
+        lineTotal,
         now,
         now,
         firstSeq + index,
@@ -433,7 +490,8 @@ export class OrderRepository {
       db,
       `INSERT INTO order_items
         (id, order_id, menu_item_id, custom_item_name, quantity, unit, notes,
-         mentioned_user_ids, sort_order, created_at, updated_at, revision, sync_seq)
+         mentioned_user_ids, sort_order, menu_id, variant_id, variant_name, unit_price,
+         tax_amount, discount_amount, line_total, created_at, updated_at, revision, sync_seq)
        VALUES ${placeholders}`,
       params,
     );
@@ -473,9 +531,15 @@ export class OrderRepository {
       for (const [index, item] of toUpdate.entries()) {
         await mutate(
           db,
+          // The price snapshot columns are deliberately not in this SET: they were frozen at
+          // sale time and a later edit must not re-price the line. `line_total` is the one
+          // exception, since it is a function of the quantity being changed here.
           `UPDATE order_items
               SET menu_item_id = ?, custom_item_name = ?, quantity = ?, unit = ?, notes = ?,
-                  mentioned_user_ids = ?, sort_order = ?, deleted_at = NULL, updated_at = ?,
+                  mentioned_user_ids = ?, sort_order = ?,
+                  line_total = CASE WHEN unit_price IS NULL THEN NULL
+                                    ELSE unit_price * ? + tax_amount - discount_amount END,
+                  deleted_at = NULL, updated_at = ?,
                   revision = revision + 1, sync_seq = ?
             WHERE id = ?`,
           [
@@ -486,6 +550,7 @@ export class OrderRepository {
             item.notes,
             toJsonColumn(item.mentionedUserIds),
             item.sortOrder,
+            item.quantity,
             now,
             firstSeq + index,
             item.id,
@@ -497,16 +562,25 @@ export class OrderRepository {
     await this.insertItems(db, orderId, toInsert);
   }
 
-  /** Changes one line's quantity. Used by the quantity/pax edit path, which logs the delta. */
+  /**
+   * Changes one line's quantity. Used by the quantity/pax edit path, which logs the delta.
+   *
+   * `line_total` is recomputed from the *frozen* `unit_price`, not from the current menu: the
+   * price snapshot stays as it was at sale time, but the total has to follow the quantity or
+   * billing would charge for the original count. Lines with no snapshot stay NULL.
+   */
   async updateItemQuantity(db: Db, itemId: string, quantity: number): Promise<void> {
     const syncSeq = await allocateSyncSeq(db);
     const now = toDbDateTime();
     await mutate(
       db,
       `UPDATE order_items
-          SET quantity = ?, updated_at = ?, revision = revision + 1, sync_seq = ?
+          SET quantity = ?,
+              line_total = CASE WHEN unit_price IS NULL THEN NULL
+                                ELSE unit_price * ? + tax_amount - discount_amount END,
+              updated_at = ?, revision = revision + 1, sync_seq = ?
         WHERE id = ? AND deleted_at IS NULL`,
-      [quantity, now, syncSeq, itemId],
+      [quantity, quantity, now, syncSeq, itemId],
     );
   }
 

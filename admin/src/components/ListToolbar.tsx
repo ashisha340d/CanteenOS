@@ -256,70 +256,71 @@ export function ListToolbar({
         </ToggleGroup>
 
         {createButton}
-      </div>
 
-      {showPaging && (
-        <div className="mt-3 flex items-center justify-end gap-4">
-          <Select value={String(pageSize)} onValueChange={(next) => onPageSizeChange(Number(next))}>
-            <SelectTrigger size="sm" className="w-[130px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                {PAGE_SIZES.map((size) => (
-                  <SelectItem key={size} value={String(size)}>
-                    {size} per page
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
+        {showPaging && (
+          <div className="flex items-center gap-4">
+            <Select value={String(pageSize)} onValueChange={(next) => onPageSizeChange(Number(next))}>
+              <SelectTrigger size="sm" className="w-[130px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {PAGE_SIZES.map((size) => (
+                    <SelectItem key={size} value={String(size)}>
+                      {size} per page
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
 
-          <Pagination className="mx-0 w-auto">
-            <PaginationContent>
-              <PaginationItem>
-                <PaginationPrevious
-                  size="sm"
-                  href="#"
-                  aria-disabled={page <= 1}
-                  className={cn(page <= 1 && 'pointer-events-none opacity-50')}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    if (page > 1) onPageChange(page - 1);
-                  }}
-                />
-              </PaginationItem>
-              {pageWindow(page, totalPages).map((entry) => (
-                <PaginationItem key={entry}>
-                  <PaginationLink
-                    size="icon-sm"
+            <Pagination className="mx-0 w-auto">
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    size="sm"
                     href="#"
-                    isActive={entry === page}
+                    aria-disabled={page <= 1}
+                    className={cn(page <= 1 && 'pointer-events-none opacity-50')}
                     onClick={(event) => {
                       event.preventDefault();
-                      onPageChange(entry);
+                      if (page > 1) onPageChange(page - 1);
                     }}
-                  >
-                    {entry}
-                  </PaginationLink>
+                  />
                 </PaginationItem>
-              ))}
-              <PaginationItem>
-                <PaginationNext
-                  size="sm"
-                  href="#"
-                  aria-disabled={page >= totalPages}
-                  className={cn(page >= totalPages && 'pointer-events-none opacity-50')}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    if (page < totalPages) onPageChange(page + 1);
-                  }}
-                />
-              </PaginationItem>
-            </PaginationContent>
-          </Pagination>
-        </div>
-      )}
+                {pageWindow(page, totalPages).map((entry) => (
+                  <PaginationItem key={entry}>
+                    <PaginationLink
+                      size="icon-sm"
+                      href="#"
+                      isActive={entry === page}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        onPageChange(entry);
+                      }}
+                    >
+                      {entry}
+                    </PaginationLink>
+                  </PaginationItem>
+                ))}
+                <PaginationItem>
+                  <PaginationNext
+                    size="sm"
+                    href="#"
+                    aria-disabled={page >= totalPages}
+                    className={cn(page >= totalPages && 'pointer-events-none opacity-50')}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      if (page < totalPages) onPageChange(page + 1);
+                    }}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          </div>
+        )}
+
+      </div>
 
       {filterPanel}
     </div>

@@ -1,22 +1,48 @@
 import type { RowDataPacket } from 'mysql2/promise';
+
+export * from './equipmentRows';
+
 import type {
   AlertSoundSlot,
   AlertType,
   AttachmentKind,
   AttachmentOwnerType,
+  AvailabilityStatus,
   BillingStatus,
   BoardRole,
   BoardStatus,
   ClientType,
+  EntityType,
+  GstSyncStatus,
+  GstTaxability,
+  HsnSacCodeType,
+  ItcEligibility,
   MasterStatus,
+  MediaEntityType,
+  MediaRole,
+  MediaType,
   MemberStatus,
   MessageType,
+  ModifierSelectionType,
   NotificationType,
   OrderPriority,
   OrderStatus,
+  PosDiscountType,
+  PosOrderItemStatus,
+  PosOrderStatus,
+  PosOrderType,
+  PosPaymentMethod,
+  PosPaymentStatus,
   RecipeDifficulty,
   RecipeIngredientScaling,
+  RoutableEntityType,
+  ScheduleShift,
   ShoppingListStatus,
+  SupplyType,
+  TaskKind,
+  TaskPriority,
+  TaskSource,
+  TaskStatus,
   UserRole,
   UserStatus,
   YoutubeImportStatus,
@@ -119,9 +145,262 @@ export interface MenuItemRow extends RowDataPacket, SyncColumns {
   unit: string;
   unit_hi: string | null;
   image_path: string | null;
+  /** Resolved by the SELECT, not a column on menu_items — see MenuItemRepository. */
+  primary_media_id?: string | null;
+  base_price: string | null;
+  tax_profile_id: string | null;
+  always_available: number;
   status: MasterStatus;
   sort_order: number;
   created_by: string | null;
+}
+
+/* ------------------------------------------------------------- menu master */
+
+export interface MenuRow extends RowDataPacket, SyncColumns {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  status: MasterStatus;
+  sort_order: number;
+  priority: number;
+  version: number;
+  effective_from: string | null;
+  effective_until: string | null;
+  published_at: string | null;
+  created_by: string | null;
+}
+
+export interface MenuCategoryAssignmentRow extends RowDataPacket, SyncColumns {
+  id: string;
+  menu_id: string;
+  category_id: string;
+  display_name: string | null;
+  display_name_hi: string | null;
+  description: string | null;
+  description_hi: string | null;
+  status: MasterStatus;
+  sort_order: number;
+  pos_visible: number;
+  board_visible: number;
+  created_by: string | null;
+  category_name?: string;
+  category_name_hi?: string | null;
+  category_image_path?: string | null;
+}
+
+export interface MenuItemAssignmentRow extends RowDataPacket, SyncColumns {
+  id: string;
+  menu_id: string;
+  food_item_id: string;
+  category_assignment_id: string | null;
+  display_name: string | null;
+  display_name_hi: string | null;
+  description: string | null;
+  description_hi: string | null;
+  preparation_method: string | null;
+  preparation_method_hi: string | null;
+  preparation_time_minutes: number | null;
+  unit: string | null;
+  status: MasterStatus;
+  availability: AvailabilityStatus;
+  sort_order: number;
+  pos_visible: number;
+  board_visible: number;
+  qr_visible: number;
+  web_visible: number;
+  app_visible: number;
+  dine_in_available: number;
+  takeaway_available: number;
+  delivery_available: number;
+  allow_decimal_quantity: number;
+  created_by: string | null;
+  food_item_name?: string;
+  food_item_name_hi?: string | null;
+  food_item_unit?: string;
+  food_item_image_path?: string | null;
+  food_item_base_price?: string | null;
+  variant_count?: number;
+}
+
+export interface MenuItemVariantRow extends RowDataPacket, SyncColumns {
+  id: string;
+  food_item_id: string;
+  variant_code: string | null;
+  name: string;
+  name_hi: string | null;
+  description: string | null;
+  description_hi: string | null;
+  portion_name: string | null;
+  portion_name_hi: string | null;
+  quantity: string | null;
+  unit: string | null;
+  price: string;
+  tax_profile_id: string | null;
+  status: MasterStatus;
+  availability: AvailabilityStatus;
+  sort_order: number;
+  preparation_method: string | null;
+  preparation_method_hi: string | null;
+  preparation_time_minutes: number | null;
+  is_default: number;
+  allow_decimal_quantity: number;
+  created_by: string | null;
+}
+
+export interface MediaAssetRow extends RowDataPacket, SyncColumns {
+  id: string;
+  file_name: string;
+  storage_path: string;
+  mime_type: string;
+  file_extension: string | null;
+  size_bytes: string | number;
+  width: number | null;
+  height: number | null;
+  media_type: MediaType;
+  title: string | null;
+  alt_text: string | null;
+  checksum: string | null;
+  status: MasterStatus;
+  created_by: string | null;
+}
+
+export interface MediaAssignmentRow extends RowDataPacket, SyncColumns {
+  id: string;
+  media_id: string;
+  entity_type: MediaEntityType;
+  entity_id: string;
+  role: MediaRole;
+  is_primary: number;
+  sort_order: number;
+  status: MasterStatus;
+  created_by: string | null;
+}
+
+export interface CounterRow extends RowDataPacket, SyncColumns {
+  id: string;
+  name: string;
+  code: string | null;
+  description: string | null;
+  status: MasterStatus;
+  sort_order: number;
+  created_by: string | null;
+}
+
+export interface CounterRouteRow extends RowDataPacket, SyncColumns {
+  id: string;
+  entity_type: RoutableEntityType;
+  entity_id: string;
+  counter_id: string;
+  status: MasterStatus;
+  created_by: string | null;
+  counter_name?: string;
+}
+
+export interface PrintingGroupRow extends RowDataPacket, SyncColumns {
+  id: string;
+  name: string;
+  code: string | null;
+  description: string | null;
+  status: MasterStatus;
+  sort_order: number;
+  created_by: string | null;
+}
+
+export interface PrintingRouteRow extends RowDataPacket, SyncColumns {
+  id: string;
+  entity_type: RoutableEntityType;
+  entity_id: string;
+  printing_group_id: string;
+  sort_order: number;
+  status: MasterStatus;
+  created_by: string | null;
+  printing_group_name?: string;
+}
+
+export interface ModifierGroupRow extends RowDataPacket, SyncColumns {
+  id: string;
+  name: string;
+  description: string | null;
+  selection_type: ModifierSelectionType;
+  min_select: number;
+  max_select: number | null;
+  status: MasterStatus;
+  sort_order: number;
+  created_by: string | null;
+}
+
+export interface ModifierRow extends RowDataPacket, SyncColumns {
+  id: string;
+  modifier_group_id: string;
+  name: string;
+  name_hi: string | null;
+  price_delta: string;
+  status: MasterStatus;
+  sort_order: number;
+  created_by: string | null;
+}
+
+export interface ModifierAssignmentRow extends RowDataPacket, SyncColumns {
+  id: string;
+  entity_type: RoutableEntityType;
+  entity_id: string;
+  modifier_group_id: string;
+  is_required: number;
+  sort_order: number;
+  status: MasterStatus;
+  created_by: string | null;
+  modifier_group_name?: string;
+}
+
+export interface MenuScheduleRow extends RowDataPacket, SyncColumns {
+  id: string;
+  menu_id: string;
+  day_of_week: number | null;
+  start_time: string;
+  end_time: string;
+  status: MasterStatus;
+  created_by: string | null;
+}
+
+export interface ItemGroupRow extends RowDataPacket, SyncColumns {
+  id: string;
+  name: string;
+  code: string | null;
+  description: string | null;
+  status: MasterStatus;
+  sort_order: number;
+  created_by: string | null;
+}
+
+export interface ItemGroupAssignmentRow extends RowDataPacket, SyncColumns {
+  id: string;
+  food_item_id: string;
+  group_id: string;
+  status: MasterStatus;
+  created_by: string | null;
+  group_name?: string;
+}
+
+export interface MenuItemScheduleRow extends RowDataPacket, SyncColumns {
+  id: string;
+  food_item_id: string;
+  day_of_week: number;
+  shift: ScheduleShift;
+  is_available: number;
+  created_by: string | null;
+}
+
+export interface MenuItemVariantCatalogPriceRow extends RowDataPacket, SyncColumns {
+  id: string;
+  variant_id: string;
+  menu_id: string;
+  price: string;
+  status: MasterStatus;
+  created_by: string | null;
+  menu_name?: string;
+  menu_code?: string;
 }
 
 export interface OrderRow extends RowDataPacket, SyncColumns {
@@ -165,6 +444,14 @@ export interface OrderItemRow extends RowDataPacket, SyncColumns {
   cancelled_at: string | null;
   cancelled_by: string | null;
   replaced_by_item_id: string | null;
+  /** Menu Master sellable-configuration snapshot — see 012_menu_master.sql. */
+  menu_id: string | null;
+  variant_id: string | null;
+  variant_name: string | null;
+  unit_price: string | null;
+  tax_amount: string;
+  discount_amount: string;
+  line_total: string | null;
 }
 
 export interface AttachmentRow extends RowDataPacket, SyncColumns {
@@ -448,4 +735,299 @@ export interface YoutubeImportRow extends RowDataPacket {
   updated_at: string;
   deleted_at: string | null;
   completed_at: string | null;
+}
+
+/* ------------------------------------------------------------------- fast auth */
+
+export interface UserPinRow extends RowDataPacket {
+  user_id: string;
+  pin_hash: string;
+  failed_attempts: number;
+  locked_until: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/* ------------------------------------------------------------------ tasks */
+
+export interface TaskRow extends RowDataPacket {
+  id: string;
+  title: string;
+  description: string | null;
+  kind: TaskKind;
+  source: TaskSource;
+  status: TaskStatus;
+  priority: TaskPriority;
+  assigned_to: string;
+  assigned_by: string | null;
+  order_id: string | null;
+  board_id: string | null;
+  due_at: string | null;
+  estimated_minutes: number | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  /** Resolved by the SELECT's joins, not columns on tasks. */
+  assigned_to_name?: string;
+  assigned_by_name?: string | null;
+  order_number?: string | null;
+  board_name?: string | null;
+}
+
+/** Aggregate row behind the team activity view; every field is computed by the query. */
+export interface TeamActivityRow extends RowDataPacket {
+  user_id: string;
+  name: string;
+  task_id: string | null;
+  task_title: string | null;
+  task_kind: TaskKind | null;
+  task_priority: TaskPriority | null;
+  started_at: string | null;
+  estimated_minutes: number | null;
+  due_at: string | null;
+  last_task_title: string | null;
+  last_active_at: string | null;
+}
+
+/* ------------------------------------------------------------- GST / tax */
+
+export interface HsnSacCodeRow extends RowDataPacket {
+  id: string;
+  code: string;
+  code_type: HsnSacCodeType;
+  description: string;
+  chapter: string | null;
+  heading: string | null;
+  sub_heading: string | null;
+  is_active: number;
+  source: string;
+  source_version: string | null;
+  source_checksum: string | null;
+  first_synced_at: string;
+  last_synced_at: string;
+  deactivated_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GstSyncRunRow extends RowDataPacket {
+  id: string;
+  started_at: string;
+  completed_at: string | null;
+  started_by: string | null;
+  source: string;
+  source_url: string | null;
+  source_version: string | null;
+  source_checksum: string | null;
+  records_downloaded: number;
+  records_added: number;
+  records_updated: number;
+  records_deactivated: number;
+  records_unchanged: number;
+  records_failed: number;
+  status: GstSyncStatus;
+  error_details: string | null;
+  created_at: string;
+  updated_at: string;
+  /** Resolved by the SELECT's join to users, not a column. */
+  started_by_name?: string | null;
+}
+
+export interface TaxProfileRow extends RowDataPacket {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  hsn_sac_id: string | null;
+  supply_type: SupplyType;
+  gst_taxability: GstTaxability;
+  gst_rate: string;
+  cgst_rate: string;
+  sgst_rate: string;
+  igst_rate: string;
+  cess_rate: string;
+  price_is_inclusive: number;
+  itc_eligibility: ItcEligibility;
+  effective_from: string | null;
+  effective_to: string | null;
+  exemption_reason: string | null;
+  regulatory_notes: string | null;
+  status: MasterStatus;
+  sort_order: number;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  /** Resolved by the SELECT's join to hsn_sac_master, not columns. */
+  hsn_sac_code?: string | null;
+  hsn_sac_code_type?: HsnSacCodeType | null;
+  hsn_sac_description?: string | null;
+  food_item_count?: number;
+}
+
+/* -------------------------------------------------- entities and point of sale */
+
+export interface EntityRow extends RowDataPacket {
+  id: string;
+  code: string;
+  type: EntityType;
+  name: string;
+  name_hi: string | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  city: string | null;
+  state_code: string | null;
+  gstin: string | null;
+  pan: string | null;
+  department: string | null;
+  designation: string | null;
+  linked_user_id: string | null;
+  discount_percent: string;
+  credit_limit: string;
+  account_balance: string;
+  notes: string | null;
+  status: MasterStatus;
+  sort_order: number;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  /** Resolved by the SELECT's joins, not columns. */
+  linked_user_name?: string | null;
+  pos_order_count?: number;
+}
+
+export interface PosOrderRow extends RowDataPacket {
+  id: string;
+  order_number: string;
+  daily_sequence: number;
+  business_date: string;
+  order_type: PosOrderType;
+  status: PosOrderStatus;
+  payment_status: PosPaymentStatus;
+  station_id: string | null;
+  counter_id: string | null;
+  menu_id: string | null;
+  entity_id: string | null;
+  entity_type: EntityType | null;
+  entity_name: string | null;
+  entity_phone: string | null;
+  entity_address: string | null;
+  table_label: string | null;
+  pax: number;
+  scheduled_for: string | null;
+  notes: string | null;
+  discount_type: PosDiscountType;
+  discount_value: string;
+  subtotal_amount: string;
+  discount_amount: string;
+  tax_amount: string;
+  round_off_amount: string;
+  total_amount: string;
+  paid_amount: string;
+  balance_amount: string;
+  placed_at: string | null;
+  completed_at: string | null;
+  cancelled_at: string | null;
+  cancel_reason: string | null;
+  created_by: string;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  revision: number;
+  /** Resolved by the SELECT's joins, not columns. */
+  station_name?: string | null;
+  counter_name?: string | null;
+  created_by_name?: string | null;
+  item_count?: number;
+}
+
+export interface PosOrderItemRow extends RowDataPacket {
+  id: string;
+  pos_order_id: string;
+  menu_item_id: string | null;
+  variant_id: string | null;
+  custom_item_name: string | null;
+  item_name: string;
+  variant_name: string | null;
+  quantity: string;
+  unit: string;
+  unit_price: string;
+  gross_amount: string;
+  discount_type: PosDiscountType;
+  discount_value: string;
+  discount_amount: string;
+  taxable_amount: string;
+  tax_profile_id: string | null;
+  tax_rate: string;
+  cgst_amount: string;
+  sgst_amount: string;
+  igst_amount: string;
+  cess_amount: string;
+  tax_amount: string;
+  line_total: string;
+  allow_decimal_quantity: number;
+  notes: string | null;
+  sort_order: number;
+  status: PosOrderItemStatus;
+  cancelled_at: string | null;
+  cancelled_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PosPaymentRow extends RowDataPacket {
+  id: string;
+  pos_order_id: string;
+  method: PosPaymentMethod;
+  amount: string;
+  tendered_amount: string | null;
+  change_amount: string;
+  reference: string | null;
+  notes: string | null;
+  entity_id: string | null;
+  is_reversal: number;
+  received_by: string | null;
+  received_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WebAuthnCredentialRow extends RowDataPacket {
+  id: string;
+  credential_id: string;
+  user_id: string;
+  public_key: string;
+  sign_counter: number;
+  transports: string;
+  backup_eligible: number;
+  backup_state: number;
+  device_name: string | null;
+  last_used_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WebAuthnChallengeRow extends RowDataPacket {
+  id: string;
+  user_id: string;
+  type: 'registration' | 'authentication';
+  challenge: string;
+  expires_at: string;
+  created_at: string;
+}
+
+export interface PasswordResetRow extends RowDataPacket {
+  id: string;
+  user_id: string;
+  email: string;
+  code_hash: string;
+  used_at: string | null;
+  expires_at: string;
+  created_at: string;
 }

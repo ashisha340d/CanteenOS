@@ -9,7 +9,7 @@ import { DataTable, type DataTableColumn } from '../../components/DataTable/Data
 import { useViewMode } from '../../components/DataTable/gridState';
 import { EntityCardGrid } from '../../components/EntityCardGrid';
 import { ListToolbar } from '../../components/ListToolbar';
-import { PageHeader } from '../../components/ui/PageHeader';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { useAuditList } from '../../hooks/useAdmin';
 import { DiffViewerModal } from './DiffViewerModal';
 
@@ -85,9 +85,11 @@ export function AuditPage(): JSX.Element {
   return (
     <>
       <PageHeader
+        eyebrow="Records"
         title="Audit log"
-        subtitle="Every change, who made it, and what it looked like before and after."
+        subtitle="Who changed what, and when. Append-only — entries are never edited or removed."
       />
+
       <ListToolbar
         search={action}
         onSearchChange={(v) => {

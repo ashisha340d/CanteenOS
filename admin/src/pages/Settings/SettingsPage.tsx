@@ -12,9 +12,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { PageHeader } from '../../components/ui/PageHeader';
 import { StatGridSkeleton } from '../../components/ui/Skeletons';
 import { useSettings, useUpdateSetting } from '../../hooks/useAdmin';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { notify } from '@/lib/notify';
 import { cn } from '@/lib/utils';
 
@@ -72,15 +72,7 @@ export function SettingsPage(): JSX.Element {
   }
 
   if (isLoading || !data) {
-    return (
-      <>
-        <PageHeader
-          title="Settings"
-          subtitle="Server-side configuration for the whole workspace."
-        />
-        <StatGridSkeleton count={3} />
-      </>
-    );
+    return <StatGridSkeleton count={3} />;
   }
 
   const byKey = new Map(data.map((setting) => [setting.key, setting]));
@@ -151,7 +143,11 @@ export function SettingsPage(): JSX.Element {
 
   return (
     <>
-      <PageHeader title="Settings" subtitle="Server-side configuration for the whole workspace." />
+      <PageHeader
+        eyebrow="Records"
+        title="Settings"
+        subtitle="Portal-wide configuration. Each change saves on its own — there is no global save."
+      />
 
       <div className="flex max-w-[880px] flex-col gap-8">
         {GROUPS.map((group) => (

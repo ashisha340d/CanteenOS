@@ -4,6 +4,8 @@ build/
 coverage/
 *.log
 npm-debug.log*
+vite.config.ts.timestamp-*
+vite.config.js.timestamp-*
 
 .env
 .env.*

@@ -114,3 +114,62 @@ Forward-only `.sql` files in `backend/src/db/migrations`, applied in filename or
 `npm run migrate --workspace @menuboard/backend`. Each applied file is recorded in
 `schema_migrations` with a SHA-256 checksum; a changed checksum aborts the run rather than
 silently diverging.
+
+## Menu Master (012_menu_master.sql)
+
+See [MENUBOARD_SPEC.md §3a](./MENUBOARD_SPEC.md#3a-menu-master-extension) for the product
+framing. `menu_items` (Food Item Master) and `menu_categories` (global category master) are
+unchanged by this migration — everything below only *references* them:
+
+`menus` → `menu_category_assignments` (→ `menu_categories`) and `menu_item_assignments`
+(→ `menu_items`) → `menu_item_variants`. Media (`media_assets` / `media_assignments`),
+routing (`counters`/`counter_routes`, `printing_groups`/`printing_routes`) and
+(`modifier_groups`/`modifiers`/`modifier_assignments`) attach to a `menu_item_assignment` or
+`menu_item_variant` via a polymorphic `(entity_type, entity_id)` pair — the same pattern
+`attachments.owner_type`/`owner_id` already uses, chosen for consistency rather than a
+strongly-typed join table per entity kind. `menu_schedules` attaches to a `menu`.
+
+`order_items` gained `menu_id`, `variant_id`, `variant_name`, `unit_price`, `tax_amount`,
+`discount_amount`, `line_total`, all nullable/defaulted so pre-existing rows and non-catalog
+(ad-hoc) lines are unaffected. Both new foreign keys are `ON DELETE RESTRICT`, matching the
+existing `fk_order_items_menu_item` convention: nothing in this schema is ever hard-deleted
+(soft delete only), so the constraint exists purely as a guarantee, never expected to fire.
+
+## Entities and Point of Sale (022_entities_and_pos.sql)
+
+See [MENUBOARD_SPEC.md §3b](./MENUBOARD_SPEC.md#3b-point-of-sale-and-the-entity-master-extension)
+for the product framing.
+
+`entities` is a **single** party master discriminated by `type`
+(`CUSTOMER`/`EMPLOYEE`/`VENDOR`/`OTHER`), not three tables: the same person is routinely a
+customer at the counter and an employee on the payroll. `code` is server-allocated per type
+(`CUS-0001`, `EMP-0001`, …) from `MAX(...) FOR UPDATE` inside the inserting transaction, and
+is unique across every type. `account_balance` is maintained *only* by `ACCOUNT` settlements
+and their reversals, always in the same transaction as the `pos_payments` row that moved it.
+
+`pos_orders` → `pos_order_items` (`ON DELETE CASCADE`) and `pos_payments` (`ON DELETE
+CASCADE`). Catalogue references (`menu_id`, `menu_item_id`, `variant_id`, `tax_profile_id`)
+and the party reference (`entity_id`) are all `ON DELETE RESTRICT`, so a historical bill can
+never be orphaned.
+
+Three things differ from the rest of the schema, deliberately:
+
+- **No `sync_seq`, and no `sync_counter` allocation.** Like `tax_profiles` (021) and
+  `youtube_recipe_imports` (011), these are counter/Admin-Portal tables that never replicate
+  to Android. `pos_orders.revision` exists but is *optimistic concurrency only* (two
+  terminals on one ticket → `STALE_WRITE`); it is not a sync cursor.
+- **Bill numbers are server-sequential**, `POS-YYYYMMDD-NNNN`, guarded by
+  `uq_pos_orders_daily_sequence (business_date, daily_sequence)` and allocated under
+  `SELECT … FOR UPDATE`. This is the opposite of `orders.order_number` (device-generated,
+  see MENUBOARD_SPEC decision 1) because a till is online by definition.
+- **Four foreign keys say `ON UPDATE RESTRICT` where the rest of the schema says CASCADE**
+  (`pos_orders.entity_id`, `pos_order_items.menu_item_id`, `pos_payments.entity_id`).
+  MariaDB refuses a `CHECK` constraint on any column whose foreign key carries a cascading
+  referential action, and these columns appear in `ck_pos_orders_quick_sale_anonymous`,
+  `ck_pos_order_items_dish` and `ck_pos_payments_account_named`.
+  `008_ad_hoc_order_items.sql` already made the same trade for the same reason. Primary keys
+  are UUIDs and are never updated, so the two actions are indistinguishable in practice.
+
+Money is `DECIMAL(14,2)` throughout and rates are `DECIMAL(6,3)`, matching `tax_profiles`.
+Every amount on `pos_order_items` is a frozen snapshot written by `PosService`; the client
+never supplies one for a catalogue line.

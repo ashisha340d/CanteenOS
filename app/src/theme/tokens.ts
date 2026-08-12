@@ -198,6 +198,65 @@ export const colors = {
   statusCompleted: { bg: '#6cf8bb', fg: '#00513a' },
 } as const;
 
+/** Dark counterpart of `colors`, used by `useThemeColors()`. Same keys, WhatsApp-dark values. */
+export const darkColors = {
+  ...colors,
+
+  background: '#0b141a',
+  onBackground: '#e9edef',
+  surface: '#111b21',
+  surfaceDim: '#0b141a',
+  surfaceBright: '#182229',
+  surfaceContainerLowest: '#0b141a',
+  surfaceContainerLow: '#182229',
+  surfaceContainer: '#1f2c34',
+  surfaceContainerHigh: '#233138',
+  surfaceContainerHighest: '#2a3942',
+  surfaceVariant: '#233138',
+  inverseSurface: '#e9edef',
+  inverseOnSurface: '#182229',
+
+  onSurface: '#e9edef',
+  onSurfaceVariant: '#8696a0',
+  outline: '#8696a0',
+  outlineVariant: '#2a3942',
+
+  dataPanel: '#182229',
+  dataPanelBorder: '#233138',
+
+  bubbleMine: '#005c4b',
+  bubbleMineBorder: '#025144',
+
+  textPrimary: '#e9edef',
+  textSecondary: '#d1d7db',
+  textMuted: '#8696a0',
+  white: '#ffffff',
+
+  taskBarDark: '#0b141a',
+  taskRowDivider: '#2a3942',
+  taskAvatar: '#2a3942',
+  taskAvatarFg: '#d1d7db',
+  taskMuted: '#8696a0',
+
+  gray50: '#182229',
+  gray75: '#1a242b',
+  gray100: '#1f2c34',
+  gray200: '#233138',
+  gray300: '#2a3942',
+  gray400: '#54656f',
+  gray500: '#8696a0',
+  gray600: '#aebac1',
+  gray700: '#d1d7db',
+  gray800: '#e9edef',
+  gray900: '#f5f6f6',
+
+  surfaceElevated: '#182229',
+  surfaceOverlay: 'rgba(0, 0, 0, 0.6)',
+} as const;
+
+type Widen<T> = T extends string ? string : T extends object ? { [K in keyof T]: Widen<T[K]> } : T;
+export type ColorPalette = Widen<typeof colors>;
+
 /** 8px rhythm, with the named steps the design system calls out. */
 export const spacing = {
   px: 1,

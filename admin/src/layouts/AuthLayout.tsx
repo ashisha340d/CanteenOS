@@ -37,7 +37,9 @@ export function AuthLayout({
       <div className="bg-card relative w-[408px] max-w-full rounded-2xl border p-6 shadow-xl sm:p-8 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-3 motion-safe:duration-500">
         <div className="mb-6 flex items-center gap-2.5">
           <span aria-hidden className="bg-primary ring-sidebar-accent size-2.5 rounded-full ring-4" />
-          <span className="font-heading text-base font-semibold tracking-[-0.02em]">MenuBoard</span>
+          {/* The product is Canteen OS everywhere else — sidebar, document title, page
+              chrome. The sign-in screen is the first thing anyone sees; it said MenuBoard. */}
+          <span className="font-heading text-base font-semibold tracking-[-0.02em]">Canteen OS</span>
         </div>
 
         <h1 className="font-heading text-xl font-bold tracking-tight">{title}</h1>

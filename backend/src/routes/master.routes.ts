@@ -122,6 +122,12 @@ export function masterRoutes(): Router {
     validate({ query: menuItemListQuerySchema }),
     asyncHandler(MasterController.listMenuItems),
   );
+  router.get(
+    '/menu-items/:id',
+    read,
+    validate({ params: idParam }),
+    asyncHandler(MasterController.getMenuItemById),
+  );
   router.post(
     '/menu-items',
     write,

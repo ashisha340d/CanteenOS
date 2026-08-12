@@ -15,7 +15,7 @@ function widthAt(index: number): string {
 
 export function TableSkeleton({ rows = 8, columns = 5 }: { rows?: number; columns?: number }): JSX.Element {
   return (
-    <div className="bg-card overflow-hidden rounded-xl border">
+    <div role="status" aria-label="Loading table" className="bg-card overflow-hidden rounded-xl border">
       <div className="bg-muted/50 flex gap-4 px-4 py-3">
         {Array.from({ length: columns }).map((_unused, index) => (
           <Skeleton key={index} className="h-3" style={{ width: index === 0 ? 120 : 78 }} />
@@ -46,7 +46,13 @@ export function TableSkeleton({ rows = 8, columns = 5 }: { rows?: number; column
 
 export function CardGridSkeleton({ count = 8 }: { count?: number }): JSX.Element {
   return (
-    <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(258px,1fr))]">
+    /* Same track sizing as EntityCardGrid — they disagreed (258 vs 320), so the column count
+       changed the instant the data landed and the whole grid jumped. */
+    <div
+      role="status"
+      aria-label="Loading cards"
+      className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(min(320px,100%),1fr))]"
+    >
       {Array.from({ length: count }).map((_unused, index) => (
         <div
           key={index}
@@ -65,7 +71,11 @@ export function CardGridSkeleton({ count = 8 }: { count?: number }): JSX.Element
 
 export function StatGridSkeleton({ count = 6 }: { count?: number }): JSX.Element {
   return (
-    <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(210px,1fr))]">
+    <div
+      role="status"
+      aria-label="Loading figures"
+      className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(210px,100%),1fr))]"
+    >
       {Array.from({ length: count }).map((_unused, index) => (
         <div
           key={index}

@@ -2,7 +2,6 @@ import {
   YoutubeImportStatus,
   YOUTUBE_IMPORT_ACTIVE_STATUSES,
   type YoutubeExtractedRecipe,
-  type YoutubeImportDto,
 } from '@menuboard/shared';
 import { CheckCircle2Icon, ChefHatIcon, CircleAlertIcon, ExternalLinkIcon } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -184,16 +183,16 @@ export function YoutubeImportDetailDialog({
                 recipe.storageInstructions ||
                 recipe.dietaryInfo.length > 0 ||
                 recipe.allergens.length > 0) && (
-                <div className="text-muted-foreground flex flex-col gap-1 text-sm">
-                  {recipe.equipment.length > 0 && <p>Equipment: {recipe.equipment.join(', ')}</p>}
-                  {recipe.garnish && <p>Garnish: {recipe.garnish}</p>}
-                  {recipe.tips.length > 0 && <p>Tips: {recipe.tips.join(' · ')}</p>}
-                  {recipe.storageInstructions && <p>Storage: {recipe.storageInstructions}</p>}
-                  {recipe.shelfLife && <p>Shelf life: {recipe.shelfLife}</p>}
-                  {recipe.dietaryInfo.length > 0 && <p>Dietary: {recipe.dietaryInfo.join(', ')}</p>}
-                  {recipe.allergens.length > 0 && <p>Allergens: {recipe.allergens.join(', ')}</p>}
-                </div>
-              )}
+                  <div className="text-muted-foreground flex flex-col gap-1 text-sm">
+                    {recipe.equipment.length > 0 && <p>Equipment: {recipe.equipment.join(', ')}</p>}
+                    {recipe.garnish && <p>Garnish: {recipe.garnish}</p>}
+                    {recipe.tips.length > 0 && <p>Tips: {recipe.tips.join(' · ')}</p>}
+                    {recipe.storageInstructions && <p>Storage: {recipe.storageInstructions}</p>}
+                    {recipe.shelfLife && <p>Shelf life: {recipe.shelfLife}</p>}
+                    {recipe.dietaryInfo.length > 0 && <p>Dietary: {recipe.dietaryInfo.join(', ')}</p>}
+                    {recipe.allergens.length > 0 && <p>Allergens: {recipe.allergens.join(', ')}</p>}
+                  </div>
+                )}
             </div>
           )}
         </div>

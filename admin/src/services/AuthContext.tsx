@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { AuthenticatedUser } from '@menuboard/shared';
+import type { AuthenticatedUser, LoginResponse } from '@menuboard/shared';
 import { Capability } from '@menuboard/shared';
 import { authApi } from '../api/auth';
 import { setSessionExpiredHandler } from '../api/client';
@@ -19,6 +19,8 @@ interface AuthContextValue {
   capabilities: Capability[];
   status: 'loading' | 'authenticated' | 'unauthenticated';
   login: (identifier: string, password: string, rememberMe: boolean) => Promise<void>;
+  loginWithPin: (identifier: string, pin: string, rememberMe: boolean) => Promise<void>;
+  setAuthenticated: (response: LoginResponse, rememberMe: boolean) => void;
   logout: () => Promise<void>;
   setUser: (user: AuthenticatedUser) => void;
   hasCapability: (capability: Capability) => boolean;
@@ -78,6 +80,15 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const setAuthenticated = useCallback((response: LoginResponse, rememberMe: boolean) => {
+    setAccessToken(response.tokens.accessToken);
+    saveRefreshToken(response.tokens.refreshToken, rememberMe);
+    saveUser(response.user, response.capabilities);
+    setUserState(response.user);
+    setCapabilities(response.capabilities as Capability[]);
+    setStatus('authenticated');
+  }, []);
+
   const login = useCallback(async (identifier: string, password: string, rememberMe: boolean) => {
     const response = await authApi.login({
       identifier,
@@ -86,13 +97,19 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
       clientType: 'ADMIN',
       rememberMe,
     });
-    setAccessToken(response.tokens.accessToken);
-    saveRefreshToken(response.tokens.refreshToken, rememberMe);
-    saveUser(response.user, response.capabilities);
-    setUserState(response.user);
-    setCapabilities(response.capabilities as Capability[]);
-    setStatus('authenticated');
-  }, []);
+    setAuthenticated(response, rememberMe);
+  }, [setAuthenticated]);
+
+  const loginWithPin = useCallback(async (identifier: string, pin: string, rememberMe: boolean) => {
+    const response = await authApi.loginWithPin({
+      identifier,
+      pin,
+      deviceId: getDeviceId(),
+      clientType: 'ADMIN',
+      rememberMe,
+    });
+    setAuthenticated(response, rememberMe);
+  }, [setAuthenticated]);
 
   const logout = useCallback(async () => {
     const refreshToken = getRefreshToken() ?? undefined;
@@ -115,8 +132,18 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
   );
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, capabilities, status, login, logout, setUser, hasCapability }),
-    [user, capabilities, status, login, logout, setUser, hasCapability],
+    () => ({
+      user,
+      capabilities,
+      status,
+      login,
+      loginWithPin,
+      setAuthenticated,
+      logout,
+      setUser,
+      hasCapability,
+    }),
+    [user, capabilities, status, login, loginWithPin, setAuthenticated, logout, setUser, hasCapability],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

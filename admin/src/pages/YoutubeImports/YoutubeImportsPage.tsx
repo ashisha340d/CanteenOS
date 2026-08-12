@@ -4,7 +4,7 @@ import {
   YOUTUBE_IMPORT_ACTIVE_STATUSES,
   type YoutubeImportDto,
 } from '@menuboard/shared';
-import { ChefHatIcon, ExternalLinkIcon, EyeIcon, RotateCwIcon } from 'lucide-react';
+import { ChefHatIcon, ExternalLinkIcon, EyeIcon, RotateCwIcon, VideoIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -17,8 +17,8 @@ import { DataTable, type DataTableColumn } from '../../components/DataTable/Data
 import { useViewMode } from '../../components/DataTable/gridState';
 import { EntityCardGrid } from '../../components/EntityCardGrid';
 import { ListToolbar } from '../../components/ListToolbar';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Modal } from '../../components/Modal/Modal';
-import { PageHeader } from '../../components/ui/PageHeader';
 import { StatusChip } from '../../components/StatusChip';
 import {
   useCreateYoutubeImport,
@@ -29,10 +29,32 @@ import {
 import { readError } from '../../services/errorMessage';
 import { enumOptions } from '@/lib/options';
 import { notify } from '@/lib/notify';
+import { cn } from '@/lib/utils';
 import { YoutubeImportDetailDialog } from './YoutubeImportDetailDialog';
 
 function isActive(row: YoutubeImportDto): boolean {
   return YOUTUBE_IMPORT_ACTIVE_STATUSES.includes(row.status);
+}
+
+/**
+ * Hotlinked straight from YouTube's own CDN — same as the detail dialog. Nothing here is
+ * downloaded or written to the media library; the URL is only ever what yt-dlp reported.
+ */
+function VideoThumbnail({ row, className }: { row: YoutubeImportDto; className?: string }): JSX.Element {
+  return (
+    <div
+      className={cn(
+        'bg-muted text-muted-foreground flex items-center justify-center overflow-hidden rounded-md border',
+        className,
+      )}
+    >
+      {row.thumbnailUrl ? (
+        <img src={row.thumbnailUrl} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <VideoIcon className="size-4 opacity-50" />
+      )}
+    </div>
+  );
 }
 
 /**
@@ -88,6 +110,13 @@ export function YoutubeImportsPage(): JSX.Element {
   }
 
   const columns: DataTableColumn<YoutubeImportDto>[] = [
+    {
+      field: 'thumbnailUrl',
+      headerName: 'Thumbnail',
+      width: 72,
+      sortable: false,
+      renderCell: (r) => <VideoThumbnail row={r} className="size-11" />,
+    },
     {
       field: 'videoTitle',
       headerName: 'Video',
@@ -238,9 +267,11 @@ export function YoutubeImportsPage(): JSX.Element {
   return (
     <>
       <PageHeader
-        title="YouTube Recipe Downloader"
-        subtitle="Paste a YouTube cooking video, let it process in the background, then review the extracted recipe and save it into the Recipe Master."
+        eyebrow="Catalogue/Collection"
+        title="Youtube Recipe Downloader"
+        subtitle="Pull a recipe out of a video, then review and correct the extraction before it becomes a recipe."
       />
+
       <ListToolbar
         search={search}
         onSearchChange={setSearch}
@@ -291,6 +322,7 @@ export function YoutubeImportsPage(): JSX.Element {
           emptyAction={{ label: 'Import video', onClick: () => setImportOpen(true) }}
           renderCard={(r) => (
             <div className="flex h-full flex-col gap-2.5">
+              <VideoThumbnail row={r} className="aspect-video w-full" />
               <div className="flex items-start justify-between gap-2">
                 <p className="min-w-0 text-[0.9375rem] leading-snug font-semibold">
                   {r.videoTitle ?? `Video ${r.youtubeVideoId}`}

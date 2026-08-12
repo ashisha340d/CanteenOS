@@ -1,9 +1,5 @@
 import { useMemo, useState } from 'react';
 import { MasterStatus, type MenuCategoryDto } from '@menuboard/shared';
-import { UtensilsIcon } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { SelectField } from '@/components/form/fields';
 import { DeleteAction, EditAction, RowActions } from '@/components/RowActions';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
@@ -11,24 +7,14 @@ import { DataTable, type DataTableColumn } from '../../components/DataTable/Data
 import { useViewMode } from '../../components/DataTable/gridState';
 import { EntityCardGrid } from '../../components/EntityCardGrid';
 import { ListToolbar } from '../../components/ListToolbar';
-import { PageHeader } from '../../components/ui/PageHeader';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusChip } from '../../components/StatusChip';
-import {
-  useDeleteMenuCategory,
-  useMenuCategories,
-  useUpdateMenuCategory,
-} from '../../hooks/useMasters';
-import { enumOptions } from '@/lib/options';
+import { useDeleteMenuCategory, useMenuCategories, useUpdateMenuCategory } from '../../hooks/useMasters';
 import { notify } from '@/lib/notify';
+import { enumOptions } from '@/lib/options';
 import { MenuCategoryFormModal } from './MenuCategoryFormModal';
 
-/**
- * Master of Menu Items (docs/AGENTS.md decision rule): a category has a related child list,
- * so double-click drills down to its items instead of opening Edit. Edit stays available as
- * a row action.
- */
 export function MenuCategoriesPage(): JSX.Element {
-  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<MasterStatus | ''>('');
   const [page, setPage] = useState(1);
@@ -70,19 +56,6 @@ export function MenuCategoriesPage(): JSX.Element {
       alwaysVisible: true,
       renderCell: (r) => (
         <RowActions>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => navigate(`/menu-items?categoryId=${r.id}`)}
-                aria-label={`View items in ${r.name}`}
-              >
-                <UtensilsIcon />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>View items</TooltipContent>
-          </Tooltip>
           <EditAction label={r.name} onClick={() => setEditing(r)} />
           <DeleteAction
             label={r.name}
@@ -117,48 +90,54 @@ export function MenuCategoriesPage(): JSX.Element {
     );
   }
 
+  const categoryToolbar = (
+    <ListToolbar
+      search={search}
+      onSearchChange={(v) => {
+        setSearch(v);
+        setPage(1);
+      }}
+      activeFilterCount={status ? 1 : 0}
+      onClearFilters={() => {
+        setStatus('');
+        setPage(1);
+      }}
+      filters={
+        <SelectField
+          label="Status"
+          value={status}
+          onChange={(v) => {
+            setStatus(v as MasterStatus | '');
+            setPage(1);
+          }}
+          emptyLabel="All statuses"
+          options={enumOptions(MasterStatus)}
+        />
+      }
+      view={view}
+      onViewChange={setView}
+      page={page}
+      pageSize={pageSize}
+      total={data?.meta.total ?? 0}
+      onPageChange={setPage}
+      onPageSizeChange={(size) => {
+        setPageSize(size);
+        setPage(1);
+      }}
+      onCreate={() => setEditing(null)}
+      createLabel="New category"
+    />
+  );
+
   return (
     <>
       <PageHeader
-        title="Menu"
-        subtitle="Categories group the items an order can be built from. Open one to edit its items."
+        eyebrow="Menu"
+        title="Menu Categories"
+        subtitle="How the menu is divided for the people reading it. Drag a row to change the order categories appear in."
       />
-      <ListToolbar
-        search={search}
-        onSearchChange={(v) => {
-          setSearch(v);
-          setPage(1);
-        }}
-        activeFilterCount={status ? 1 : 0}
-        onClearFilters={() => {
-          setStatus('');
-          setPage(1);
-        }}
-        filters={
-          <SelectField
-            label="Status"
-            value={status}
-            onChange={(v) => {
-              setStatus(v as MasterStatus | '');
-              setPage(1);
-            }}
-            emptyLabel="All statuses"
-            options={enumOptions(MasterStatus)}
-          />
-        }
-        view={view}
-        onViewChange={setView}
-        page={page}
-        pageSize={pageSize}
-        total={data?.meta.total ?? 0}
-        onPageChange={setPage}
-        onPageSizeChange={(size) => {
-          setPageSize(size);
-          setPage(1);
-        }}
-        onCreate={() => setEditing(null)}
-        createLabel="New category"
-      />
+
+      {categoryToolbar}
 
       {view === 'table' ? (
         <DataTable
@@ -167,7 +146,7 @@ export function MenuCategoriesPage(): JSX.Element {
           rows={data?.items ?? []}
           getRowId={(r) => r.id}
           loading={isLoading}
-          onRowDoubleClick={(r) => navigate(`/menu-items?categoryId=${r.id}`)}
+          onRowDoubleClick={(r) => setEditing(r)}
           rowReorder
           onRowReorder={onRowReorder}
           filtered={filtersActive}
@@ -180,7 +159,7 @@ export function MenuCategoriesPage(): JSX.Element {
           rows={data?.items ?? []}
           getRowId={(r) => r.id}
           loading={isLoading}
-          onCardDoubleClick={(r) => navigate(`/menu-items?categoryId=${r.id}`)}
+          onCardDoubleClick={(r) => setEditing(r)}
           filtered={filtersActive}
           emptyTitle="No categories yet"
           emptyMessage="Group your menu items so they are quick to find when building an order."
@@ -194,7 +173,6 @@ export function MenuCategoriesPage(): JSX.Element {
               <p className="text-muted-foreground flex-1 text-sm">
                 {r.description ?? 'No description'}
               </p>
-              <p className="text-primary text-xs font-medium">Open items →</p>
             </div>
           )}
         />

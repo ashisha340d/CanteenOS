@@ -5,10 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { CheckboxField, NumberField, SelectField, SwitchField } from '@/components/form/fields';
-import { PageHeader } from '../../components/ui/PageHeader';
 import { StatGridSkeleton } from '../../components/ui/Skeletons';
 import { alertsApi } from '@/api/alerts';
 import { useAlertSettings, useAlertSounds, useUpdateAlertSetting, useUploadAlertSound } from '../../hooks/useAlerts';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { enumOptions, humanise } from '@/lib/options';
 import { notify } from '@/lib/notify';
 import { cn } from '@/lib/utils';
@@ -47,17 +47,17 @@ export function AlertsPage(): JSX.Element {
   const { data: settings, isLoading: settingsLoading } = useAlertSettings();
 
   if (soundsLoading || settingsLoading || !sounds || !settings) {
-    return (
-      <>
-        <PageHeader title="Alerts" subtitle="Alarm sounds and when each one fires." />
-        <StatGridSkeleton count={3} />
-      </>
-    );
+    return <StatGridSkeleton count={3} />;
   }
 
   return (
     <>
-      <PageHeader title="Alerts" subtitle="Alarm sounds and when each one fires." />
+      <PageHeader
+        eyebrow="Records"
+        title="Alerts"
+        subtitle="The buzzers every device downloads, and the conditions that set them off."
+      />
+
       <div className="flex max-w-[880px] flex-col gap-8">
         <section>
           <h2 className="font-heading text-base font-semibold">Alarm sounds</h2>

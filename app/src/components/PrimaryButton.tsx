@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ActivityIndicator, StyleSheet, Text, type PressableProps } from 'react-native';
 import { PressableScale } from './PressableScale';
-import { colors, radii, spacing, typography, fonts } from '../theme/tokens';
+import { radii, spacing, typography, fonts } from '../theme/tokens';
+import { useThemeColors } from '../theme/useThemeColors';
 
 interface Props extends PressableProps {
   label: string;
@@ -21,7 +22,17 @@ export function PrimaryButton({
   style: _ignoredStyle,
   ...rest
 }: Props): React.JSX.Element {
+  const { colors } = useThemeColors();
   const isDisabled = disabled || loading;
+  const stylesByVariant = useMemo(
+    () => ({
+      primary: { container: { backgroundColor: colors.taskBar }, textColor: colors.white, loaderColor: colors.white },
+      secondary: { container: { backgroundColor: colors.gray100 }, textColor: colors.textPrimary, loaderColor: colors.gray700 },
+      danger: { container: { backgroundColor: colors.danger500 }, textColor: colors.white, loaderColor: colors.white },
+      ghost: { container: { backgroundColor: 'transparent' }, textColor: colors.taskBar, loaderColor: colors.taskBar },
+    }),
+    [colors],
+  );
   const variantStyle = stylesByVariant[variant];
   const sizeStyle = size === 'sm' ? styles.sizeSm : styles.sizeMd;
 
@@ -42,32 +53,6 @@ export function PrimaryButton({
     </PressableScale>
   );
 }
-
-// WhatsApp's own action colour — its "Send", "Save", "Done" buttons are all this teal-green,
-// not the app's indigo brand. Applied here rather than per-screen so every primary action in
-// the app (sign in, save, confirm) reads as WhatsApp's without hunting down each call site.
-const stylesByVariant = {
-  primary: {
-    container: { backgroundColor: colors.taskBar },
-    textColor: colors.white,
-    loaderColor: colors.white,
-  },
-  secondary: {
-    container: { backgroundColor: colors.gray100 },
-    textColor: colors.textPrimary,
-    loaderColor: colors.gray700,
-  },
-  danger: {
-    container: { backgroundColor: colors.danger500 },
-    textColor: colors.white,
-    loaderColor: colors.white,
-  },
-  ghost: {
-    container: { backgroundColor: 'transparent' },
-    textColor: colors.taskBar,
-    loaderColor: colors.taskBar,
-  },
-};
 
 const styles = StyleSheet.create({
   base: {

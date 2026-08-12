@@ -343,13 +343,24 @@ export class MasterService {
 
   /* ------------------------------------------------------------- menu items */
 
-  async listMenuItems(query: MasterQuery & { categoryId?: string }) {
+  async listMenuItems(query: MasterQuery & { categoryId?: string }, userId?: string) {
     const filter = pagingFor(query);
     const { rows, total } = await menuItemRepository.list(getPool(), {
       ...filter,
       ...(query.categoryId !== undefined ? { categoryId: query.categoryId } : {}),
     });
-    return buildPage(rows.map(mapMenuItem), total, filter.page, filter.pageSize);
+    return buildPage(
+      rows.map((row) => mapMenuItem(row, userId)),
+      total,
+      filter.page,
+      filter.pageSize,
+    );
+  }
+
+  async getMenuItemById(id: string, userId?: string): Promise<MenuItemDto> {
+    const row = await menuItemRepository.findById(getPool(), id);
+    if (row === null) throw new NotFoundError('Menu item', id);
+    return mapMenuItem(row, userId);
   }
 
   async createMenuItem(input: MenuItemWriteRequest, actor: AuditActor): Promise<MenuItemDto> {
@@ -365,6 +376,9 @@ export class MasterService {
         unit: input.unit,
         unitHi: input.unitHi ?? null,
         imagePath: input.imagePath ?? null,
+        basePrice: input.basePrice ?? null,
+        taxProfileId: input.taxProfileId ?? null,
+        alwaysAvailable: input.alwaysAvailable ?? true,
         status: input.status ?? MasterStatus.ACTIVE,
         sortOrder: input.sortOrder ?? 0,
         createdBy: actor.userId,
@@ -380,7 +394,7 @@ export class MasterService {
     });
 
     this.announce('menu_items', Number(row.sync_seq));
-    return mapMenuItem(row);
+    return mapMenuItem(row, actor.userId ?? undefined);
   }
 
   async updateMenuItem(
@@ -404,6 +418,11 @@ export class MasterService {
         ...(input.unit !== undefined ? { unit: input.unit } : {}),
         ...(input.unitHi !== undefined ? { unitHi: input.unitHi } : {}),
         ...(input.imagePath !== undefined ? { imagePath: input.imagePath } : {}),
+        ...(input.basePrice !== undefined ? { basePrice: input.basePrice } : {}),
+        ...(input.taxProfileId !== undefined ? { taxProfileId: input.taxProfileId } : {}),
+        ...(input.alwaysAvailable !== undefined
+          ? { alwaysAvailable: input.alwaysAvailable }
+          : {}),
         ...(input.status !== undefined ? { status: input.status } : {}),
         ...(input.sortOrder !== undefined ? { sortOrder: input.sortOrder } : {}),
       });
@@ -420,7 +439,7 @@ export class MasterService {
     });
 
     this.announce('menu_items', Number(row.sync_seq));
-    return mapMenuItem(row);
+    return mapMenuItem(row, actor.userId ?? undefined);
   }
 
   async deleteMenuItem(id: string, actor: AuditActor): Promise<void> {

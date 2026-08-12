@@ -4,20 +4,32 @@ export interface ModalGeometry {
   x: number;
   y: number;
   width: number;
-  height: number;
+  /**
+   * `null` means "as tall as the content needs", capped by the viewport. A fixed default made
+   * every dialog the same height, so a three-field form opened with a large empty gap above
+   * its footer. Dragging the resize handle replaces it with a concrete height.
+   */
+  height: number | null;
 }
 
-const GEOMETRY_PREFIX = 'menuboard.admin.modal.geometry.';
+/*
+ * `v2`: opening a dialog persists its geometry immediately, so every dialog a user had ever
+ * opened carried the old fixed 640px default. Versioning the key retires those so the
+ * content-sized default above actually takes effect; a genuine resize re-persists at once.
+ */
+const GEOMETRY_PREFIX = 'menuboard.admin.modal.geometry.v2.';
 const FORM_PREFIX = 'menuboard.admin.modal.form.';
+
+/** Roughly where a content-sized dialog will end up, used to centre it before it has a height. */
+const ASSUMED_HEIGHT = 420;
 
 function defaultGeometry(): ModalGeometry {
   const width = Math.min(720, Math.round(window.innerWidth * 0.6));
-  const height = Math.min(640, Math.round(window.innerHeight * 0.75));
   return {
     x: Math.round((window.innerWidth - width) / 2),
-    y: Math.round((window.innerHeight - height) / 2 - 20),
+    y: Math.max(16, Math.round((window.innerHeight - ASSUMED_HEIGHT) / 2 - 20)),
     width,
-    height,
+    height: null,
   };
 }
 

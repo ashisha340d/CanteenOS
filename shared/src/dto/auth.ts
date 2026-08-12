@@ -62,6 +62,82 @@ export interface RegisterPushTokenRequest {
   pushToken: string;
 }
 
+/* -------------------------------------------------------------- fast auth */
+
+export interface PinLoginRequest {
+  identifier: string;
+  pin: string;
+  deviceId: string;
+  deviceName?: string | null;
+  clientType: ClientType;
+  rememberMe?: boolean;
+}
+
+export interface PasskeyLoginOptionsRequest {
+  identifier: string;
+}
+
+/** The challenge is returned as an opaque JSON object for the browser's WebAuthn API. */
+export interface PasskeyLoginOptionsResponse {
+  options: Record<string, unknown>;
+}
+
+export interface PasskeyLoginRequest {
+  response: Record<string, unknown>;
+  deviceId: string;
+  deviceName?: string | null;
+  clientType: ClientType;
+  rememberMe?: boolean;
+}
+
+export interface RegisterPasskeyOptionsRequest {
+  currentPassword: string;
+  deviceName?: string | null;
+}
+
+export interface RegisterPasskeyOptionsResponse {
+  options: Record<string, unknown>;
+}
+
+export interface RegisterPasskeyRequest {
+  currentPassword: string;
+  response: Record<string, unknown>;
+  deviceName?: string | null;
+}
+
+export interface PasskeyDto {
+  id: Uuid;
+  credentialId: string;
+  deviceName: string | null;
+  transports: string[];
+  backupEligible: boolean;
+  backupState: boolean;
+  createdAt: IsoDateTime;
+  lastUsedAt: IsoDateTime | null;
+}
+
+export interface PasskeyListResponse {
+  passkeys: PasskeyDto[];
+}
+
+export interface RemovePasskeyRequest {
+  credentialId: string;
+  currentPassword: string;
+}
+
+export interface SetPinRequest {
+  currentPassword: string;
+  pin: string;
+}
+
+export interface RemovePinRequest {
+  currentPassword: string;
+}
+
+export interface PinStatusResponse {
+  hasPin: boolean;
+}
+
 /** Decoded access token payload. */
 export interface AccessTokenClaims {
   sub: Uuid;

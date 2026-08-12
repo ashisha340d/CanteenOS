@@ -9,7 +9,7 @@ import {
   type LoginRequest,
   type LoginResponse,
 } from '@menuboard/shared';
-import { getPool } from '../db/pool';
+import { getPool, type PoolConnection } from '../db/pool';
 import { withTransaction } from '../db/transaction';
 import type { Db } from '../db/types';
 import type { UserRow } from '../models/rows';
@@ -59,6 +59,18 @@ export class AuthService {
       throw new InvalidCredentialsError();
     }
 
+    this.assertUserCanLogin(user, input.clientType);
+    return this.startSession(user, input, meta, AuditAction.LOGIN, {
+      clientType: input.clientType,
+      deviceId: input.deviceId,
+    });
+  }
+
+  /**
+   * Validates that a user is allowed to start a session for the requested client type.
+   * Throws the same errors the password login would, so fast-auth methods behave identically.
+   */
+  assertUserCanLogin(user: UserRow, clientType: ClientType): void {
     if (user.status !== UserStatus.ACTIVE) {
       throw new AccountInactiveError(
         user.status === UserStatus.SUSPENDED
@@ -69,37 +81,50 @@ export class AuthService {
 
     // The Admin Portal is restricted to the ADMIN role only — not Super Admin, Manager,
     // User or Employee. Checked before a session is ever issued for this client type.
-    if (input.clientType === ClientType.ADMIN && user.role !== UserRole.ADMIN) {
+    if (clientType === ClientType.ADMIN && user.role !== UserRole.ADMIN) {
       throw new AdminRoleRequiredError();
     }
+  }
 
-    return withTransaction(async (connection) => {
-      // A fresh login supersedes any previous session on the same device.
-      const existing = await refreshTokenRepository.findActiveByUserDevice(
-        connection,
-        user.id,
-        input.deviceId,
-      );
-      for (const token of existing) {
-        await refreshTokenRepository.revoke(connection, token.id);
-      }
+  /**
+   * Issues a full authenticated session after the caller has already verified the user's
+   * credentials (password, PIN, or passkey). This is the single place sessions are created
+   * so fast-auth methods reuse the same refresh-token rotation, audit and capability logic.
+   */
+  async startSession(
+    user: UserRow,
+    input: { deviceId: string; deviceName?: string | null; clientType: ClientType },
+    meta: AuthRequestMeta,
+    action: AuditAction,
+    after: Record<string, unknown> = {},
+    connection?: PoolConnection,
+  ): Promise<LoginResponse> {
+    return withTransaction(
+      async (conn) => {
+        // A fresh login supersedes any previous session on the same device.
+        const existing = await refreshTokenRepository.findActiveByUserDevice(conn, user.id, input.deviceId);
+        for (const token of existing) {
+          await refreshTokenRepository.revoke(conn, token.id);
+        }
 
-      const tokens = await this.issueSession(connection, user, input, meta);
-      await userRepository.touchLastLogin(connection, user.id);
+        const tokens = await this.issueSession(conn, user, input, meta);
+        await userRepository.touchLastLogin(conn, user.id);
 
-      await auditService.record(connection, this.actorFor(user, meta), {
-        action: AuditAction.LOGIN,
-        entityType: 'user',
-        entityId: user.id,
-        after: { clientType: input.clientType, deviceId: input.deviceId },
-      });
+        await auditService.record(conn, this.actorFor(user, meta), {
+          action,
+          entityType: 'user',
+          entityId: user.id,
+          after,
+        });
 
-      return {
-        user: toAuthenticatedUser(user),
-        tokens,
-        capabilities: tokenService.capabilitiesFor(user.role, input.clientType),
-      };
-    });
+        return {
+          user: toAuthenticatedUser(user),
+          tokens,
+          capabilities: tokenService.capabilitiesFor(user.role, input.clientType),
+        };
+      },
+      connection,
+    );
   }
 
   /**
@@ -293,7 +318,7 @@ export class AuthService {
   private async issueSession(
     db: Db,
     user: UserRow,
-    input: LoginRequest,
+    input: { deviceId: string; deviceName?: string | null; clientType: ClientType },
     meta: AuthRequestMeta,
   ): Promise<AuthTokens> {
     const refresh = tokenService.createRefreshToken();
@@ -326,7 +351,7 @@ export class AuthService {
     };
   }
 
-  private async recordFailedLogin(
+  async recordFailedLogin(
     db: Db,
     identifier: string,
     meta: AuthRequestMeta,

@@ -14,6 +14,8 @@ const ASSET_DIRECTORIES = [
   ['src/db/migrations', 'dist/db/migrations'],
   // seedRecipes.ts reads this JSON at runtime relative to __dirname; tsc only emits .js.
   ['src/db/seeds/data', 'dist/db/seeds/data'],
+  // seedRealMenu.ts reads the menu cover image at runtime relative to __dirname.
+  ['src/db/seeds/assets', 'dist/db/seeds/assets'],
 ];
 
 for (const [from, to] of ASSET_DIRECTORIES) {
