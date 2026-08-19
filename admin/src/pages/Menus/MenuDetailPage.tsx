@@ -13,15 +13,17 @@ import { DeleteAction, EditAction, RowActions } from '@/components/RowActions';
 import { BackButton } from '../../components/BackButton';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { StatusChip } from '../../components/StatusChip';
-import { menuCategoriesApi, menuItemsApi } from '../../api/masters';
+import { CATALOGUE_NONE, menuCategoriesApi, menuItemsApi } from '../../api/masters';
+import { itemGroupsApi } from '../../api/menuMaster';
+import { useUpdateMenuCategory } from '../../hooks/useMasters';
 import {
-  useAssignMenuCategory,
   useAssignMenuItem,
+  useItemGroups,
   useMenu,
   useMenuCategoryAssignments,
   useMenuItemAssignments,
-  useRemoveMenuCategoryAssignment,
   useRemoveMenuItemAssignment,
+  useUpdateItemGroup,
 } from '../../hooks/useMenuMaster';
 import { notify } from '@/lib/notify';
 import { CategoryAssignmentFormModal } from './CategoryAssignmentFormModal';
@@ -35,21 +37,49 @@ export function MenuDetailPage(): JSX.Element {
   const { id: menuId = '' } = useParams();
   const { data: menu } = useMenu(menuId);
 
+  // Reads still come from the assignment rows, which carry the per-menu sort order the menu
+  // tree and POS use. Writes go to `menu_categories.catalogue_id` — the single stored fact —
+  // and MasterService derives the assignment row from it.
   const { data: categoryAssignments } = useMenuCategoryAssignments(menuId, true);
-  const assignCategory = useAssignMenuCategory(menuId);
-  const removeCategoryAssignment = useRemoveMenuCategoryAssignment(menuId);
+  const updateCategory = useUpdateMenuCategory();
+
+  const groupQuery = useMemo(() => ({ catalogueId: menuId, page: 1, pageSize: 100 }), [menuId]);
+  const { data: groups } = useItemGroups(groupQuery);
+  const updateGroup = useUpdateItemGroup();
 
   const itemQuery = useMemo(() => ({ menuId, page: 1, pageSize: 100 }), [menuId]);
   const { data: itemAssignments } = useMenuItemAssignments(itemQuery);
   const assignItem = useAssignMenuItem(menuId);
   const removeItemAssignment = useRemoveMenuItemAssignment();
 
+  // Only unassigned categories are offerable: one already on another catalogue would have to be
+  // taken off it first, and silently moving it is not this picker's decision to make.
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
   const [categorySearch, setCategorySearch] = useState('');
   const { data: categoryOptions, isFetching: categoryOptionsLoading } = useQuery({
     queryKey: ['category-picker', categorySearch],
-    queryFn: () => menuCategoriesApi.list({ search: categorySearch || undefined, page: 1, pageSize: 20 }),
+    queryFn: () =>
+      menuCategoriesApi.list({
+        search: categorySearch || undefined,
+        catalogueId: CATALOGUE_NONE,
+        page: 1,
+        pageSize: 20,
+      }),
     enabled: categoryPickerOpen,
+  });
+
+  const [groupPickerOpen, setGroupPickerOpen] = useState(false);
+  const [groupSearch, setGroupSearch] = useState('');
+  const { data: groupOptions, isFetching: groupOptionsLoading } = useQuery({
+    queryKey: ['group-picker', groupSearch],
+    queryFn: () =>
+      itemGroupsApi.list({
+        search: groupSearch || undefined,
+        catalogueId: CATALOGUE_NONE,
+        page: 1,
+        pageSize: 50,
+      }),
+    enabled: groupPickerOpen,
   });
 
   const [itemPickerOpen, setItemPickerOpen] = useState(false);
@@ -62,21 +92,40 @@ export function MenuDetailPage(): JSX.Element {
 
   const [editingCategory, setEditingCategory] = useState<MenuCategoryAssignmentDto | null>(null);
   const [editingAssignment, setEditingAssignment] = useState<MenuItemAssignmentDto | null>(null);
-  const [removingCategory, setRemovingCategory] = useState<{ id: string; name: string } | null>(null);
+  // Keyed by categoryId, not assignment id: removal now clears the category's own catalogue.
+  const [removingCategory, setRemovingCategory] = useState<{
+    categoryId: string;
+    name: string;
+  } | null>(null);
+  const [removingGroup, setRemovingGroup] = useState<{ id: string; name: string } | null>(null);
   const [removingItem, setRemovingItem] = useState<MenuItemAssignmentDto | null>(null);
 
-  const assignedCategoryIds = new Set((categoryAssignments ?? []).map((c) => c.categoryId));
   const assignedFoodItemIds = new Set((itemAssignments?.items ?? []).map((i) => i.foodItemId));
 
   async function confirmRemoveCategory(): Promise<void> {
     if (!removingCategory) return;
     try {
-      await removeCategoryAssignment.mutateAsync(removingCategory.id);
+      await updateCategory.mutateAsync({
+        id: removingCategory.categoryId,
+        body: { catalogueId: null },
+      });
       notify.success('Category removed from menu.');
       setRemovingCategory(null);
     } catch (err) {
       notify.fromError(err);
       setRemovingCategory(null);
+    }
+  }
+
+  async function confirmRemoveGroup(): Promise<void> {
+    if (!removingGroup) return;
+    try {
+      await updateGroup.mutateAsync({ id: removingGroup.id, body: { catalogueId: null } });
+      notify.success('Group removed from menu.');
+      setRemovingGroup(null);
+    } catch (err) {
+      notify.fromError(err);
+      setRemovingGroup(null);
     }
   }
 
@@ -148,10 +197,42 @@ export function MenuDetailPage(): JSX.Element {
                   aria-label={`Remove ${category.categoryName}`}
                   onClick={() =>
                     setRemovingCategory({
-                      id: category.id,
+                      categoryId: category.categoryId,
                       name: category.displayName ?? category.categoryName ?? '',
                     })
                   }
+                >
+                  <XIcon className="size-3.5" />
+                </button>
+              </Badge>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="mb-8">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="font-heading text-base font-semibold">Groups</h2>
+          <Button variant="outline" size="sm" onClick={() => setGroupPickerOpen(true)}>
+            <PlusIcon data-icon="inline-start" />
+            Add group
+          </Button>
+        </div>
+        {(groups?.items ?? []).length === 0 ? (
+          <p className="text-muted-foreground text-sm">
+            No groups on this menu yet — groups cut across categories (à la carte, combo, set
+            menu) and tag the items this menu offers.
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {(groups?.items ?? []).map((group) => (
+              <Badge key={group.id} variant="outline" className="gap-1.5 py-1.5 pr-1.5 pl-2.5">
+                <span>{group.name}</span>
+                <button
+                  type="button"
+                  className="focus-ring hover:text-destructive rounded-sm"
+                  aria-label={`Remove ${group.name}`}
+                  onClick={() => setRemovingGroup({ id: group.id, name: group.name })}
                 >
                   <XIcon className="size-3.5" />
                 </button>
@@ -236,13 +317,34 @@ export function MenuDetailPage(): JSX.Element {
         onClose={() => setCategoryPickerOpen(false)}
         loading={categoryOptionsLoading}
         onSearchChange={setCategorySearch}
-        options={(categoryOptions?.items ?? [])
-          .filter((c) => !assignedCategoryIds.has(c.id))
-          .map((c) => ({ id: c.id, label: c.name }))}
+        options={(categoryOptions?.items ?? []).map((c) => ({ id: c.id, label: c.name }))}
         onSelect={async (option) => {
           setCategoryPickerOpen(false);
           try {
-            await assignCategory.mutateAsync({ categoryId: option.id });
+            await updateCategory.mutateAsync({ id: option.id, body: { catalogueId: menuId } });
+            notify.success(`${option.label} added to menu.`);
+          } catch (err) {
+            notify.fromError(err);
+          }
+        }}
+      />
+
+      <SimplePickerDialog
+        id="menu-group"
+        title="Add group"
+        open={groupPickerOpen}
+        onClose={() => setGroupPickerOpen(false)}
+        loading={groupOptionsLoading}
+        onSearchChange={setGroupSearch}
+        options={(groupOptions?.items ?? []).map((g) => ({
+          id: g.id,
+          label: g.name,
+          ...(g.code ? { sublabel: g.code } : {}),
+        }))}
+        onSelect={async (option) => {
+          setGroupPickerOpen(false);
+          try {
+            await updateGroup.mutateAsync({ id: option.id, body: { catalogueId: menuId } });
             notify.success(`${option.label} added to menu.`);
           } catch (err) {
             notify.fromError(err);
@@ -287,12 +389,23 @@ export function MenuDetailPage(): JSX.Element {
       <ConfirmDialog
         open={Boolean(removingCategory)}
         title="Remove category"
-        message={`Remove "${removingCategory?.name}" from this menu? Refused while any item on this menu still uses it.`}
+        message={`Remove "${removingCategory?.name}" from this menu? Refused while any item on this menu still uses it. The category stays in the master, unassigned.`}
         confirmLabel="Remove"
         danger
-        loading={removeCategoryAssignment.isPending}
+        loading={updateCategory.isPending}
         onConfirm={confirmRemoveCategory}
         onCancel={() => setRemovingCategory(null)}
+      />
+
+      <ConfirmDialog
+        open={Boolean(removingGroup)}
+        title="Remove group"
+        message={`Remove "${removingGroup?.name}" from this menu? The group stays in the master, unassigned.`}
+        confirmLabel="Remove"
+        danger
+        loading={updateGroup.isPending}
+        onConfirm={confirmRemoveGroup}
+        onCancel={() => setRemovingGroup(null)}
       />
 
       <ConfirmDialog

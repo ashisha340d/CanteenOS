@@ -43,6 +43,7 @@ import type {
   UserStatus,
   YoutubeImportStatus,
 } from '../enums';
+import type { PosKdsLineStatus } from './kds';
 import type { ClockTime, IsoDate, IsoDateTime, SyncMeta, Uuid } from './common';
 
 /* ------------------------------------------------------------------ users */
@@ -204,6 +205,14 @@ export interface ActivityTypeDto extends SyncMeta {
 
 export interface MenuCategoryDto extends SyncMeta {
   id: Uuid;
+  /**
+   * The Menu Catalogue (`MenuDto.id`) this category belongs to. A category belongs to exactly
+   * one catalogue and is never shared between them. Null means it has not been filed under a
+   * catalogue yet, so it appears in the master list but on no menu.
+   */
+  catalogueId: Uuid | null;
+  /** Resolved by the SELECT for display; never written. */
+  catalogueName?: string | null;
   name: string;
   /**
    * Devanagari name, authored rather than machine-translated — a dish has one spelling the
@@ -220,6 +229,12 @@ export interface MenuCategoryDto extends SyncMeta {
 export interface MenuItemDto extends SyncMeta {
   id: Uuid;
   categoryId: Uuid;
+  /** Resolved by the SELECT for display; never written. */
+  categoryName?: string | null;
+  /** The single Item Group this dish belongs to. Null means ungrouped. */
+  groupId: Uuid | null;
+  /** Resolved by the SELECT for display; never written. */
+  groupName?: string | null;
   name: string;
   /** Devanagari name. Null falls back to `name`. */
   nameHi: string | null;
@@ -240,6 +255,11 @@ export interface MenuItemDto extends SyncMeta {
   taxProfileId: Uuid | null;
   /** When true, ignores MenuItemScheduleDto and is always available. */
   alwaysAvailable: boolean;
+  /**
+   * KDS prep target in seconds — the line's deadline on the kitchen board. Null uses the
+   * station's default (KdsConfigDto.defaultPrepSeconds).
+   */
+  prepSeconds: number | null;
   status: MasterStatus;
   sortOrder: number;
 }
@@ -257,12 +277,14 @@ export interface ActivityTypeWriteRequest extends MasterWriteRequest {
 }
 
 export interface MenuCategoryWriteRequest extends MasterWriteRequest {
+  catalogueId?: Uuid | null;
   nameHi?: string | null;
   imagePath?: string | null;
 }
 
 export interface MenuItemWriteRequest extends MasterWriteRequest {
   categoryId: Uuid;
+  groupId?: Uuid | null;
   nameHi?: string | null;
   unit: string;
   unitHi?: string | null;
@@ -270,6 +292,7 @@ export interface MenuItemWriteRequest extends MasterWriteRequest {
   basePrice?: number | null;
   taxProfileId?: Uuid | null;
   alwaysAvailable?: boolean;
+  prepSeconds?: number | null;
 }
 
 /* ------------------------------------------------------------- menu master */
@@ -475,6 +498,8 @@ export interface ResolvedMenuVariantDto {
   sortOrder: number;
   /** Resolved by variant -> menu item -> food item, first non-null wins. Never duplicated. */
   primaryMediaUrl: string | null;
+  /** What the kitchen needs for this portion. Drives the kiosk's "ready by" estimate. */
+  preparationTimeMinutes: number | null;
   allowDecimalQuantity: boolean;
   counters: string[];
   printingGroups: string[];
@@ -491,6 +516,8 @@ export interface ResolvedMenuItemDto {
   availability: AvailabilityStatus;
   sortOrder: number;
   primaryMediaUrl: string | null;
+  /** Per-menu preparation time; a variant may state its own. */
+  preparationTimeMinutes: number | null;
   allowDecimalQuantity: boolean;
   basePrice: number | null;
   variants: ResolvedMenuVariantDto[];
@@ -618,6 +645,10 @@ export interface CounterRouteWriteRequest {
 /** Reusable tag master for the Food Item Master (À La Carte, Combo Eligible, Set Menu, ...). */
 export interface ItemGroupDto extends SyncMeta {
   id: Uuid;
+  /** The Menu Catalogue this group belongs to, on the same terms as `MenuCategoryDto`. */
+  catalogueId: Uuid | null;
+  /** Resolved by the SELECT for display; never written. */
+  catalogueName?: string | null;
   name: string;
   code: string | null;
   description: string | null;
@@ -628,27 +659,12 @@ export interface ItemGroupDto extends SyncMeta {
 
 export interface ItemGroupWriteRequest {
   id?: Uuid;
+  catalogueId?: Uuid | null;
   name: string;
   code?: string | null;
   description?: string | null;
   status?: MasterStatus;
   sortOrder?: number;
-}
-
-export interface ItemGroupAssignmentDto extends SyncMeta {
-  id: Uuid;
-  foodItemId: Uuid;
-  groupId: Uuid;
-  status: MasterStatus;
-  createdBy: Uuid | null;
-  /** Denormalised from item_groups for display. */
-  groupName?: string;
-}
-
-export interface ItemGroupAssignmentWriteRequest {
-  foodItemId: Uuid;
-  groupId: Uuid;
-  status?: MasterStatus;
 }
 
 /* -------------------------------------------------------------- printing groups */
@@ -1976,6 +1992,12 @@ export interface PosOrderItemDto {
   status: PosOrderItemStatus;
   cancelledAt: IsoDateTime | null;
   cancelledBy: Uuid | null;
+  /** Kitchen/counter flow, independent of billing status. See dto/kds.ts. */
+  kdsStatus?: PosKdsLineStatus;
+  acknowledgedAt?: IsoDateTime | null;
+  acknowledgedBy?: Uuid | null;
+  servedAt?: IsoDateTime | null;
+  servedBy?: Uuid | null;
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
 }
@@ -2168,13 +2190,27 @@ export interface PosDashboardSummaryDto {
   cancelledToday: number;
   /** Money taken today across completed sales, net of reversals. */
   salesToday: number;
+  /** Money taken today grouped by payment method. */
+  salesTodayByMethod: Record<PosPaymentMethod, number>;
   /** Money still owed on active tickets. */
   outstandingAmount: number;
+}
+
+/** Live work sitting on one service counter. Idle counters are reported with a zero count. */
+export interface PosCounterLoadDto {
+  counterId: Uuid;
+  code: string | null;
+  name: string;
+  /** Drafts, scheduled and open tickets currently routed to this counter. */
+  activeCount: number;
+  /** Money still owed across those tickets. */
+  openAmount: number;
 }
 
 /** Everything the POS dashboard renders in one round trip. */
 export interface PosDashboardDto {
   summary: PosDashboardSummaryDto;
+  counterLoad: PosCounterLoadDto[];
   drafts: PosOrderDto[];
   scheduled: PosOrderDto[];
   takeaway: PosOrderDto[];

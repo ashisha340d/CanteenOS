@@ -1,0 +1,170 @@
+/*
+ * Desktop skins — the look of the OS shell itself: wallpaper, window chrome, status bar and
+ * icons. Deliberately separate from the shadcn theme (light/dark/high-contrast), which paints
+ * the *content* inside a window. A user can run a dark desktop with light page content, the
+ * way a real OS does.
+ *
+ * Selected with `data-desktop-skin` on <html>. Nothing outside this file hard-codes a value.
+ */
+
+:root,
+[data-desktop-skin='sandalwood'] {
+  --desk-window-radius: 12px;
+  --desk-bg: #fdf9f4;
+  --desk-fg: #1a1a1a;
+  --desk-accent: #c1440e;
+
+  --desk-glow-a: color-mix(in srgb, var(--desk-accent) 7%, transparent);
+  --desk-glow-b: rgba(45, 122, 45, 0.05);
+  --desk-glow-c: rgba(180, 160, 120, 0.06);
+
+  --desk-icon-hover-bg: rgba(193, 68, 14, 0.08);
+  --desk-icon-hover-border: rgba(193, 68, 14, 0.2);
+
+  --desk-chrome-from: #d2c6b2;
+  --desk-chrome-to: #b8a890;
+  --desk-chrome-idle-from: #d8cfbf;
+  --desk-chrome-idle-to: #cec3b0;
+  --desk-chrome-border: #a89880;
+  --desk-caption-fg: rgba(26, 26, 26, 0.85);
+
+  --desk-window-shadow: 0 8px 24px rgba(42, 31, 18, 0.18), 0 1px 0 rgba(255, 255, 255, 0.6) inset;
+  --desk-window-shadow-focus: 0 20px 60px rgba(42, 31, 18, 0.32), 0 4px 16px rgba(42, 31, 18, 0.18),
+    0 1px 0 rgba(255, 255, 255, 0.7) inset;
+  --desk-grip: rgba(90, 80, 60, 0.35);
+
+  --desk-bar-from: #ece4d7;
+  --desk-bar-to: #ddd2c0;
+  --desk-bar-border: #a89880;
+  --desk-bar-fg: #4a4238;
+  --desk-bevel-hi: #fff9f0;
+  --desk-bevel-lo: #b8ab97;
+  --desk-cell-bg: rgba(255, 255, 255, 0.25);
+  --desk-task-bg: rgba(255, 255, 255, 0.4);
+  --desk-task-hover-bg: rgba(255, 255, 255, 0.7);
+  --desk-task-active-bg: rgba(193, 68, 14, 0.12);
+  --desk-task-fg: #3a332a;
+}
+
+/* Graphite — low-light rooms and long shifts; the wallpaper stops competing with the content. */
+[data-desktop-skin='graphite'] {
+  --desk-window-radius: 12px;
+  --desk-bg: #17181d;
+  --desk-fg: #e6e9f0;
+  --desk-accent: #6ea8fe;
+
+  --desk-glow-a: color-mix(in srgb, var(--desk-accent) 10%, transparent);
+  --desk-glow-b: rgba(80, 120, 255, 0.06);
+  --desk-glow-c: rgba(255, 255, 255, 0.03);
+
+  --desk-icon-hover-bg: rgba(110, 168, 254, 0.12);
+  --desk-icon-hover-border: rgba(110, 168, 254, 0.3);
+
+  --desk-chrome-from: #343841;
+  --desk-chrome-to: #262930;
+  --desk-chrome-idle-from: #2b2e35;
+  --desk-chrome-idle-to: #24262c;
+  --desk-chrome-border: #464a54;
+  --desk-caption-fg: rgba(240, 242, 248, 0.9);
+
+  --desk-window-shadow: 0 8px 24px rgba(0, 0, 0, 0.45), 0 1px 0 rgba(255, 255, 255, 0.06) inset;
+  --desk-window-shadow-focus: 0 22px 60px rgba(0, 0, 0, 0.62), 0 4px 16px rgba(0, 0, 0, 0.4),
+    0 1px 0 rgba(255, 255, 255, 0.09) inset;
+  --desk-grip: rgba(200, 210, 230, 0.35);
+
+  --desk-bar-from: #23252b;
+  --desk-bar-to: #1b1d22;
+  --desk-bar-border: #3a3d45;
+  --desk-bar-fg: #c3c8d4;
+  --desk-bevel-hi: #4b505b;
+  --desk-bevel-lo: #101115;
+  --desk-cell-bg: rgba(255, 255, 255, 0.04);
+  --desk-task-bg: rgba(255, 255, 255, 0.06);
+  --desk-task-hover-bg: rgba(255, 255, 255, 0.13);
+  --desk-task-active-bg: rgba(110, 168, 254, 0.22);
+  --desk-task-fg: #dfe4ee;
+}
+
+/* Azure — cool steel, the closest to a familiar workstation; highest contrast in daylight. */
+[data-desktop-skin='azure'] {
+  --desk-window-radius: 12px;
+  --desk-bg: #eef2f7;
+  --desk-fg: #16202e;
+  --desk-accent: #0f6cbd;
+
+  --desk-glow-a: color-mix(in srgb, var(--desk-accent) 8%, transparent);
+  --desk-glow-b: rgba(0, 120, 215, 0.05);
+  --desk-glow-c: rgba(120, 140, 170, 0.06);
+
+  --desk-icon-hover-bg: rgba(15, 108, 189, 0.08);
+  --desk-icon-hover-border: rgba(15, 108, 189, 0.22);
+
+  --desk-chrome-from: #dce6f2;
+  --desk-chrome-to: #c3d3e8;
+  --desk-chrome-idle-from: #e4ebf4;
+  --desk-chrome-idle-to: #d6e0ed;
+  --desk-chrome-border: #9db3cd;
+  --desk-caption-fg: rgba(18, 28, 42, 0.85);
+
+  --desk-window-shadow: 0 8px 24px rgba(28, 48, 74, 0.16), 0 1px 0 rgba(255, 255, 255, 0.75) inset;
+  --desk-window-shadow-focus: 0 20px 60px rgba(28, 48, 74, 0.28), 0 4px 16px rgba(28, 48, 74, 0.16),
+    0 1px 0 rgba(255, 255, 255, 0.85) inset;
+  --desk-grip: rgba(70, 95, 130, 0.35);
+
+  --desk-bar-from: #e6edf6;
+  --desk-bar-to: #d3dfee;
+  --desk-bar-border: #9db3cd;
+  --desk-bar-fg: #33455c;
+  --desk-bevel-hi: #ffffff;
+  --desk-bevel-lo: #a9bcd3;
+  --desk-cell-bg: rgba(255, 255, 255, 0.45);
+  --desk-task-bg: rgba(255, 255, 255, 0.6);
+  --desk-task-hover-bg: rgba(255, 255, 255, 0.85);
+  --desk-task-active-bg: rgba(15, 108, 189, 0.14);
+  --desk-task-fg: #1d3350;
+}
+
+/*
+ * Beta — Fluent-inspired graphite. The workstation skin: flat surfaces instead of gradients,
+ * hairline borders instead of bevels, an 8px window radius and the Canteen OS brand accent
+ * (#948dff) rather than a new colour. Built for density and long operational shifts.
+ */
+[data-desktop-skin='beta'] {
+  --desk-window-radius: 8px;
+  --desk-bg: #111318;
+  --desk-fg: #e8eaed;
+  --desk-accent: #948dff;
+
+  /* Barely-there depth: a Fluent desktop is a surface, not a painting. */
+  --desk-glow-a: color-mix(in srgb, var(--desk-accent) 6%, transparent);
+  --desk-glow-b: rgba(120, 140, 200, 0.04);
+  --desk-glow-c: rgba(255, 255, 255, 0.015);
+
+  --desk-icon-hover-bg: rgba(255, 255, 255, 0.06);
+  --desk-icon-hover-border: rgba(255, 255, 255, 0.1);
+
+  /* Flat header, no gradient — the inactive state differs by ink, not by shading. */
+  --desk-chrome-from: #22252b;
+  --desk-chrome-to: #22252b;
+  --desk-chrome-idle-from: #1c1f24;
+  --desk-chrome-idle-to: #1c1f24;
+  --desk-chrome-border: #2e323a;
+  --desk-caption-fg: rgba(232, 234, 237, 0.92);
+
+  --desk-window-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --desk-window-shadow-focus: 0 12px 32px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.35);
+  --desk-grip: rgba(190, 198, 212, 0.3);
+
+  --desk-bar-from: #15171c;
+  --desk-bar-to: #111318;
+  --desk-bar-border: #2a2e36;
+  --desk-bar-fg: #b9bec7;
+  /* Hairlines, not bevels: both "edges" are the same low-contrast line. */
+  --desk-bevel-hi: #2a2e36;
+  --desk-bevel-lo: #2a2e36;
+  --desk-cell-bg: rgba(255, 255, 255, 0.03);
+  --desk-task-bg: rgba(255, 255, 255, 0.04);
+  --desk-task-hover-bg: rgba(255, 255, 255, 0.09);
+  --desk-task-active-bg: color-mix(in srgb, var(--desk-accent) 20%, transparent);
+  --desk-task-fg: #dfe2e8;
+}

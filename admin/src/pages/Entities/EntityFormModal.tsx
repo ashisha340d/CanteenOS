@@ -2,14 +2,17 @@ import { useState } from 'react';
 import { EntityType, LIMITS, MasterStatus, type EntityDto, type EntityWriteRequest } from '@menuboard/shared';
 import { useQuery } from '@tanstack/react-query';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import { FieldGroup, NumberField, SelectField, TextField } from '@/components/form/fields';
 import { FormModalFooter } from '@/components/form/FormModalFooter';
 import { Modal } from '../../components/Modal/Modal';
 import { usePersistedFormState } from '../../components/Modal/modalState';
 import { SearchPickerField } from '../../components/SearchPickerField';
+import { ingredientsApi } from '../../api/ingredients';
 import { usersApi } from '../../api/users';
 import { useCreateEntity, useUpdateEntity } from '../../hooks/useEntities';
 import { readError } from '../../services/errorMessage';
+import { notify } from '@/lib/notify';
 import { enumOptions } from '@/lib/options';
 
 interface FormValues {
@@ -108,6 +111,7 @@ export function EntityFormModal({
 
   const { value, setValue, clear } = usePersistedFormState<FormValues>(modalId, initial, open);
   const [error, setError] = useState<string | null>(null);
+  const [translating, setTranslating] = useState(false);
   const [userSearch, setUserSearch] = useState('');
   const create = useCreateEntity();
   const update = useUpdateEntity();
@@ -120,6 +124,19 @@ export function EntityFormModal({
     queryFn: () => usersApi.list({ search: userSearch || undefined, page: 1, pageSize: 20 }),
     enabled: open && isEmployee,
   });
+
+  async function onTranslate(): Promise<void> {
+    if (!value.name.trim()) return;
+    setTranslating(true);
+    try {
+      const { translated } = await ingredientsApi.translate(value.name);
+      setValue({ ...value, nameHi: translated });
+    } catch (err) {
+      notify.fromError(err);
+    } finally {
+      setTranslating(false);
+    }
+  }
 
   async function onSubmit(e: React.FormEvent): Promise<void> {
     e.preventDefault();
@@ -191,12 +208,24 @@ export function EntityFormModal({
             maxLength={LIMITS.ENTITY_NAME_MAX}
           />
 
-          <TextField
-            label="Name (Hindi)"
-            value={value.nameHi}
-            onChange={(e) => setValue({ ...value, nameHi: e.target.value })}
-            maxLength={LIMITS.ENTITY_NAME_MAX}
-          />
+          <div className="flex items-end gap-2">
+            <TextField
+              className="flex-1"
+              label="Name (Hindi)"
+              value={value.nameHi}
+              onChange={(e) => setValue({ ...value, nameHi: e.target.value })}
+              maxLength={LIMITS.ENTITY_NAME_MAX}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={translating || !value.name.trim()}
+              onClick={onTranslate}
+            >
+              {translating ? 'Translating…' : 'हिंदी →'}
+            </Button>
+          </div>
 
           <TextField
             label="Code"

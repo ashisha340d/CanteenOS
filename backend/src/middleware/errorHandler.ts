@@ -45,15 +45,10 @@ export function errorHandler(
   const requestId = req.context?.requestId ?? '';
   const appError = normalise(error);
 
-  if (appError.expected) {
-    logger.warn('Request failed', {
-      requestId,
-      code: appError.code,
-      status: appError.statusCode,
-      path: req.originalUrl.split('?')[0],
-      userId: req.auth?.userId,
-    });
-  } else {
+  // Expected errors (bad input, wrong credentials, a refused transition) are ordinary client
+  // behaviour — they go to the client in the envelope and nowhere else. Only a genuine fault
+  // is worth a log line.
+  if (!appError.expected) {
     logger.error(
       'Unhandled request error',
       {

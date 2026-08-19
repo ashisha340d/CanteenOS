@@ -12,6 +12,7 @@ import { getPool } from '../db/pool';
 import { withTransaction } from '../db/transaction';
 import { mapMediaAsset, mapMediaAssignment } from '../models/mappers';
 import { mediaAssetRepository, mediaAssignmentRepository } from '../repositories/MediaRepository';
+import { menuBoardRealtime } from '../realtime/menuBoardSocket';
 import { AttachmentKind } from '@menuboard/shared';
 import { ConflictError, NotFoundError, UnsupportedMediaTypeError } from '../utils/errors';
 import { buildPage, resolvePaging } from '../utils/http';
@@ -210,6 +211,10 @@ export class MediaService {
       });
       return created;
     });
+    // Every one of these entity types is something a board's resolved menu tree can carry a
+    // photo for (see `MenuMasterService.getMenuTree`'s media-inheritance chain); a board that
+    // just displayed an item with no photo needs to know the moment one lands on it.
+    menuBoardRealtime.announceChange(`media:assign:${input.entityType}`);
     return mapMediaAssignment(row);
   }
 
@@ -224,6 +229,7 @@ export class MediaService {
         entityId: id,
       });
     });
+    menuBoardRealtime.announceChange('media:unassign');
   }
 
   /** Makes this assignment the entity's primary image, demoting any previous one. */
@@ -248,6 +254,7 @@ export class MediaService {
       });
       return updated;
     });
+    menuBoardRealtime.announceChange('media:setPrimary');
     return mapMediaAssignment(row);
   }
 
@@ -263,6 +270,7 @@ export class MediaService {
         after: { sortOrder },
       });
     });
+    menuBoardRealtime.announceChange('media:reorder');
   }
 }
 

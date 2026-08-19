@@ -1,5 +1,4 @@
 import { MediaEntityType } from '@menuboard/shared';
-import { useQuery } from '@tanstack/react-query';
 import { ChefHatIcon, ImageIcon, PencilIcon } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
@@ -7,14 +6,9 @@ import { Button } from '@/components/ui/button';
 import { BackButton } from '../../components/BackButton';
 import { PageSkeleton } from '../../components/ui/Skeletons';
 import { StatusChip } from '../../components/StatusChip';
-import { menuCategoriesApi } from '../../api/masters';
 import { useMediaForEntity } from '@/hooks/useMedia';
 import { useMenuItem } from '../../hooks/useMasters';
-import {
-  useItemGroupsForFoodItem,
-  useMenuItemSchedule,
-  useMenuItemVariants,
-} from '../../hooks/useMenuMaster';
+import { useMenuItemSchedule, useMenuItemVariants } from '../../hooks/useMenuMaster';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -30,16 +24,10 @@ export function MenuItemDetailPage(): JSX.Element {
   const { data: item, isLoading } = useMenuItem(id);
   const { data: images } = useMediaForEntity(MediaEntityType.MENU_ITEM, id);
   const { data: variants } = useMenuItemVariants(id);
-  const { data: groups } = useItemGroupsForFoodItem(id);
   const { data: schedule } = useMenuItemSchedule(id);
 
-  const { data: categories } = useQuery({
-    queryKey: ['menu-category-resolve-all'],
-    queryFn: () => menuCategoriesApi.list({ page: 1, pageSize: 200 }),
-    enabled: Boolean(item?.categoryId),
-  });
-  const categoryName =
-    categories?.items.find((c) => c.id === item?.categoryId)?.name ?? item?.categoryId ?? '—';
+  const categoryName = item?.categoryName ?? item?.categoryId ?? '—';
+  const groupName = item?.groupName ?? item?.groupId ?? '—';
 
   if (isLoading || !item) return <PageSkeleton />;
 
@@ -141,17 +129,11 @@ export function MenuItemDetailPage(): JSX.Element {
             <h2 className="font-heading mb-3 text-base font-semibold">Groups & Availability</h2>
             <div className="flex flex-col gap-3 text-sm">
               <div>
-                <p className="text-muted-foreground mb-1.5 text-xs font-medium">Item groups</p>
-                {(groups ?? []).length === 0 ? (
-                  <p className="text-muted-foreground">Not tagged to any group.</p>
+                <p className="text-muted-foreground mb-1.5 text-xs font-medium">Item group</p>
+                {groupName ? (
+                  <Badge variant="outline">{groupName}</Badge>
                 ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {(groups ?? []).map((assignment) => (
-                      <Badge key={assignment.id} variant="outline">
-                        {assignment.groupName ?? assignment.groupId}
-                      </Badge>
-                    ))}
-                  </div>
+                  <p className="text-muted-foreground">Not tagged to any group.</p>
                 )}
               </div>
               <div>

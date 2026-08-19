@@ -3,7 +3,7 @@ import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
 import { create } from 'zustand';
 import { AlertSoundSlot, AlertType, type OrderDto } from '@menuboard/shared';
-import { API_BASE_URL, apiClient } from '../api/client';
+import { apiClient, getApiBaseUrl } from '../api/client';
 import { alertSettingsRepository } from '../db/repositories';
 import { secureTokenStore } from '../utils/secureTokenStore';
 import { useUiStore } from '../state/uiStore';
@@ -30,12 +30,35 @@ export const useNewOrderAlertStore = create<NewOrderAlertState>((set) => ({
     set((state) => ({ flashOrderIds: state.flashOrderIds.filter((x) => x !== id) })),
 }));
 
-export async function notifyNewOrders(orders: OrderDto[]): Promise<void> {
-  if (orders.length === 0) return;
+/**
+ * Order ids already buzzed for, with the time they were buzzed.
+ *
+ * The same order reaches this module twice — once when the sync pull notices a row it has
+ * never seen, and once when the push notification for it arrives — and without this the
+ * device buzzes twice for one order.
+ */
+const alertedAt = new Map<string, number>();
+const ALERT_DEDUPE_MS = 60_000;
 
-  // The flash ids are set synchronously, before any await, so the pull worker can bump
-  // dataVersion right after this call and the reloading feed already knows what to flash.
-  useNewOrderAlertStore.getState().addFlash(orders.map((order) => order.id));
+function claimUnalerted(orderIds: readonly string[]): string[] {
+  const now = Date.now();
+  for (const [id, at] of alertedAt) {
+    if (now - at > ALERT_DEDUPE_MS) alertedAt.delete(id);
+  }
+  const fresh = orderIds.filter((id) => !alertedAt.has(id));
+  for (const id of fresh) alertedAt.set(id, now);
+  return fresh;
+}
+
+/**
+ * Buzz for orders that just landed, with the sound the admin configured for NEW_INCOMING.
+ *
+ * Safe to call from both the pull worker and the push listener — the second caller for a
+ * given order is deduped away.
+ */
+export async function playNewOrderAlert(orderIds: readonly string[]): Promise<void> {
+  const fresh = claimUnalerted(orderIds);
+  if (fresh.length === 0) return;
 
   const setting = await alertSettingsRepository.findByType(AlertType.NEW_INCOMING);
   if (setting !== null && !setting.enabled) return;
@@ -43,6 +66,32 @@ export async function notifyNewOrders(orders: OrderDto[]): Promise<void> {
 
   if (Platform.OS !== 'web') Vibration.vibrate([0, 300, 150, 300]);
   await playAlertSound(setting?.sound ?? AlertSoundSlot.NORMAL);
+}
+
+export async function notifyNewOrders(orders: OrderDto[]): Promise<void> {
+  if (orders.length === 0) return;
+
+  // The flash ids are set synchronously, before any await, so the pull worker can bump
+  // dataVersion right after this call and the reloading feed already knows what to flash.
+  useNewOrderAlertStore.getState().addFlash(orders.map((order) => order.id));
+
+  await playNewOrderAlert(orders.map((order) => order.id));
+}
+
+/**
+ * A chat message landing from someone else.
+ *
+ * Deliberately quieter than an order: the WARNING slot is a different buzzer from the one
+ * NEW_INCOMING uses, and the vibration is a single short tick rather than the order's
+ * double pulse, so the two are distinguishable without looking at the screen.
+ */
+export async function playNewMessageAlert(messageIds: readonly string[]): Promise<void> {
+  const fresh = claimUnalerted(messageIds);
+  if (fresh.length === 0) return;
+  if (!useUiStore.getState().notificationSoundEnabled) return;
+
+  if (Platform.OS !== 'web') Vibration.vibrate(120);
+  await playAlertSound(AlertSoundSlot.WARNING);
 }
 
 /** Resolved buzzer URIs, per slot, for this session. */
@@ -69,7 +118,7 @@ async function resolveSoundUri(slot: AlertSoundSlot): Promise<string | null> {
 
     const token = secureTokenStore.getAccessToken();
     const result = await FileSystem.downloadAsync(
-      `${API_BASE_URL}/alerts/sounds/${slot}/file`,
+      `${getApiBaseUrl()}/alerts/sounds/${slot}/file`,
       `${FileSystem.cacheDirectory}alert-sound-${slot}`,
       token ? { headers: { Authorization: `Bearer ${token}` } } : {},
     );

@@ -26,15 +26,23 @@ import {
   stationRepository,
   type MasterListFilter,
 } from '../repositories/MasterRepository';
+import {
+  itemGroupRepository,
+  menuCategoryAssignmentRepository,
+  menuRepository,
+} from '../repositories/MenuMasterRepository';
 import { realtime } from '../realtime/RealtimeGateway';
 import { ConflictError, NotFoundError } from '../utils/errors';
 import { buildPage, resolvePaging } from '../utils/http';
 import { newId } from '../utils/ids';
 import { AuditAction, auditService, type AuditActor } from './AuditService';
+import type { Db } from '../db/types';
 
 export interface MasterQuery {
   search?: string;
   status?: MasterStatus;
+  /** A menu id narrows to one Menu Catalogue; `null` asks for the unfiled rows. */
+  catalogueId?: string | null;
   page?: number;
   pageSize?: number;
 }
@@ -44,6 +52,7 @@ function pagingFor(query: MasterQuery): MasterListFilter & { page: number; pageS
   return {
     ...(query.search !== undefined ? { search: query.search } : {}),
     ...(query.status !== undefined ? { status: query.status } : {}),
+    ...(query.catalogueId !== undefined ? { catalogueId: query.catalogueId } : {}),
     limit: pageSize,
     offset,
     page,
@@ -250,6 +259,66 @@ export class MasterService {
 
   /* -------------------------------------------------------- menu categories */
 
+  /**
+   * Keeps `menu_category_assignments` in step with the category's `catalogue_id`.
+   *
+   * `catalogue_id` is the fact the operator states; the assignment row is the derived record
+   * the kiosk, the menu tree, POS and `menu_item_assignments.category_assignment_id` all still
+   * read. Writing only the column would silently leave those consumers showing the old menu.
+   *
+   * Moving a category that already has items filed under it on the old menu is refused rather
+   * than performed: those `menu_item_assignments` rows point at the assignment being retired,
+   * and dragging them to a different menu behind the operator's back is not a decision this
+   * function is entitled to make.
+   */
+  private async syncCategoryAssignment(
+    db: Db,
+    categoryId: string,
+    catalogueId: string | null,
+    actor: AuditActor,
+  ): Promise<void> {
+    if (catalogueId !== null) {
+      const menu = await menuRepository.findById(db, catalogueId);
+      if (menu === null) throw new NotFoundError('Menu catalogue', catalogueId);
+    }
+
+    const existing = await menuCategoryAssignmentRepository.listForCategory(db, categoryId);
+
+    for (const assignment of existing) {
+      if (assignment.menu_id === catalogueId) continue;
+      const itemCount = await menuCategoryAssignmentRepository.countItemReferences(
+        db,
+        assignment.id,
+      );
+      if (itemCount > 0) {
+        throw new ConflictError(
+          `This category still has ${itemCount} item(s) on its current catalogue; move or remove them before changing the catalogue`,
+        );
+      }
+      await menuCategoryAssignmentRepository.softDelete(db, assignment.id);
+    }
+
+    if (catalogueId === null) return;
+    if (existing.some((assignment) => assignment.menu_id === catalogueId)) return;
+
+    await menuCategoryAssignmentRepository.insert(db, {
+      id: newId(),
+      menuId: catalogueId,
+      categoryId,
+      // Every override stays null: with one catalogue per category there is nothing to override,
+      // and the assignment falls back to the category's own name, description and visibility.
+      displayName: null,
+      displayNameHi: null,
+      description: null,
+      descriptionHi: null,
+      status: MasterStatus.ACTIVE,
+      sortOrder: 0,
+      posVisible: true,
+      boardVisible: true,
+      createdBy: actor.userId,
+    });
+  }
+
   async listMenuCategories(query: MasterQuery) {
     const filter = pagingFor(query);
     const { rows, total } = await menuCategoryRepository.list(getPool(), filter);
@@ -261,8 +330,10 @@ export class MasterService {
     actor: AuditActor,
   ): Promise<MenuCategoryDto> {
     const row = await withTransaction(async (connection) => {
+      const catalogueId = input.catalogueId ?? null;
       const created = await menuCategoryRepository.insert(connection, {
         id: input.id ?? newId(),
+        catalogueId,
         name: input.name,
         nameHi: input.nameHi ?? null,
         description: input.description ?? null,
@@ -272,11 +343,13 @@ export class MasterService {
         createdBy: actor.userId,
       });
 
+      await this.syncCategoryAssignment(connection, created.id, catalogueId, actor);
+
       await auditService.record(connection, actor, {
         action: AuditAction.MASTER_CREATED,
         entityType: 'menu_category',
         entityId: created.id,
-        after: { name: created.name },
+        after: { name: created.name, catalogueId },
       });
       return created;
     });
@@ -295,6 +368,7 @@ export class MasterService {
       if (before === null) throw new NotFoundError('Menu category', id);
 
       const updated = await menuCategoryRepository.update(connection, id, {
+        ...(input.catalogueId !== undefined ? { catalogueId: input.catalogueId } : {}),
         ...(input.name !== undefined ? { name: input.name } : {}),
         ...(input.nameHi !== undefined ? { nameHi: input.nameHi } : {}),
         ...(input.description !== undefined ? { description: input.description } : {}),
@@ -304,12 +378,16 @@ export class MasterService {
       });
       if (updated === null) throw new NotFoundError('Menu category', id);
 
+      if (input.catalogueId !== undefined && input.catalogueId !== before.catalogue_id) {
+        await this.syncCategoryAssignment(connection, id, input.catalogueId, actor);
+      }
+
       await auditService.record(connection, actor, {
         action: AuditAction.MASTER_UPDATED,
         entityType: 'menu_category',
         entityId: id,
-        before: { name: before.name, status: before.status },
-        after: { name: updated.name, status: updated.status },
+        before: { name: before.name, status: before.status, catalogueId: before.catalogue_id },
+        after: { name: updated.name, status: updated.status, catalogueId: updated.catalogue_id },
       });
       return updated;
     });
@@ -330,6 +408,9 @@ export class MasterService {
         );
       }
 
+      // The derived assignment row goes with it, or the catalogue would keep listing a category
+      // that no longer exists. countActiveItems above already guaranteed nothing is filed here.
+      await this.syncCategoryAssignment(connection, id, null, actor);
       await menuCategoryRepository.softDelete(connection, id);
       await auditService.record(connection, actor, {
         action: AuditAction.MASTER_DELETED,
@@ -343,11 +424,12 @@ export class MasterService {
 
   /* ------------------------------------------------------------- menu items */
 
-  async listMenuItems(query: MasterQuery & { categoryId?: string }, userId?: string) {
+  async listMenuItems(query: MasterQuery & { categoryId?: string; groupId?: string }, userId?: string) {
     const filter = pagingFor(query);
     const { rows, total } = await menuItemRepository.list(getPool(), {
       ...filter,
       ...(query.categoryId !== undefined ? { categoryId: query.categoryId } : {}),
+      ...(query.groupId !== undefined ? { groupId: query.groupId } : {}),
     });
     return buildPage(
       rows.map((row) => mapMenuItem(row, userId)),
@@ -371,6 +453,7 @@ export class MasterService {
       const created = await menuItemRepository.insert(connection, {
         id: input.id ?? newId(),
         categoryId: input.categoryId,
+        groupId: input.groupId ?? null,
         name: input.name,
         nameHi: input.nameHi ?? null,
         unit: input.unit,
@@ -379,6 +462,7 @@ export class MasterService {
         basePrice: input.basePrice ?? null,
         taxProfileId: input.taxProfileId ?? null,
         alwaysAvailable: input.alwaysAvailable ?? true,
+        prepSeconds: input.prepSeconds ?? null,
         status: input.status ?? MasterStatus.ACTIVE,
         sortOrder: input.sortOrder ?? 0,
         createdBy: actor.userId,
@@ -410,9 +494,14 @@ export class MasterService {
         const category = await menuCategoryRepository.findById(connection, input.categoryId);
         if (category === null) throw new NotFoundError('Menu category', input.categoryId);
       }
+      if (input.groupId !== undefined && input.groupId !== null) {
+        const group = await itemGroupRepository.findById(connection, input.groupId);
+        if (group === null) throw new NotFoundError('Item group', input.groupId);
+      }
 
       const updated = await menuItemRepository.update(connection, id, {
         ...(input.categoryId !== undefined ? { categoryId: input.categoryId } : {}),
+        ...(input.groupId !== undefined ? { groupId: input.groupId } : {}),
         ...(input.name !== undefined ? { name: input.name } : {}),
         ...(input.nameHi !== undefined ? { nameHi: input.nameHi } : {}),
         ...(input.unit !== undefined ? { unit: input.unit } : {}),
@@ -423,6 +512,7 @@ export class MasterService {
         ...(input.alwaysAvailable !== undefined
           ? { alwaysAvailable: input.alwaysAvailable }
           : {}),
+        ...(input.prepSeconds !== undefined ? { prepSeconds: input.prepSeconds } : {}),
         ...(input.status !== undefined ? { status: input.status } : {}),
         ...(input.sortOrder !== undefined ? { sortOrder: input.sortOrder } : {}),
       });

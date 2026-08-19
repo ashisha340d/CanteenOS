@@ -266,8 +266,16 @@ export function OrderItemsEditor({
                       selectTextOnFocus
                       onChangeText={(text) => {
                         const parsed = Number(text.replace(/[^0-9.]/g, ''));
+                        // Clamped like the steppers are. Typing went straight to `patchLine`
+                        // and so skipped `setQuantity`'s ceiling entirely, letting a typed
+                        // figure exceed LIMITS.QUANTITY_MAX and fail server validation only
+                        // after the order had been posted. Zero stays reachable on purpose —
+                        // the field has to be clearable to retype — and the composer's own
+                        // submit gate is what refuses to post a zero-quantity line.
                         patchLine(line.key, {
-                          quantity: Number.isFinite(parsed) ? parsed : 0,
+                          quantity: Number.isFinite(parsed)
+                            ? Math.min(Math.max(parsed, 0), LIMITS.QUANTITY_MAX)
+                            : 0,
                         });
                       }}
                     />

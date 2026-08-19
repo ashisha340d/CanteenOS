@@ -1,316 +1,668 @@
-# Canteen OS Development Skills
+# Canteen OS UI Engineering Skill
 
-This skill configuration applies to the complete Canteen OS codebase.
+## Mission
 
-Canteen OS contains:
+Build production-grade Canteen OS interfaces with exceptional visual hierarchy, usability, responsiveness, accessibility, interaction quality, performance, and consistency.
 
-1. Canteen OS Web
-2. Canteen OS Expo / React Native Mobile App
-3. Shared backend/API/services
+The UI must look intentionally designed and product-specific, never like a generic AI-generated dashboard.
 
-Maintain the correct technology for each platform.
+## Platform Classification
 
-WEB APPLICATION
-
-The Canteen OS web application uses Smart UI Community Edition as its primary UI component system.
-
-Keep and use capabilities for:
-
-Frontend development
-React
-TypeScript
-Smart UI Community Edition
-Smart UI Web Components
-UI component migration
-UI architecture
-CSS
-Themes
-Skins
-Responsive UI
-Accessibility
-Frontend performance
-State management
-API integration
-Browser testing
-E2E testing
-
-Smart UI must be used for appropriate web UI components wherever a Community Edition equivalent exists.
-
-Do not introduce Professional, Enterprise, paid, or trial-only Smart UI functionality.
-
-Do not assume a feature exists in Community Edition without verifying the actual installed package/version.
-
-MOBILE APPLICATION
-
-The Canteen OS mobile application is an Expo / React Native application.
-
-Keep and use capabilities for:
-
-Expo
-React Native
-TypeScript
-Expo Router if used by the existing application
-React Native navigation
-React Native UI
-Mobile gestures
-Mobile animations
-Mobile state management
-Mobile API integration
-Expo build workflows
-Android
-iOS where applicable
-Mobile performance
-Mobile accessibility
-Mobile testing
-E2E mobile testing
-
-Do not migrate the Expo mobile application to Smart UI Web Components.
-
-Do not force web UI components into the native mobile application.
-
-The mobile application must remain a proper Expo / React Native application.
-
-CANTEEN OS MOBILE UX REQUIREMENT
-
-The Canteen OS mobile application must have a WhatsApp-like interaction model and overall UX familiarity.
-
-Use WhatsApp as the UX reference for interaction patterns, information hierarchy, navigation behavior, messaging behavior, and mobile ergonomics.
-
-Do not copy WhatsApp proprietary branding, logos, icons, assets, source code, or exact visual identity.
-
-The target is WhatsApp-like UX behavior, not a visual clone.
-
-The mobile experience should use familiar patterns such as:
-
-Conversation-first navigation
-Chat list
-Conversation screen
-Message bubbles
-Message grouping
-Unread counts
-Unread separators
-Read/seen states where applicable
-Typing/input behavior
-Persistent message composer
-Attachment/media actions
-Camera/gallery interaction
-Voice/message actions where applicable
-Swipe gestures
-Long-press contextual actions
-Message context menus
-Reply-to-message behavior
-Forward/share behavior where applicable
-Search
-Conversation search
-Pinned conversations where applicable
-Archived conversations where applicable
-Mute/notification controls where applicable
-Message timestamps
-Date separators
-Infinite/virtualized message history
-Optimistic message sending
-Sending state
-Delivered state
-Read state
-Failed state
-Retry
-Offline-aware behavior
-Network reconnection
-Push notifications
-Deep linking into conversations
-Notification navigation
-Unread synchronization
-Background synchronization
-Pull-to-refresh where appropriate
-Keyboard-aware layouts
-Keyboard dismissal
-Safe-area handling
-Touch-friendly controls
-Native mobile gestures
-Smooth transitions
-Native-feeling animations
-Mobile loading states
-Empty states
-Error states
-
-The UX must feel native to a modern messaging application.
-
-Avoid desktop-web behavior inside the mobile application.
-
-Do not use tiny desktop controls.
-
-Do not use desktop-style dense tables on mobile.
-
-Do not reproduce web sidebars where a native mobile navigation pattern is more appropriate.
-
-Use native React Native components and Expo capabilities for mobile interactions.
-
-The mobile app should maintain consistent interaction patterns throughout all modules.
-
-If the application contains operational workflows such as orders, tasks, notifications, staff communication, kitchen communication, or other conversation-based workflows, present them using the appropriate mobile interaction patterns rather than simply shrinking the web interface.
-
-SHARED ARCHITECTURE
-
-Keep shared:
-
-API contracts
-Authentication
-Authorization
-Business logic
-Data models
-Validation rules
-Network services
-Relevant state/data services
-
-Do not duplicate business logic unnecessarily between Web and Mobile.
-
-Keep platform-specific presentation separate.
-
-SKILLS TO KEEP
+Before touching any file, classify the work.
 
 Web:
-Frontend
-React
-TypeScript
-Smart UI Community Edition
-Smart UI Web Components
-CSS
-Themes
-Skins
-Responsive UI
-Accessibility
-Frontend performance
-Browser testing
-E2E testing
+React + TypeScript + shadcn/ui + Smart UI Community Edition.
 
 Mobile:
-Expo
-React Native
-TypeScript
-Expo Router if applicable
-Mobile UI
-Mobile UX
-Navigation
-Gestures
-Animations
-Push notifications
-Deep linking
-Mobile API integration
-Mobile performance
-Android
-iOS where applicable
-Mobile testing
-E2E testing
+Expo + React Native + TypeScript.
 
 Shared:
-Refactoring
-Code quality
-Testing
-Debugging
-Git
-GitHub
-Dependency management
-Build verification
-API integration
+API contracts, authentication, business logic, validation, types, and data models only. No UI framework.
 
-DO NOT USE FOR THIS TASK
+If a change spans multiple platforms, separate shared logic from platform-specific presentation.
 
-Do not search for or install additional skills unless a genuinely missing capability blocks implementation.
+## Web UI Stack
 
-Do not install documentation skills.
+shadcn/ui is the DEFAULT UI system.
 
-Do not install README skills.
+Use shadcn/ui for:
+Buttons
+Inputs
+Forms
+Cards
+Dialogs
+Drawers
+Sheets
+Dropdowns
+Menus
+Tabs
+Navigation
+Tooltips
+Command interfaces
+Badges
+Alerts
+Typography
+Layout primitives
+General application UI
+Design tokens
 
-Do not install changelog skills.
+Use Smart UI Community Edition for specialized components where it provides meaningful functionality that shadcn/ui does not adequately provide, particularly advanced data-oriented or operational UI.
 
-Do not install technical-writing skills.
+Smart UI Community Edition and shadcn/ui must coexist cleanly.
 
-Do not install architecture-documentation skills.
+Do not use Smart UI Professional.
+Do not use Smart UI Enterprise.
+Do not use trial-only Smart UI functionality.
+Do not introduce paid Smart UI dependencies.
 
-Do not install design-documentation skills.
+Never use Smart UI Web Components inside the Expo application.
 
-Do not install generic skill-discovery skills.
+Do not use Smart UI merely because it exists when shadcn/ui is the better implementation.
 
-Do not install unrelated framework skills.
+Do not recreate a shadcn component with Smart UI without a technical reason.
 
-Do not install unrelated DevOps skills unless deployment is explicitly required.
+Do not recreate Smart UI functionality with shadcn when the required Community Edition component already exists and is appropriate.
 
-Do not install unrelated database skills unless database inspection is required.
+## shadcn Rules
 
-Do not waste ACUs searching for skills unrelated to the current implementation.
+Inspect the project's existing shadcn configuration before adding components.
 
-DOCUMENTATION
+Check:
+components.json
+package.json
+lockfile
+Tailwind version
+existing components
+aliases
+theme variables
+icon library
+existing component customizations
 
-Do not create documentation during implementation.
+Use the project's package manager.
 
-Do not create README files.
+Use the shadcn CLI when adding or inspecting shadcn components.
 
-Do not create migration reports.
+Before overwriting an existing customized component, inspect the diff first.
 
-Do not create architecture documents.
+Preserve existing local customizations unless the requested change explicitly requires replacing them.
 
-Do not create changelogs.
+Do not manually fetch raw shadcn component files when the CLI can resolve the component.
 
-Do not create technical documentation.
+Do not install components blindly.
 
-Documentation will be created separately after implementation is stable.
+Only install what the implementation actually requires.
 
-PLATFORM RULE
+## Smart UI Verification
 
-Before modifying code, determine whether it belongs to:
+Never assume a Smart UI feature exists in Community Edition.
 
-Canteen OS Web
-Canteen OS Expo Mobile
-Shared code
+Before using Smart UI:
+Inspect the installed package version.
+Verify the component exists in the installed Community Edition.
+Verify the required functionality is supported.
+Verify its current API and imports.
 
-Use Smart UI for the Web application.
+If the required functionality is Pro/Enterprise-only, do not use it.
 
-Use Expo / React Native for the Mobile application.
+Implement the equivalent with shadcn/ui, React, CSS, or existing application code.
 
-Do not mix platform-specific UI technologies.
+Do not introduce a paid dependency to solve a UI problem.
 
-Do not rewrite working mobile architecture merely to make it visually similar to the Web application.
+## First Action
 
-The Web and Mobile applications should share the same Canteen OS product identity, data, business behavior, terminology, permissions, and workflows while using platform-appropriate UI.
+Before editing:
 
-MOBILE QUALITY TARGET
+Identify the platform.
+Inspect the actual repository.
+Inspect package.json and lockfile.
+Inspect existing UI components.
+Inspect existing design tokens.
+Inspect routing and layouts.
+Inspect relevant feature components.
+Inspect existing patterns for forms, tables, dialogs, drawers, navigation, loading, errors, and empty states.
 
-The mobile application should feel like a purpose-built messaging application rather than a responsive web application packaged inside Expo.
+Do not assume architecture or dependencies.
+
+Once sufficient evidence exists, implement immediately.
+
+Do not spend excessive time exploring alternatives that will not change the implementation.
+
+## Design Quality
+
+Every screen must have deliberate:
+
+Visual hierarchy.
+Information hierarchy.
+Spacing.
+Typography.
+Alignment.
+Interaction states.
+Responsive behavior.
+Accessibility.
+Loading behavior.
+Empty states.
+Error states.
+Success states.
+
+Avoid generic SaaS-dashboard aesthetics unless the existing product specifically uses them.
+
+Avoid excessive cards.
+Avoid unnecessary gradients.
+Avoid decorative UI without functional value.
+Avoid excessive rounded containers.
+Avoid tiny text.
+Avoid excessive shadows.
+Avoid inconsistent spacing.
+Avoid random colors.
+Avoid unnecessary animations.
+
+Canteen OS should have a coherent visual language across the application.
+
+## Design System
+
+Use centralized design tokens.
+
+Define and reuse tokens for:
+
+Colors.
+Typography.
+Spacing.
+Radius.
+Borders.
+Shadows.
+Elevation.
+Motion.
+Breakpoints.
+Component dimensions.
+
+Prefer semantic tokens such as:
+
+background
+foreground
+muted
+border
+primary
+secondary
+success
+warning
+danger
+surface
+surface-elevated
+
+Do not scatter arbitrary color values throughout components.
+
+Do not introduce one-off visual styles when an existing token or component can be reused.
+
+## Typography
+
+Use a deliberate type hierarchy:
+
+Page title.
+Section title.
+Component title.
+Body.
+Secondary text.
+Metadata.
+Labels.
+Numerical data.
+
+Do not make every heading bold.
+
+Do not make operational metadata unnecessarily small.
+
+Prices, quantities, totals, counts, sales figures, and other numerical values must have clear visual hierarchy and consistent alignment.
+
+## Layout
+
+Use the appropriate layout system.
+
+CSS Grid:
+Structured multi-column layouts and dashboards.
+
+Flexbox:
+One-dimensional alignment and component composition.
+
+Avoid absolute positioning for normal page layout.
+
+Avoid unnecessary fixed heights.
+
+Avoid layouts that break with long text or dynamic content.
+
+Maintain consistent content widths and gutters.
+
+Use an 8px-oriented spacing system unless the existing product system dictates otherwise.
+
+## Responsive Design
+
+Responsive design must be intentional.
+
+Desktop:
+Optimize for productivity, scanning, and multi-column workflows.
+
+Tablet:
+Reduce density while preserving operational functionality.
+
+Mobile:
+Optimize for touch, readability, vertical flow, and focused actions.
+
+Never simply shrink a desktop dashboard onto a phone.
+
+Dense desktop tables should become appropriate mobile structures such as:
+
+Lists.
+Expandable rows.
+Sections.
+Drawers.
+Bottom sheets.
+Focused detail views.
+Conversation views.
+
+## Mobile UI
+
+Expo Mobile must use native React Native patterns.
+
+Do not port Smart UI Web Components into Mobile.
+
+Do not copy desktop web layouts into Mobile.
+
+For operational or conversational workflows such as orders, tasks, notifications, staff communication, and kitchen communication, use messaging-app ergonomics where appropriate.
+
+Conversation list:
+Avatar or icon.
+Title.
+Latest activity.
+Timestamp.
+Unread state.
+Status.
+
+Conversation:
+Message/event bubbles.
+Timestamp.
+Status indicators.
+Contextual actions.
+Quick actions.
+Composer/action area.
+
+Use Canteen OS branding and terminology.
+
+Do not clone WhatsApp branding, assets, logos, or proprietary visual identity.
+
+## Interaction Design
+
+Every interactive component must have clear states:
+
+Default.
+Hover.
+Focus.
+Pressed.
+Disabled.
+Loading.
+Success.
+Error.
+
+Buttons must communicate action hierarchy.
+
+Use one visually dominant primary action per context.
+
+Secondary actions should remain visually subordinate.
+
+Destructive actions must be clearly distinguishable.
+
+Do not make unrelated actions look equally important.
+
+## Forms
+
+Forms must have:
+
+Visible labels.
+Correct input types.
+Logical grouping.
+Inline validation.
+Useful error messages.
+Loading state.
+Submit state.
+Keyboard navigation.
+Logical tab order.
+
+Never rely on placeholders as the only field labels.
+
+Do not ask users to re-enter information already available in application state.
+
+## Tables and Data
+
+Use tables when users need rapid comparison and scanning.
+
+Tables should provide appropriate:
+
+Column hierarchy.
+Numerical alignment.
+Row density.
+Sorting.
+Filtering.
+Pagination or virtualization when required.
+Sticky headers where useful.
+Loading state.
+Empty state.
+Error state.
+
+Do not add complex table functionality merely for visual sophistication.
+
+For very large datasets, prioritize rendering performance.
+
+## Operational UI
+
+For POS, KDS, kitchen, staff, orders, inventory, tasks, and operational screens:
+
+Prioritize speed of recognition and action.
+
+Important information should be immediately visible.
 
 Prioritize:
+Order/task identity.
+Status.
+Quantity.
+Time.
+Priority.
+Assigned person.
+Required action.
 
-Fast startup
-Smooth scrolling
-60 FPS interaction where practical
-Virtualized lists
-Optimistic interactions
-Reliable message synchronization
-Offline/reconnection handling
-Keyboard correctness
-Gesture correctness
-Push notification behavior
-Deep linking
-Native navigation
-Touch ergonomics
-Consistent mobile interaction patterns
+Minimize unnecessary interaction steps.
 
-The final mobile UX should feel immediately familiar to users accustomed to WhatsApp while remaining distinctly branded and designed for Canteen OS.
+Use large enough controls for rapid interaction.
 
+Support keyboard workflows where appropriate on desktop.
 
-Keep the platform separation exactly as you have it.
+Do not sacrifice operational efficiency for decorative design.
 
-Make Smart UI Community Edition a hard Web-only rule.
+## Navigation
 
-Make the mobile WhatsApp-like requirement an explicit UX target, while allowing Canteen OS-specific workflows.
+Users must always understand:
 
-Add one important execution rule: inspect first, then execute; do not spend excessive time producing analysis before making changes.
+Where they are.
+What section they are viewing.
+What actions are available.
+How to return or navigate elsewhere.
 
-I would also remove the repeated “skills to keep” sections. Devin already knows its available skills; the important thing is defining which capabilities it should use and which it should avoid.
+Use persistent navigation where the product requires it.
 
-The biggest addition I recommend is:
+Use breadcrumbs only when hierarchical navigation benefits the user.
 
-“Do not optimize for theoretical completeness. Prioritize implementation speed, correctness, and removal of redundant code. Make decisions autonomously when the existing codebase provides enough evidence.”
+Avoid excessive nested navigation.
 
-That will help prevent Devin from burning ACUs endlessly analyzing the repository.
+## Dialogs, Drawers, and Sheets
 
-Your current configuration is approximately 8/10. With that polish, I would consider it ready for the migration.
+Use a dialog for focused decisions or short tasks.
+
+Use a drawer/sheet for contextual workflows that should preserve the underlying page.
+
+Use a dedicated page for large or complex workflows.
+
+Do not put an entire application inside a modal.
+
+Support:
+Keyboard focus.
+Escape.
+Accessible labels.
+Clear close action.
+Loading.
+Error handling.
+
+## Feedback
+
+Use the correct feedback mechanism.
+
+Toast:
+Short-lived confirmation.
+
+Inline feedback:
+Contextual validation or information.
+
+Dialog:
+Important decisions.
+
+Banner:
+Page-level or system-level conditions.
+
+Do not hide critical information exclusively inside transient toasts.
+
+## Animation
+
+Animation must communicate state, hierarchy, or spatial relationships.
+
+Use subtle, short transitions.
+
+Animate:
+Opening.
+Closing.
+Reordering.
+Loading.
+State changes.
+Navigation.
+
+Avoid decorative continuous animation.
+
+Avoid excessive bounce effects.
+
+Avoid animation that delays user interaction.
+
+Respect reduced-motion preferences.
+
+## Accessibility
+
+Target WCAG 2.2 AA.
+
+Ensure:
+
+Semantic HTML.
+Keyboard navigation.
+Visible focus.
+Accessible names.
+Correct labels.
+Logical heading hierarchy.
+Sufficient contrast.
+Accessible form controls.
+Screen-reader-compatible interactions.
+Appropriate touch targets.
+No information conveyed only through color.
+
+Never remove focus indicators without providing an accessible alternative.
+
+## Component Architecture
+
+Use the existing component architecture before creating new abstractions.
+
+Prefer:
+
+UI primitives
+→ composed UI components
+→ feature components
+→ page composition
+
+Create reusable components when the same visual structure or behavior is genuinely repeated.
+
+Do not create abstractions prematurely.
+
+Do not duplicate components with slightly different styling.
+
+Keep business logic separate from presentation.
+
+## State Architecture
+
+Separate:
+
+Server state.
+UI state.
+Form state.
+Navigation state.
+
+Use the existing application state architecture.
+
+Do not introduce another state-management library unless genuinely required.
+
+Do not duplicate server state unnecessarily.
+
+## Shared Logic
+
+Business rules must exist once.
+
+Shared code owns:
+
+Validation.
+Business rules.
+API contracts.
+Types.
+Data models.
+Authentication rules.
+
+Web and Mobile consume shared logic.
+
+Do not reimplement business rules independently in Web and Mobile.
+
+## Performance
+
+Avoid unnecessary renders.
+
+Virtualize genuinely large lists.
+
+Lazy-load expensive features where appropriate.
+
+Optimize image sizes.
+
+Avoid unnecessary dependencies.
+
+Avoid loading assets that are not needed.
+
+Do not introduce premature optimization that damages maintainability.
+
+## Visual Verification
+
+After implementation, inspect the rendered UI.
+
+Verify:
+
+Alignment.
+Spacing.
+Typography.
+Responsive behavior.
+Overflow.
+Long text.
+Large numerical values.
+Large datasets.
+Loading states.
+Empty states.
+Error states.
+Hover states.
+Focus states.
+Disabled states.
+Small screens.
+Large screens.
+
+Fix visible defects before completion.
+
+## Code Quality
+
+Remove redundant code encountered during implementation.
+
+Remove dead imports.
+
+Remove unused components.
+
+Remove duplicated styles.
+
+Reuse existing components where appropriate.
+
+Do not introduce unrelated dependencies.
+
+Follow existing repository conventions unless they demonstrably conflict with this skill.
+
+## Implementation Workflow
+
+Classify.
+
+Inspect.
+
+Verify dependencies.
+
+Verify shadcn configuration.
+
+Verify Smart UI Community Edition capability where applicable.
+
+Identify existing patterns.
+
+Implement.
+
+Remove redundant/dead code encountered during implementation.
+
+Run relevant tests.
+
+Run the relevant production/build verification.
+
+Inspect the rendered result.
+
+Fix defects.
+
+Stop.
+
+## Hard Restrictions
+
+Never use Smart UI Professional.
+
+Never use Smart UI Enterprise.
+
+Never use trial-only Smart UI functionality.
+
+Never use Smart UI Web Components in Expo Mobile.
+
+Never replace working mobile architecture merely to match Web visually.
+
+Never duplicate shared business logic.
+
+Never install unrelated dependencies.
+
+Never create documentation as part of implementation.
+
+Never create README files.
+
+Never create migration reports.
+
+Never create architecture reports.
+
+Never create changelogs.
+
+Never spend excessive time on theoretical alternatives after the repository provides sufficient evidence.
+
+## Definition of Done
+
+The implementation is complete only when:
+
+The correct platform technology was used.
+
+shadcn/ui is used as the default Web UI system.
+
+Smart UI Community Edition is used only where appropriate.
+
+No prohibited Smart UI dependency was introduced.
+
+The UI follows the existing Canteen OS design language.
+
+The interface is responsive.
+
+The interaction states are complete.
+
+Loading, empty, error, and success states exist where relevant.
+
+Accessibility requirements are satisfied.
+
+The implementation reuses existing components appropriately.
+
+Shared business logic remains shared.
+
+Dead and redundant implementation code introduced or encountered during the change has been removed where safe.
+
+Relevant tests pass.
+
+Relevant build verification passes.
+
+The rendered UI has been inspected and obvious defects have been corrected.
+
+Stop after completing the implementation.

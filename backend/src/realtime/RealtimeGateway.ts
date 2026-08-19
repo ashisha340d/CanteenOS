@@ -1,6 +1,23 @@
 import type { Server as SocketServer } from 'socket.io';
-import { SOCKET_EVENTS, SOCKET_ROOMS, type SyncEntity } from '@menuboard/shared';
+import {
+  KDS_SOCKET_EVENTS,
+  SOCKET_EVENTS,
+  SOCKET_ROOMS,
+  type CdsBillDto,
+  type CdsLiveDto,
+  type SyncEntity,
+} from '@menuboard/shared';
 import { logger } from '../utils/logger';
+
+/**
+ * Kitchen/customer display rooms. Not in shared's SOCKET_ROOMS because the KDS display is a
+ * first-class client of these rooms alone — the sync clients never join them.
+ */
+export const KDS_REALTIME_ROOMS = {
+  kdsCounter: (counterId: string): string => `kds:counter:${counterId}`,
+  kdsKitchen: (printingGroupId: string): string => `kds:kitchen:${printingGroupId}`,
+  cdsCounter: (counterId: string): string => `cds:counter:${counterId}`,
+} as const;
 
 /**
  * Socket.IO emission façade.
@@ -102,7 +119,44 @@ export class RealtimeGateway {
     this.emit(SOCKET_ROOMS.user(userId), SOCKET_EVENTS.SYNC_HINT, { cursor });
   }
 
-  private emit(room: string, event: string, payload: Record<string, unknown>): void {
+  /**
+   * Same hint discipline as the board rooms: the payload names the scope and nothing more,
+   * the display refetches its own queue.
+   */
+  emitKdsChanged(scope: { counterId?: string; printingGroupId?: string }): void {
+    if (scope.counterId !== undefined) {
+      this.emit(KDS_REALTIME_ROOMS.kdsCounter(scope.counterId), KDS_SOCKET_EVENTS.KDS_CHANGED, {
+        counterId: scope.counterId,
+      });
+    }
+    if (scope.printingGroupId !== undefined) {
+      this.emit(
+        KDS_REALTIME_ROOMS.kdsKitchen(scope.printingGroupId),
+        KDS_SOCKET_EVENTS.KDS_CHANGED,
+        { printingGroupId: scope.printingGroupId },
+      );
+    }
+  }
+
+  /**
+   * The customer display is the one channel whose payload IS the data: a pre-printed QR has
+   * no refetch trigger of its own, so the bill itself goes out with the event. Null clears
+   * the screen — the counter has no open ticket.
+   */
+  emitCdsBill(counterId: string, bill: CdsBillDto | null): void {
+    this.emit(KDS_REALTIME_ROOMS.cdsCounter(counterId), KDS_SOCKET_EVENTS.CDS_BILL, bill);
+  }
+
+  /**
+   * The till's unsaved cart, relayed verbatim from the POS socket (after the server's own
+   * validation and QR enrichment in socketServer). Nothing is stored — a display that joins
+   * late simply waits for the next keystroke. Null clears the live view.
+   */
+  emitCdsLive(counterId: string, live: CdsLiveDto | null): void {
+    this.emit(KDS_REALTIME_ROOMS.cdsCounter(counterId), KDS_SOCKET_EVENTS.CDS_LIVE, live);
+  }
+
+  private emit(room: string, event: string, payload: unknown): void {
     if (this.io === null) return;
     try {
       this.io.to(room).emit(event, payload);

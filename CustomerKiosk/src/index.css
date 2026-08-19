@@ -1,0 +1,546 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/fraunces';
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/noto-sans-devanagari';
+
+/*
+ * Kiosk tokens.
+ *
+ * Nothing in a component names a colour, a radius or a duration; everything resolves here.
+ * That is what makes the skin switchable at all: the Admin Portal picks one of four, the
+ * kiosk stamps it on <html data-skin>, and every surface in the hall follows without a
+ * component knowing a skin exists.
+ *
+ * The four are all quiet. A canteen run by a spiritual organisation is not a promotion, so
+ * each skin carries exactly one accent and one trim — a second would make the hall look like
+ * a food-delivery app, which is the failure mode this palette exists to avoid.
+ *
+ * `@theme` below is Sandalwood, the default; the three `[data-skin]` blocks override only the
+ * tokens that differ. Semantic names (`accent`, `trim`) rather than pigment names (`saffron`,
+ * `gold`), because the accent is saffron in one skin and lamp-gold in another.
+ */
+
+@theme {
+  --font-sans: 'Inter Variable', 'Segoe UI', system-ui, sans-serif;
+  --font-display: 'Fraunces Variable', 'Iowan Old Style', Georgia, serif;
+  --font-hindi: 'Noto Sans Devanagari Variable', 'Nirmala UI', sans-serif;
+
+  /*
+   * A fluid scale, because the same build runs on a 10-inch tablet held at arm's length and
+   * on a 27-inch portrait panel read from two metres. Fixed rem sizes serve exactly one of
+   * those well; every step below is tied to the viewport between a floor and a ceiling.
+   */
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1.4;
+  --text-2xs--letter-spacing: 0.24em;
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.5;
+  --text-sm: 0.9375rem;
+  --text-sm--line-height: 1.55;
+  --text-base: clamp(1rem, 0.94rem + 0.3vw, 1.15rem);
+  --text-base--line-height: 1.6;
+  --text-lg: clamp(1.1rem, 1.02rem + 0.42vw, 1.34rem);
+  --text-lg--line-height: 1.45;
+  --text-xl: clamp(1.28rem, 1.12rem + 0.75vw, 1.66rem);
+  --text-xl--line-height: 1.32;
+  --text-2xl: clamp(1.55rem, 1.26rem + 1.3vw, 2.2rem);
+  --text-2xl--line-height: 1.2;
+  --text-3xl: clamp(1.95rem, 1.45rem + 2.1vw, 3rem);
+  --text-3xl--line-height: 1.1;
+  --text-4xl: clamp(2.5rem, 1.7rem + 3.4vw, 4.2rem);
+  --text-4xl--line-height: 1.04;
+  /* The token number, which has to be legible to somebody standing well back from the stand. */
+  --text-token: clamp(4rem, 2.2rem + 7.5vw, 8rem);
+  --text-token--line-height: 0.92;
+
+  /* Surfaces — warm paper, never pure grey. */
+  --color-canvas: #faf6ef;
+  --color-canvas-deep: #f2eade;
+  --color-surface: #fffdf9;
+  --color-surface-raised: #ffffff;
+
+  /* Ink — three levels, so hierarchy never needs a colour. */
+  --color-ink: #1e1913;
+  --color-ink-soft: #6c6154;
+  --color-ink-faint: #a1968a;
+  /* What reads on top of the accent. Dark-accent skins flip this to their own canvas. */
+  --color-on-accent: #fffdf9;
+
+  --color-line: #e9e0d0;
+  --color-line-strong: #d8ccb6;
+
+  /* The hairline ornament. One metal per skin, never two. */
+  --color-trim: #c9a227;
+  --color-trim-soft: #e6d3a3;
+
+  /* One accent. A second would make the hall look like a promotion. */
+  --color-accent: #c2571a;
+  --color-accent-deep: #a5470f;
+  --color-accent-tint: #fbeee3;
+
+  --color-veg: #2f7d4f;
+  --color-veg-tint: #eaf4ee;
+  --color-danger: #a3352c;
+  --color-danger-tint: #fbeceb;
+
+  --radius-xs: 0.5rem;
+  --radius-sm: 0.75rem;
+  --radius-md: 1rem;
+  --radius-lg: 1.375rem;
+  --radius-xl: 1.875rem;
+  --radius-pill: 999px;
+
+  /* Motion. Everything that appears uses `emerge`; everything that responds uses `snap`. */
+  --ease-snap: cubic-bezier(0.22, 0.8, 0.28, 1);
+  --ease-emerge: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-instant: 120ms;
+  --duration-fast: 200ms;
+  --duration-base: 320ms;
+  --duration-slow: 520ms;
+
+  --shadow-card: 0 1px 2px rgba(60, 43, 20, 0.05), 0 12px 28px -18px rgba(60, 43, 20, 0.35);
+  --shadow-lift: 0 2px 6px rgba(60, 43, 20, 0.08), 0 26px 50px -26px rgba(60, 43, 20, 0.45);
+  --shadow-sheet: 0 -8px 60px -24px rgba(48, 33, 12, 0.45);
+}
+
+/* ------------------------------------------------------------------ the other three skins */
+
+/* Cool ivory and tulsi green. Reads calmer than Sandalwood under daylight-white hall lighting. */
+:root[data-skin='TULSI'] {
+  --color-canvas: #f7f8f4;
+  --color-canvas-deep: #ecefe6;
+  --color-surface: #fdfefb;
+  --color-surface-raised: #ffffff;
+
+  --color-ink: #161d18;
+  --color-ink-soft: #556056;
+  --color-ink-faint: #909a90;
+  --color-on-accent: #fdfefb;
+
+  --color-line: #e0e5db;
+  --color-line-strong: #c9d2c4;
+
+  --color-trim: #9a8f4a;
+  --color-trim-soft: #ddd8b6;
+
+  --color-accent: #2f6b45;
+  --color-accent-deep: #235536;
+  --color-accent-tint: #e8f1ea;
+
+  --color-veg: #2f6b45;
+  --color-veg-tint: #e8f1ea;
+  --color-danger: #97392f;
+  --color-danger-tint: #f8ecea;
+
+  --shadow-card: 0 1px 2px rgba(22, 40, 28, 0.05), 0 12px 28px -18px rgba(22, 40, 28, 0.32);
+  --shadow-lift: 0 2px 6px rgba(22, 40, 28, 0.08), 0 26px 50px -26px rgba(22, 40, 28, 0.42);
+  --shadow-sheet: 0 -8px 60px -24px rgba(18, 34, 24, 0.4);
+}
+
+/*
+ * Low-light indigo and moonlight, for an evening hall or a stand that keeps working after
+ * dark. The accent turns to lamp-gold rather than staying a bright hue: the one warm thing
+ * in a dark room should read as a flame, not as a button.
+ */
+:root[data-skin='KASHI'] {
+  --color-canvas: #12141c;
+  --color-canvas-deep: #0c0e14;
+  --color-surface: #1a1d27;
+  --color-surface-raised: #232734;
+
+  --color-ink: #ecebf3;
+  --color-ink-soft: #a8a4b9;
+  --color-ink-faint: #726e83;
+  --color-on-accent: #14110a;
+
+  --color-line: #2b2f3d;
+  --color-line-strong: #3c4154;
+
+  --color-trim: #d4b86a;
+  --color-trim-soft: #574c2e;
+
+  --color-accent: #dba849;
+  --color-accent-deep: #c4913a;
+  --color-accent-tint: #241e12;
+
+  --color-veg: #6cbf93;
+  --color-veg-tint: #16261e;
+  --color-danger: #e2857b;
+  --color-danger-tint: #2b1917;
+
+  /* Elevation in the dark is a lit edge, not a cast shadow. */
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 14px 32px -20px rgba(0, 0, 0, 0.9);
+  --shadow-lift: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 30px 60px -28px rgba(0, 0, 0, 0.95);
+  --shadow-sheet: 0 -10px 70px -26px rgba(0, 0, 0, 0.95);
+}
+
+/* Near-monochrome paper and graphite; the most austere of the four. */
+:root[data-skin='SATTVA'] {
+  --color-canvas: #f6f6f4;
+  --color-canvas-deep: #ececea;
+  --color-surface: #ffffff;
+  --color-surface-raised: #ffffff;
+
+  --color-ink: #17181a;
+  --color-ink-soft: #5d6064;
+  --color-ink-faint: #92959a;
+  --color-on-accent: #f6f6f4;
+
+  --color-line: #e4e4e1;
+  --color-line-strong: #cfcfcb;
+
+  --color-trim: #a3a099;
+  --color-trim-soft: #dbd9d3;
+
+  --color-accent: #2c2e31;
+  --color-accent-deep: #17181a;
+  --color-accent-tint: #ececeb;
+
+  --color-veg: #3d6b4d;
+  --color-veg-tint: #eaefeb;
+  --color-danger: #8f342c;
+  --color-danger-tint: #f5ebea;
+
+  --shadow-card: 0 1px 2px rgba(20, 20, 22, 0.05), 0 12px 28px -18px rgba(20, 20, 22, 0.28);
+  --shadow-lift: 0 2px 6px rgba(20, 20, 22, 0.07), 0 26px 50px -26px rgba(20, 20, 22, 0.36);
+  --shadow-sheet: 0 -8px 60px -24px rgba(20, 20, 22, 0.36);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-feature-settings: 'ss01', 'cv05';
+    font-optical-sizing: auto;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overscroll-behavior: none;
+    /* A skin change is a deliberate operator act, so it fades rather than snapping. */
+    transition:
+      background-color var(--duration-slow) var(--ease-emerge),
+      color var(--duration-slow) var(--ease-emerge);
+  }
+
+  /* Kiosk furniture: no text selection, no long-press callout, no blue tap flash. */
+  body,
+  button {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    user-select: none;
+  }
+
+  /*
+   * Devanagari sits on a heavier baseline than Latin and needs more room between lines, so a
+   * bilingual card set in one leading has one of its two scripts looking cramped.
+   */
+  :lang(hi) {
+    font-family: var(--font-hindi);
+    line-height: 1.62;
+    letter-spacing: 0;
+  }
+
+  /* Fraunces carries optical size, softness and a "wonk" axis; the kiosk wants the warm,
+     humanist end of all three rather than the default cold setting. */
+  .font-display {
+    font-variation-settings:
+      'SOFT' 40,
+      'WONK' 1,
+      'opsz' 36;
+  }
+
+  button {
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: none;
+    cursor: pointer;
+  }
+
+  /* A guest never sees a focus ring (there is no keyboard), but the setup screen is used by
+     staff with one, and removing the ring outright would fail WCAG 2.4.7. */
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 3px;
+    border-radius: var(--radius-xs);
+  }
+
+  ::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+}
+
+@layer utilities {
+  .numeric {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+
+  /* The hairline that separates sections. Thin, warm, and never a solid rule. */
+  .hairline {
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--color-trim-soft) 18%,
+      var(--color-trim) 50%,
+      var(--color-trim-soft) 82%,
+      transparent
+    );
+  }
+
+  .press {
+    transition:
+      transform var(--duration-instant) var(--ease-snap),
+      box-shadow var(--duration-fast) var(--ease-snap),
+      background-color var(--duration-fast) var(--ease-snap),
+      border-color var(--duration-fast) var(--ease-snap);
+  }
+
+  .press:active {
+    transform: scale(0.972);
+  }
+
+  /*
+   * The bottom of a tablet in a floor stand is where a home indicator and a rounded corner
+   * live. Anything fixed to the bottom edge clears them, or the last row of dishes is
+   * unreachable on exactly the hardware this app is built for.
+   */
+  .safe-bottom {
+    padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
+  }
+
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  /* Lottie renders its own SVG with baked fills; this makes one follow the skin's ink. */
+  .lottie-tint svg path,
+  .lottie-tint svg ellipse,
+  .lottie-tint svg rect {
+    fill: currentColor;
+  }
+
+  .lottie-tint svg path[stroke],
+  .lottie-tint svg ellipse[stroke] {
+    stroke: currentColor;
+  }
+}
+
+/* ------------------------------------------------------------------ animation */
+
+@keyframes kiosk-emerge {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0) scale(0.994);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes kiosk-rise {
+  from {
+    transform: translate3d(0, 100%, 0);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes kiosk-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes kiosk-pop {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes kiosk-sheen {
+  0% {
+    transform: translateX(-120%);
+  }
+  60%,
+  100% {
+    transform: translateX(220%);
+  }
+}
+
+@keyframes kiosk-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/*
+ * The dish travelling to the basket.
+ *
+ * An arc rather than a straight line, and the arc is the point: a puck sliding diagonally
+ * across a screen reads as a UI element being moved, while one that rises first and then falls
+ * into the basket reads as a thing being put somewhere. The midpoint lifts and holds most of
+ * its size; the last third is where it shrinks and fades, so the eye arrives at the basket
+ * with the puck rather than losing it halfway.
+ */
+@keyframes kiosk-fly {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 1;
+  }
+  55% {
+    transform: translate3d(calc(var(--fly-x) * 0.55), calc(var(--fly-y) * 0.34 - 56px), 0)
+      scale(0.78);
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(var(--fly-x), var(--fly-y), 0) scale(0.22);
+    opacity: 0;
+  }
+}
+
+/* The basket taking the delivery. Scaled, never translated — a bar that moves is a bar the
+   next tap misses. */
+@keyframes kiosk-receive {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  38% {
+    transform: scale(1.075);
+  }
+  70% {
+    transform: scale(0.985);
+  }
+}
+
+/* A stage arriving. Paired with `kiosk-emerge` on the incoming screen, this is what makes the
+   cart feel like it slid in over the menu rather than replacing it between two frames. */
+@keyframes kiosk-slide-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 22px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes kiosk-greet {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0) scale(0.96);
+    letter-spacing: 0.3em;
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+    letter-spacing: normal;
+  }
+}
+
+.animate-emerge {
+  animation: kiosk-emerge var(--duration-base) var(--ease-emerge) both;
+}
+.animate-rise {
+  animation: kiosk-rise var(--duration-base) var(--ease-emerge) both;
+}
+.animate-fade {
+  animation: kiosk-fade var(--duration-fast) var(--ease-snap) both;
+}
+.animate-pop {
+  animation: kiosk-pop var(--duration-base) var(--ease-emerge) both;
+}
+.animate-sheen {
+  animation: kiosk-sheen 2.6s var(--ease-snap) infinite;
+}
+.animate-breathe {
+  animation: kiosk-breathe 2.4s ease-in-out infinite;
+}
+.animate-stage {
+  animation: kiosk-slide-in var(--duration-base) var(--ease-emerge) both;
+}
+.animate-greet {
+  animation: kiosk-greet var(--duration-slow) var(--ease-emerge) both;
+}
+.animate-receive {
+  animation: kiosk-receive 460ms var(--ease-snap);
+}
+
+/*
+ * The flight duration is stated here rather than in the component because everything else about
+ * motion in this kiosk is a token, and a JavaScript timer that disagrees with a CSS duration is
+ * the kind of drift nobody notices until the puck vanishes before it lands. `FLIGHT_MS` in
+ * `components/FlyToCart.tsx` is the one number that has to match this.
+ */
+.kiosk-flight {
+  animation: kiosk-fly 620ms var(--ease-emerge) forwards;
+  will-change: transform, opacity;
+}
+
+/*
+ * Staggered entrance for the menu grid. The cap is the point: without it the hundredth dish
+ * on a large menu waits two and a half seconds to exist, which reads as a broken screen
+ * rather than as choreography.
+ */
+.stagger > * {
+  animation: kiosk-emerge var(--duration-base) var(--ease-emerge) both;
+  animation-delay: calc(min(var(--i, 0), 11) * 26ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}
+
+/* ------------------------------------------------------------------ printing
+ *
+ * There is no print stylesheet, and its absence is deliberate.
+ *
+ * The kiosk prints over ESC/POS only — straight to a printer on the tablet, or to the counter
+ * printer over the network (see `src/print/index.ts`). It used to carry a third route: an HTML
+ * rendering of the bill laid out for 80 mm roll paper, printed through the browser's own
+ * dialog. That path produced an approximation of a GST document on whatever paper the tablet's
+ * default printer held, and raised a modal an unattended guest could not dismiss.
+ *
+ * If it ever comes back, it needs its own screen and a member of staff standing at it — not a
+ * silent fallback that makes a misconfigured stand look like a working one.
+ */
+
+@media print {
+  /* Nothing here is a document. A stray Ctrl+P should waste one sheet, not forty. */
+  body {
+    display: none;
+  }
+}

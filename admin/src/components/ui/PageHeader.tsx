@@ -32,7 +32,7 @@ export function PageHeader({
   className,
 }: PageHeaderProps): JSX.Element {
   return (
-    <header className={cn('mb-6', className)}>
+    <header className={cn('page-header mb-6', className)}>
       {leading}
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end sm:gap-4">
         <div className="min-w-0">

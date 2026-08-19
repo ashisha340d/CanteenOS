@@ -13,7 +13,8 @@ import { getDb } from '../src/db/client';
 import { LoadingScreen } from '../src/components/LoadingScreen';
 import { syncEngine } from '../src/sync/syncEngine';
 import { useAppFonts } from '../src/theme/useAppFonts';
-import { pingApi } from '../src/api/client';
+import { discoverApiBaseUrl } from '../src/api/client';
+import { subscribeToOrderAlerts } from '../src/utils/pushNotifications';
 
 /**
  * Guards navigation by auth status. `(tabs)`, `boards` and `orders` are protected; `login`
@@ -122,7 +123,9 @@ export default function RootLayout(): React.JSX.Element {
       // Each step is isolated: an unreachable server or an unopenable database must not stop
       // `bootstrap()` from running, because until it does the splash screen never clears and
       // the user has no way to reach the login screen.
-      await pingApi();
+      // Must run before anything authenticates: it picks the backend host this device can
+      // actually reach, and `bootstrap` immediately calls the API.
+      await discoverApiBaseUrl();
       try {
         await getDb();
       } catch (error) {
@@ -149,6 +152,10 @@ export default function RootLayout(): React.JSX.Element {
     }
   }, [status]);
 
+  // A new-order push arriving with the app open plays the admin-configured buzzer. Mounted at
+  // the root so it fires wherever the user happens to be, not only on a board feed.
+  useEffect(() => subscribeToOrderAlerts(), []);
+
   const { ready } = useAuthGate();
   // Gate the first paint on the brand faces. Rendering a frame in Roboto and then reflowing
   // into Inter is more jarring than a beat longer on the splash.
@@ -171,9 +178,26 @@ export default function RootLayout(): React.JSX.Element {
             <Stack.Screen name="settings" options={{ headerShown: false }} />
             <Stack.Screen name="notifications" options={{ headerShown: false }} />
             <Stack.Screen name="boards/[boardId]/index" options={{ title: 'Board' }} />
-            <Stack.Screen name="boards/[boardId]/create-order" options={{ title: 'Create Order' }} />
+            {/* Draws its own bar with the Cancel affordance, so the navigator's would double up. */}
+            <Stack.Screen name="boards/[boardId]/create-order" options={{ headerShown: false }} />
             <Stack.Screen name="orders/[orderId]/index" options={{ title: 'Order Details' }} />
             <Stack.Screen name="orders/[orderId]/edit" options={{ title: 'Edit Order' }} />
+            {/* Equipment draws its own TopAppBar, and `equipment/[equipmentId]` is the target of
+                the `menuboard://equipment/<ASSET-ID>` deep link a printed QR label carries. */}
+            <Stack.Screen name="equipment/index" options={{ headerShown: false }} />
+            <Stack.Screen name="equipment/assets" options={{ headerShown: false }} />
+            <Stack.Screen name="equipment/[equipmentId]" options={{ headerShown: false }} />
+            <Stack.Screen name="equipment/register" options={{ headerShown: false }} />
+            <Stack.Screen name="equipment/report" options={{ headerShown: false }} />
+            <Stack.Screen name="equipment/my-maintenance" options={{ headerShown: false }} />
+            <Stack.Screen name="equipment/scan" options={{ headerShown: false }} />
+            <Stack.Screen name="equipment/floor-plan" options={{ headerShown: false }} />
+            <Stack.Screen name="equipment/locations" options={{ headerShown: false }} />
+            <Stack.Screen name="equipment/schedules" options={{ headerShown: false }} />
+            <Stack.Screen name="equipment/tickets/index" options={{ headerShown: false }} />
+            <Stack.Screen name="equipment/tickets/[ticketId]" options={{ headerShown: false }} />
+            <Stack.Screen name="equipment/suppliers/index" options={{ headerShown: false }} />
+            <Stack.Screen name="equipment/suppliers/[supplierId]" options={{ headerShown: false }} />
           </Stack>
         )}
       </SafeAreaProvider>

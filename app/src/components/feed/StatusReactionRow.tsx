@@ -42,7 +42,7 @@ export function StatusReactionRow({
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
+  row: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2], justifyContent: 'flex-end' },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',

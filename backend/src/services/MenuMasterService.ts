@@ -3,7 +3,6 @@ import {
   type AvailabilityStatus,
   type CounterRouteWriteRequest,
   type CounterWriteRequest,
-  type ItemGroupAssignmentWriteRequest,
   type ItemGroupWriteRequest,
   type MediaEntityType,
   type MenuCategoryAssignmentWriteRequest,
@@ -31,7 +30,6 @@ import {
   mapCounter,
   mapCounterRoute,
   mapItemGroup,
-  mapItemGroupAssignment,
   mapMenu,
   mapMenuCategoryAssignment,
   mapMenuItemAssignment,
@@ -49,7 +47,6 @@ import { menuItemRepository, type MasterListFilter } from '../repositories/Maste
 import {
   counterRepository,
   counterRouteRepository,
-  itemGroupAssignmentRepository,
   itemGroupRepository,
   menuCategoryAssignmentRepository,
   menuItemAssignmentRepository,
@@ -66,6 +63,8 @@ import {
   type MenuItemAssignmentListFilter,
 } from '../repositories/MenuMasterRepository';
 import { mediaAssignmentRepository } from '../repositories/MediaRepository';
+import { menuBoardRealtime } from '../realtime/menuBoardSocket';
+import type { Db } from '../db/types';
 import { ConflictError, NotFoundError, ValidationError } from '../utils/errors';
 import { signMenuMediaUrl } from '../utils/mediaStorage';
 import { buildPage, resolvePaging } from '../utils/http';
@@ -75,6 +74,8 @@ import { AuditAction, auditService, type AuditActor } from './AuditService';
 export interface MenuMasterQuery {
   search?: string;
   status?: MasterStatus;
+  /** Only honoured by tables carrying `catalogue_id` (item_groups); `null` means unfiled. */
+  catalogueId?: string | null;
   page?: number;
   pageSize?: number;
 }
@@ -84,6 +85,7 @@ function pagingFor(query: MenuMasterQuery): MasterListFilter & { page: number; p
   return {
     ...(query.search !== undefined ? { search: query.search } : {}),
     ...(query.status !== undefined ? { status: query.status } : {}),
+    ...(query.catalogueId !== undefined ? { catalogueId: query.catalogueId } : {}),
     limit: pageSize,
     offset,
     page,
@@ -710,10 +712,24 @@ export class MenuMasterService {
     return buildPage(rows.map(mapItemGroup), total, filter.page, filter.pageSize);
   }
 
+  /**
+   * A Menu Group names the Menu Catalogue it belongs to, so the id has to be a real menu.
+   * Unlike a category there is no derived assignment row to keep in step: nothing outside
+   * `item_groups.catalogue_id` records which catalogue a group is on.
+   */
+  private async assertCatalogueExists(db: Db, catalogueId: string | null): Promise<void> {
+    if (catalogueId === null) return;
+    const menu = await menuRepository.findById(db, catalogueId);
+    if (menu === null) throw new NotFoundError('Menu catalogue', catalogueId);
+  }
+
   async createItemGroup(input: ItemGroupWriteRequest, actor: AuditActor) {
     const row = await withTransaction(async (connection) => {
+      const catalogueId = input.catalogueId ?? null;
+      await this.assertCatalogueExists(connection, catalogueId);
       const created = await itemGroupRepository.insert(connection, {
         id: input.id ?? newId(),
+        catalogueId,
         name: input.name,
         code: input.code ?? null,
         description: input.description ?? null,
@@ -725,7 +741,7 @@ export class MenuMasterService {
         action: AuditAction.MASTER_CREATED,
         entityType: 'item_group',
         entityId: created.id,
-        after: { name: created.name },
+        after: { name: created.name, catalogueId },
       });
       return created;
     });
@@ -737,12 +753,17 @@ export class MenuMasterService {
     const row = await withTransaction(async (connection) => {
       const before = await itemGroupRepository.findById(connection, id);
       if (before === null) throw new NotFoundError('Item group', id);
+      if (input.catalogueId !== undefined) {
+        await this.assertCatalogueExists(connection, input.catalogueId);
+      }
       const updated = await itemGroupRepository.update(connection, id, input);
       if (updated === null) throw new NotFoundError('Item group', id);
       await auditService.record(connection, actor, {
         action: AuditAction.MASTER_UPDATED,
         entityType: 'item_group',
         entityId: id,
+        before: { catalogueId: before.catalogue_id },
+        after: { catalogueId: updated.catalogue_id },
       });
       return updated;
     });
@@ -754,10 +775,10 @@ export class MenuMasterService {
     await withTransaction(async (connection) => {
       const before = await itemGroupRepository.findById(connection, id);
       if (before === null) throw new NotFoundError('Item group', id);
-      const references = await itemGroupRepository.countAssignmentReferences(connection, id);
+      const references = await itemGroupRepository.countItemReferences(connection, id);
       if (references > 0) {
         throw new ConflictError(
-          `${references} food item(s) are still assigned to this group; remove them first`,
+          `${references} food item(s) are still filed under this group; reassign or remove them first`,
         );
       }
       await itemGroupRepository.softDelete(connection, id);
@@ -768,48 +789,6 @@ export class MenuMasterService {
       });
     });
     this.announce('item-groups', 0);
-  }
-
-  async listItemGroupsForFoodItem(foodItemId: string) {
-    const rows = await itemGroupAssignmentRepository.listForFoodItem(getPool(), foodItemId);
-    return rows.map(mapItemGroupAssignment);
-  }
-
-  async assignItemGroup(input: ItemGroupAssignmentWriteRequest, actor: AuditActor) {
-    const row = await withTransaction(async (connection) => {
-      const foodItem = await menuItemRepository.findById(connection, input.foodItemId);
-      if (foodItem === null) throw new NotFoundError('Menu item', input.foodItemId);
-      const group = await itemGroupRepository.findById(connection, input.groupId);
-      if (group === null) throw new NotFoundError('Item group', input.groupId);
-      const created = await itemGroupAssignmentRepository.insert(connection, {
-        id: newId(),
-        foodItemId: input.foodItemId,
-        groupId: input.groupId,
-        status: input.status ?? MasterStatus.ACTIVE,
-        createdBy: actor.userId,
-      });
-      await auditService.record(connection, actor, {
-        action: AuditAction.MASTER_CREATED,
-        entityType: 'item_group_assignment',
-        entityId: created.id,
-      });
-      return created;
-    });
-    this.announce('item-group-assignments', Number(row.sync_seq));
-    return mapItemGroupAssignment(row);
-  }
-
-  async removeItemGroupAssignment(id: string, actor: AuditActor) {
-    await withTransaction(async (connection) => {
-      const removed = await itemGroupAssignmentRepository.softDelete(connection, id);
-      if (!removed) throw new NotFoundError('Item group assignment', id);
-      await auditService.record(connection, actor, {
-        action: AuditAction.MASTER_DELETED,
-        entityType: 'item_group_assignment',
-        entityId: id,
-      });
-    });
-    this.announce('item-group-assignments', 0);
   }
 
   /* -------------------------------------------------------------- food item schedules */
@@ -1254,8 +1233,18 @@ export class MenuMasterService {
    * items -> variants, each carrying its resolved primary media (variant -> item -> food item,
    * first non-null wins, never duplicating the file) and routing/modifier ids. Unpublished or
    * inactive menus resolve to null so a caller cannot accidentally serve a draft.
+   *
+   * @param mediaUrlFor how a resolved media id becomes a URL. Defaults to the signed, expiring
+   *   link every authenticated client uses. The Digital Menu Board passes its own builder
+   *   instead: a wall screen holds one page open for days, so a URL that expires in two hours
+   *   would blank its photography — and re-signing on every poll would make every URL differ,
+   *   which defeats change detection and churns every `<img>` on the board.
    */
-  async getMenuTree(menuCode: string, userId: string): Promise<MenuTreeDto> {
+  async getMenuTree(
+    menuCode: string,
+    userId: string,
+    mediaUrlFor: (mediaId: string) => string = (mediaId) => signMenuMediaUrl(mediaId, userId),
+  ): Promise<MenuTreeDto> {
     const pool = getPool();
     const menu = await menuRepository.findByCode(pool, menuCode);
     if (menu === null || menu.status !== MasterStatus.ACTIVE || menu.published_at === null) {
@@ -1309,12 +1298,12 @@ export class MenuMasterService {
       uniqueFoodItemIds,
     );
 
-    // `findPrimaryForEntities` returns the media asset id, not a path — signing is the only
-    // way to reach it, since `/media/:id/file` requires a time-limited signature. There is no
-    // working unsigned static route, so a legacy `image_path` with no assignment renders
-    // nothing rather than a broken `<img>`.
+    // `findPrimaryForEntities` returns the media asset id, not a path, so reaching the bytes
+    // always means building a URL — `mediaUrlFor` decides which kind. A legacy `image_path`
+    // with no assignment has no id to build from and renders nothing rather than a broken
+    // `<img>`.
     const toUrl = (mediaId: string | undefined): string | null =>
-      mediaId ? signMenuMediaUrl(mediaId, userId) : null;
+      mediaId ? mediaUrlFor(mediaId) : null;
 
     // An item can be assigned to a menu without being placed in any category on it — the
     // assignment form does not require one. Dropping such an item from the tree would make it
@@ -1337,6 +1326,7 @@ export class MenuMasterService {
             toUrl(variantMedia.get(variant.id)) ??
             toUrl(itemMedia.get(item.id)) ??
             toUrl(foodItemMedia.get(item.food_item_id)),
+          preparationTimeMinutes: variant.preparation_time_minutes,
           allowDecimalQuantity: variant.allow_decimal_quantity === 1,
           counters: [],
           printingGroups: [],
@@ -1353,6 +1343,7 @@ export class MenuMasterService {
         availability: item.availability,
         sortOrder: item.sort_order,
         primaryMediaUrl: toUrl(itemMedia.get(item.id)) ?? toUrl(foodItemMedia.get(item.food_item_id)),
+        preparationTimeMinutes: item.preparation_time_minutes,
         allowDecimalQuantity: item.allow_decimal_quantity === 1,
         basePrice:
           item.food_item_base_price === null || item.food_item_base_price === undefined
@@ -1410,11 +1401,16 @@ export class MenuMasterService {
    * Menu Master is not (yet) part of the Android offline-sync entity set (`SYNC_ENTITIES` in
    * shared/src/sync), so there is nothing to broadcast through `realtime.emitMasterChange`,
    * which only accepts that closed union. The Admin Portal picks up changes the same way every
-   * other list in it already does: refetching after a mutation. Kept as a named seam so wiring
-   * this into sync/realtime later touches one place.
+   * other list in it already does: refetching after a mutation.
+   *
+   * It is, however, exactly the seam a Digital Menu Board needs: every write in this file that
+   * reaches here touches something `getMenuTree` resolves, and every board renders that tree.
+   * Firing here rather than duplicating a call at each of the ~40 mutation sites above is what
+   * keeps a menu-master write and a board refresh from drifting apart as new mutations are
+   * added later.
    */
-  private announce(_entity: string, _syncSeq: number): void {
-    // Intentionally empty for now — see comment above.
+  private announce(entity: string, _syncSeq: number): void {
+    menuBoardRealtime.announceChange(`menu-master:${entity}`);
   }
 }
 

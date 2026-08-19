@@ -26,12 +26,14 @@ acceptance record. Summary:
 
 ```
 MenuBoard/
-├── shared/     @menuboard/shared — types, enums, permission matrix, constants
-├── backend/    Express + MariaDB + Socket.IO      (Phase 2)
-├── admin/      React + Vite + TS + MUI            (Phase 3)
-├── app/        Expo + React Native + TS           (Phase 4+, not an npm workspace member)
-├── docs/       product spec, architecture, design system, API, database, agent rules
-└── tasks/      phase-by-phase build briefs (PHASE_3.md .. PHASE_7.md)
+├── shared/         @menuboard/shared — types, enums, permission matrix, constants
+├── backend/        Express + MariaDB + Socket.IO      (Phase 2)
+├── admin/          React + Vite + TS + MUI            (Phase 3)
+├── CustomerKiosk/  React + Vite + TS + Tailwind       (guest self-service kiosk, spec §3d)
+├── digitalmenu/    one hand-written HTML page         (the menu board above the counter)
+├── app/            Expo + React Native + TS           (Phase 4+, not an npm workspace member)
+├── docs/           product spec, architecture, design system, API, database, agent rules
+└── tasks/          phase-by-phase build briefs (PHASE_3.md .. PHASE_7.md)
 ```
 
 ## Documentation
@@ -88,7 +90,27 @@ Base path `/api/v1`. Health check at `/health`.
 | `/attachments` | upload, bind, signed download |
 | `/notifications` | the signed-in user's inbox |
 | `/sync` | offline push, pull and cursor status |
+| `/menu-board` | what a wall screen reads — public and read-only; screen registry Admin-only |
 | `/admin` | dashboard, permissions, reports, billing, audit, settings — Admin Portal only |
+
+## The digital menu board
+
+The bilingual menu screen above the counter is `digitalmenu/index.html` — one hand-written
+page, no build step, served by the backend at `/menu-board`. A display needs a URL and
+nothing else: no install, no launcher, no sign-in.
+
+Which menu a screen advertises, and how it presents itself, is a row in `menu_board_screens`
+edited from the Admin Portal under **Menu → Digital Menu Boards**. The screen's code goes in
+the URL:
+
+```
+http://<backend-host>:4000/menu-board?screen=MAIN
+```
+
+Everything on the board comes from Menu Master — prices from the published menu, photography
+from the shared media library, the morning menu from each dish's MORNING shift schedule. The
+board reads and never writes, and polls its own revision so an unchanged menu costs one small
+request per interval.
 
 ## Boundaries enforced in code
 

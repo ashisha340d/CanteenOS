@@ -13,6 +13,10 @@ export default function Index(): React.JSX.Element {
 
   if (status === 'unknown') return <LoadingScreen />;
   if (status === 'signedOut') return <Redirect href="/login" />;
+  // A locked device lands on the pad, not on the boards. This used to fall through to the
+  // tabs and rely on the gate's effect to bounce it back, which painted a frame of the
+  // signed-in app behind the lock before the replace landed.
+  if (status === 'pinRequired') return <Redirect href="/pin-login" />;
   if (mustChangePassword) return <Redirect href="/change-password" />;
   return <Redirect href="/(tabs)/boards" />;
 }

@@ -1,0 +1,107 @@
+.os-desktop {
+  /* Every child is absolutely positioned, so a percentage height would collapse to zero and
+     `overflow: hidden` would blank the desktop. Pin to the (relative) shell instead. */
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--desk-bg);
+  color: var(--desk-fg);
+  background-image:
+    radial-gradient(ellipse at 8% 92%, var(--desk-glow-a) 0%, transparent 45%),
+    radial-gradient(ellipse at 92% 8%, var(--desk-glow-b) 0%, transparent 45%),
+    radial-gradient(ellipse at 50% 50%, var(--desk-glow-c) 0%, transparent 70%);
+  user-select: none;
+}
+
+.os-icon {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 88px;
+  padding: 6px 4px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.os-icon:hover {
+  background: var(--desk-icon-hover-bg);
+  border-color: var(--desk-icon-hover-border);
+}
+
+/* Selected, not open: single click marks an icon the way a file manager does. */
+.os-icon--selected {
+  background: color-mix(in srgb, var(--desk-accent) 16%, transparent);
+  border-color: color-mix(in srgb, var(--desk-accent) 45%, transparent);
+}
+
+.os-icon:focus-visible {
+  outline: 2px solid var(--desk-accent);
+  outline-offset: 1px;
+}
+
+.os-icon--dragging {
+  opacity: 0.75;
+  cursor: grabbing;
+}
+
+.os-icon--open .os-icon__tile::after {
+  content: '';
+  position: absolute;
+  bottom: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--desk-accent);
+}
+
+.os-icon__tile {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 13px;
+  /* A soft top highlight over the flat accent reads as a physical key rather than a swatch. */
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(0, 0, 0, 0.08) 100%);
+  box-shadow:
+    0 1px 6px rgba(0, 0, 0, 0.12),
+    0 1px 0 rgba(255, 255, 255, 0.35) inset;
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+
+.os-icon:hover .os-icon__tile {
+  transform: translateY(-1px);
+  box-shadow:
+    0 3px 10px rgba(0, 0, 0, 0.18),
+    0 1px 0 rgba(255, 255, 255, 0.4) inset;
+}
+
+.os-icon:active .os-icon__tile {
+  transform: translateY(0) scale(0.97);
+}
+
+.os-icon__glyph {
+  width: 26px;
+  height: 26px;
+  color: #fff;
+  stroke-width: 1.9;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.25));
+}
+
+.os-icon__label {
+  max-width: 86px;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  word-break: break-word;
+}

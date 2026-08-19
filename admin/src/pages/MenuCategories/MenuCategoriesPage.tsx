@@ -10,6 +10,8 @@ import { ListToolbar } from '../../components/ListToolbar';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusChip } from '../../components/StatusChip';
 import { useDeleteMenuCategory, useMenuCategories, useUpdateMenuCategory } from '../../hooks/useMasters';
+import { useCatalogueOptions } from '../../hooks/useMenuMaster';
+import { CATALOGUE_NONE } from '../../api/masters';
 import { notify } from '@/lib/notify';
 import { enumOptions } from '@/lib/options';
 import { MenuCategoryFormModal } from './MenuCategoryFormModal';
@@ -17,6 +19,7 @@ import { MenuCategoryFormModal } from './MenuCategoryFormModal';
 export function MenuCategoriesPage(): JSX.Element {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<MasterStatus | ''>('');
+  const [catalogueId, setCatalogueId] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [view, setView] = useViewMode('menu-categories');
@@ -24,16 +27,37 @@ export function MenuCategoriesPage(): JSX.Element {
   const [deleting, setDeleting] = useState<MenuCategoryDto | null>(null);
 
   const query = useMemo(
-    () => ({ search: search || undefined, status: status || undefined, page, pageSize }),
-    [search, status, page, pageSize],
+    () => ({
+      search: search || undefined,
+      status: status || undefined,
+      catalogueId: catalogueId || undefined,
+      page,
+      pageSize,
+    }),
+    [search, status, catalogueId, page, pageSize],
   );
   const { data, isLoading } = useMenuCategories(query);
+  const { options: catalogueOptions } = useCatalogueOptions();
   const del = useDeleteMenuCategory();
   const reorder = useUpdateMenuCategory();
-  const filtersActive = Boolean(status) || search.trim() !== '';
+  const activeFilterCount = (status ? 1 : 0) + (catalogueId ? 1 : 0);
+  const filtersActive = activeFilterCount > 0 || search.trim() !== '';
 
   const columns: DataTableColumn<MenuCategoryDto>[] = [
     { field: 'name', headerName: 'Name', width: 220 },
+    {
+      field: 'catalogueName',
+      headerName: 'Catalogue',
+      width: 170,
+      // Unassigned is a state worth noticing, not a blank cell: the category is invisible on
+      // every menu until somebody files it.
+      renderCell: (r) =>
+        r.catalogueId ? (
+          <span>{r.catalogueName ?? '—'}</span>
+        ) : (
+          <span className="text-muted-foreground italic">Unassigned</span>
+        ),
+    },
     {
       field: 'description',
       headerName: 'Description',
@@ -97,22 +121,38 @@ export function MenuCategoriesPage(): JSX.Element {
         setSearch(v);
         setPage(1);
       }}
-      activeFilterCount={status ? 1 : 0}
+      activeFilterCount={activeFilterCount}
       onClearFilters={() => {
         setStatus('');
+        setCatalogueId('');
         setPage(1);
       }}
       filters={
-        <SelectField
-          label="Status"
-          value={status}
-          onChange={(v) => {
-            setStatus(v as MasterStatus | '');
-            setPage(1);
-          }}
-          emptyLabel="All statuses"
-          options={enumOptions(MasterStatus)}
-        />
+        <>
+          <SelectField
+            label="Catalogue"
+            value={catalogueId}
+            onChange={(v) => {
+              setCatalogueId(v);
+              setPage(1);
+            }}
+            emptyLabel="All catalogues"
+            options={[
+              ...catalogueOptions,
+              { value: CATALOGUE_NONE, label: 'Unassigned' },
+            ]}
+          />
+          <SelectField
+            label="Status"
+            value={status}
+            onChange={(v) => {
+              setStatus(v as MasterStatus | '');
+              setPage(1);
+            }}
+            emptyLabel="All statuses"
+            options={enumOptions(MasterStatus)}
+          />
+        </>
       }
       view={view}
       onViewChange={setView}
@@ -167,7 +207,12 @@ export function MenuCategoriesPage(): JSX.Element {
           renderCard={(r) => (
             <div className="flex h-full flex-col gap-2.5">
               <div className="flex items-start justify-between gap-2">
-                <p className="min-w-0 text-[0.9375rem] leading-snug font-semibold">{r.name}</p>
+                <div className="min-w-0">
+                  <p className="min-w-0 text-[0.9375rem] leading-snug font-semibold">{r.name}</p>
+                  <p className="text-muted-foreground text-xs">
+                    {r.catalogueId ? (r.catalogueName ?? '—') : <em>Unassigned</em>}
+                  </p>
+                </div>
                 <StatusChip status={r.status} />
               </div>
               <p className="text-muted-foreground flex-1 text-sm">

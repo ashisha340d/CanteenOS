@@ -19,7 +19,6 @@ const ICONS: Record<string, keyof typeof MaterialIcons.glyphMap> = {
   boards: 'dashboard',
   orders: 'receipt-long',
   users: 'group',
-  archive: 'inventory-2',
 };
 
 const LABELS: Record<string, string> = {
@@ -27,7 +26,6 @@ const LABELS: Record<string, string> = {
   boards: 'Boards',
   orders: 'Orders',
   users: 'Users',
-  archive: 'Archive',
 };
 
 export function TabBar({

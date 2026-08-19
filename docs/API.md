@@ -1074,6 +1074,59 @@ Media inheritance (variant → menu item → food item, first non-null primary i
 resolved server-side only inside `GET /menus/by-code/:code/tree`; the CRUD endpoints above
 return exactly what is assigned at each level with no fallback.
 
+### 17.8 Digital Menu Board
+
+The bilingual menu screens above the counter. A screen is a row in `menu_board_screens`
+(032): which published menu it advertises, how often it re-reads it, and a JSON blob of how it
+presents itself. The page itself is `digitalmenu/index.html`, served by this backend at
+`GET /menu-board` so a display needs a URL and nothing else.
+
+**Screen registry** — Admin Portal, `MASTER_READ` / `MASTER_WRITE` like the rest of Menu
+Master:
+
+- `GET /menu-board/screens` → `200 MenuBoardScreenDto[]`
+- `GET /menu-board/screens/:id` → `200 MenuBoardScreenDto`
+- `POST /menu-board/screens` — `CreateMenuBoardScreenRequest` → `201`
+- `PATCH /menu-board/screens/:id` — `UpdateMenuBoardScreenRequest` → `200`
+- `DELETE /menu-board/screens/:id` → `204` (soft delete)
+
+**What a screen reads** — mounted *before* `authenticate`, like `/media/:id/file`, because the
+client is a browser on a wall with no session and no way to hold a token:
+
+- `GET /menu-board/snapshot?screen?` → `200 MenuBoardSnapshotDto`
+- `GET /menu-board/revision?screen?` → `200 MenuBoardRevisionDto`
+- `GET /menu-board/media/:id` → the image bytes, unsigned
+
+`screen` is the screen's `code`; omitting it resolves the first ACTIVE screen. An unknown or
+INACTIVE code is `NOT_FOUND` rather than a silent fallback — a board showing the wrong hall's
+prices is worse than one that says it is not configured. Each snapshot stamps `lastSeenAt`
+without bumping `revision`, so a screen switching on is visible in the portal but is not an
+edit.
+
+Three deliberate departures from the rest of the API, each forced by the client being an
+unattended display:
+
+- **The payload is narrowed, not just filtered.** `MenuBoardItemDto` is a flat name, price and
+  photo. The resolved tree behind it carries variant ids, counter routing, printing groups and
+  modifier ids; all are dropped before the response leaves. Items are filtered on
+  `boardVisible`, and a dish with variants contributes one priced line per variant.
+- **Image URLs are unsigned and stable.** Every other route to `media_assets` carries a
+  time-limited signature naming a user. A board has neither, and holds one page open for days,
+  so a signature would only guarantee the photographs blank themselves overnight — and
+  re-signing per poll would change every URL on every fetch, defeating the revision check.
+  `GET /menu-board/media/:id` instead answers a narrower question: it serves the asset only
+  while it is assigned to something in the menu hierarchy, so it can reach the dish photos on
+  the wall and nothing else in the library.
+- **Change detection is a poll, not a socket.** Socket.IO authenticates every connection. The
+  board polls `revision` — a hash of exactly what it renders — and re-fetches the snapshot only
+  when it moves.
+
+The morning menu resolves from `menu_item_schedules` (MORNING shift, today's weekday).
+`menu_items.always_available` is deliberately not folded in: it defaults to `1` on every row,
+so honouring it would put every dish in every shift. Until an operator sets MORNING slots
+nothing resolves as morning food, and the board reads that as "nobody has scheduled this" and
+shows the whole menu rather than a blank wall.
+
 ---
 
 ## 17a. Entities

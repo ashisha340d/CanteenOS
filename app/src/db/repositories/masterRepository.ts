@@ -56,6 +56,7 @@ function toActivityType(row: ActivityTypeRow): ActivityTypeDto {
 function toMenuCategory(row: MenuCategoryRow): MenuCategoryDto {
   return {
     id: row.id,
+    catalogueId: row.catalogue_id,
     name: row.name,
     nameHi: row.name_hi,
     description: row.description,
@@ -74,6 +75,7 @@ function toMenuItem(row: MenuItemRow): MenuItemDto {
   return {
     id: row.id,
     categoryId: row.category_id,
+    groupId: row.group_id,
     nameHi: row.name_hi,
     unitHi: row.unit_hi,
     name: row.name,
@@ -165,18 +167,19 @@ export const masterRepository = {
     await runInTx(db, tx, async () => {
       for (const c of rows) {
         await db.runAsync(
-          `INSERT INTO menu_categories (id, name, name_hi, description, image_path, status, sort_order,
-             created_at, updated_at, deleted_at, revision, server_sync_seq)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `INSERT INTO menu_categories (id, catalogue_id, name, name_hi, description, image_path,
+             status, sort_order, created_at, updated_at, deleted_at, revision, server_sync_seq)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET
+             catalogue_id = excluded.catalogue_id,
              name = excluded.name, name_hi = excluded.name_hi, description = excluded.description,
              image_path = excluded.image_path, status = excluded.status,
              sort_order = excluded.sort_order, updated_at = excluded.updated_at,
              deleted_at = excluded.deleted_at, revision = excluded.revision,
              server_sync_seq = excluded.server_sync_seq`,
           [
-            c.id, c.name, c.nameHi, c.description, c.imagePath, c.status, c.sortOrder, c.createdAt,
-            c.updatedAt, c.deletedAt, c.revision, c.syncSeq,
+            c.id, c.catalogueId, c.name, c.nameHi, c.description, c.imagePath, c.status,
+            c.sortOrder, c.createdAt, c.updatedAt, c.deletedAt, c.revision, c.syncSeq,
           ],
         );
       }
@@ -189,12 +192,12 @@ export const masterRepository = {
     await runInTx(db, tx, async () => {
       for (const i of rows) {
         await db.runAsync(
-          `INSERT INTO menu_items (id, category_id, name, name_hi, unit, unit_hi, image_path,
+          `INSERT INTO menu_items (id, category_id, group_id, name, name_hi, unit, unit_hi, image_path,
              primary_media_id, base_price, always_available, status,
              sort_order, created_at, updated_at, deleted_at, revision, server_sync_seq)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET
-             category_id = excluded.category_id, name = excluded.name,
+             category_id = excluded.category_id, group_id = excluded.group_id, name = excluded.name,
              name_hi = excluded.name_hi, unit = excluded.unit, unit_hi = excluded.unit_hi,
              image_path = excluded.image_path,
              primary_media_id = excluded.primary_media_id, base_price = excluded.base_price,
@@ -203,7 +206,7 @@ export const masterRepository = {
              deleted_at = excluded.deleted_at, revision = excluded.revision,
              server_sync_seq = excluded.server_sync_seq`,
           [
-            i.id, i.categoryId, i.name, i.nameHi, i.unit, i.unitHi, i.imagePath,
+            i.id, i.categoryId, i.groupId ?? null, i.name, i.nameHi, i.unit, i.unitHi, i.imagePath,
             i.primaryMediaId ?? null, i.basePrice ?? null, i.alwaysAvailable ? 1 : 0,
             i.status, i.sortOrder,
             i.createdAt, i.updatedAt, i.deletedAt, i.revision, i.syncSeq,

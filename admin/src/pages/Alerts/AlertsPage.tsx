@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { AlertSoundSlot, AlertType, UserRole, type UpdateAlertSettingRequest } from '@menuboard/shared';
+import {
+  AlertSoundSlot,
+  AlertType,
+  MOBILE_ALERT_SOUND_SLOTS,
+  UserRole,
+  type UpdateAlertSettingRequest,
+} from '@menuboard/shared';
 import { CheckIcon, PauseIcon, PlayIcon, UploadIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -9,7 +15,7 @@ import { StatGridSkeleton } from '../../components/ui/Skeletons';
 import { alertsApi } from '@/api/alerts';
 import { useAlertSettings, useAlertSounds, useUpdateAlertSetting, useUploadAlertSound } from '../../hooks/useAlerts';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { enumOptions, humanise } from '@/lib/options';
+import { humanise } from '@/lib/options';
 import { notify } from '@/lib/notify';
 import { cn } from '@/lib/utils';
 
@@ -25,6 +31,19 @@ const SLOT_LABELS: Record<AlertSoundSlot, { title: string; description: string }
   [AlertSoundSlot.CRITICAL]: {
     title: 'Critical order',
     description: 'Plays when an order is about to breach its required time.',
+  },
+  // The KDS wall screens keep their own three voices, configured on Profile → KDS & CDS.
+  [AlertSoundSlot.KDS_NEW]: {
+    title: 'KDS — new order',
+    description: 'Configured on the KDS & CDS tab.',
+  },
+  [AlertSoundSlot.KDS_ATTENTION]: {
+    title: 'KDS — attention',
+    description: 'Configured on the KDS & CDS tab.',
+  },
+  [AlertSoundSlot.KDS_CRITICAL]: {
+    title: 'KDS — critical',
+    description: 'Configured on the KDS & CDS tab.',
   },
 };
 
@@ -62,10 +81,11 @@ export function AlertsPage(): JSX.Element {
         <section>
           <h2 className="font-heading text-base font-semibold">Alarm sounds</h2>
           <p className="text-muted-foreground mt-0.5 mb-3 text-sm">
-            Upload the audio file each buzzer plays. Uploading again replaces the slot.
+            Upload the audio file each buzzer plays. Uploading again replaces the slot. The KDS
+            wall screens have their own three alarms on Profile → KDS &amp; CDS.
           </p>
           <div className="bg-card overflow-hidden rounded-xl border">
-            {Object.values(AlertSoundSlot).map((slot, index) => {
+            {MOBILE_ALERT_SOUND_SLOTS.map((slot, index) => {
               const sound = sounds.find((s) => s.slot === slot) ?? null;
               return (
                 <SoundRow key={slot} slot={slot} sound={sound} bordered={index > 0} />
@@ -285,9 +305,9 @@ function TriggerCard({
             label="Sound"
             value={draft.sound}
             onChange={(value) => setDraft((prev) => ({ ...prev, sound: value as AlertSoundSlot }))}
-            options={enumOptions(AlertSoundSlot).map((o) => ({
-              ...o,
-              label: SLOT_LABELS[o.value as AlertSoundSlot].title,
+            options={MOBILE_ALERT_SOUND_SLOTS.map((slot) => ({
+              value: slot,
+              label: SLOT_LABELS[slot].title,
             }))}
           />
         </div>

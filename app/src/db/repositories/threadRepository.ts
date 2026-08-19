@@ -63,6 +63,54 @@ export const threadRepository = {
     });
   },
 
+  /**
+   * Tombstones every message belonging to an order, and queues each one for the server.
+   *
+   * Called when the order itself is withdrawn: its replies are the conversation *about* that
+   * order, so leaving them behind would strand a thread of comments under a card that is no
+   * longer there. Returns the ids it removed.
+   *
+   * `ORDER_CREATED` is deliberately kept — the feed draws the order card from that row, and
+   * deleting it would make the cancelled order vanish from the board entirely instead of
+   * staying visible as cancelled.
+   */
+  async deleteForOrderLocal(orderId: string): Promise<string[]> {
+    const db = await getDb();
+    const rows = await db.getAllAsync<{ id: string }>(
+      `SELECT id FROM thread_messages
+        WHERE order_id = ? AND deleted_at IS NULL
+          AND NOT (message_type = 'SYSTEM' AND system_event = 'ORDER_CREATED')`,
+      [orderId],
+    );
+    if (rows.length === 0) return [];
+
+    const now = nowIso();
+    for (const row of rows) {
+      await db.runAsync(
+        `UPDATE thread_messages SET deleted_at = ?, updated_at = ?, sync_state = 'PENDING'
+          WHERE id = ?`,
+        [now, now, row.id],
+      );
+      await syncQueueRepository.enqueue({
+        entity: 'thread_messages',
+        entityId: row.id,
+        op: SyncOp.DELETE,
+        payload: null,
+      });
+    }
+    return rows.map((row) => row.id);
+  },
+
+  /** Whether this message is already on the device — the sync pull's "is this new?" check. */
+  async existsById(id: string): Promise<boolean> {
+    const db = await getDb();
+    const row = await db.getFirstAsync<{ id: string }>(
+      'SELECT id FROM thread_messages WHERE id = ? LIMIT 1',
+      [id],
+    );
+    return row !== null && row !== undefined;
+  },
+
   /** The board feed: general posts and order-scoped messages, oldest first. */
   async listForBoard(boardId: string): Promise<ThreadMessageDto[]> {
     const db = await getDb();

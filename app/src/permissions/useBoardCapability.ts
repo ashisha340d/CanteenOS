@@ -19,9 +19,16 @@ export function useBoardCapability(boardId: string | undefined, capability: Capa
       setBoardRole(null);
       return;
     }
-    boardRepository.findMembership(boardId, user.id).then((membership) => {
-      if (!cancelled) setBoardRole(membership?.boardRole ?? null);
-    });
+    boardRepository
+      .findMembership(boardId, user.id)
+      .then((membership) => {
+        if (!cancelled) setBoardRole(membership?.boardRole ?? null);
+      })
+      // A failed read must deny rather than reject unhandled: no membership is the safe
+      // answer, and an unhandled rejection here took down the screen that asked.
+      .catch(() => {
+        if (!cancelled) setBoardRole(null);
+      });
     return () => {
       cancelled = true;
     };

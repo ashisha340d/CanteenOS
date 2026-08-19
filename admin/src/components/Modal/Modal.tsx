@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { GripVerticalIcon, XIcon } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
-import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { useDeviceProfile } from '@/hooks/useDeviceProfile';
 import { cn } from '@/lib/utils';
@@ -50,7 +49,7 @@ export function Modal({
   minHeight = MIN_H,
   description,
 }: ModalProps): JSX.Element | null {
-  const { isMobile, supportsPointerAffordances } = useDeviceProfile();
+  const { supportsPointerAffordances } = useDeviceProfile();
   const { geometry, setGeometry } = useModalGeometry(id);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const lastEscapeRef = useRef<number>(0);
@@ -80,10 +79,10 @@ export function Modal({
 
   // A window restored from a previous session may no longer fit; pull it back on screen.
   useEffect(() => {
-    if (!open || isMobile) return;
+    if (!open) return;
     setGeometry(clampToViewport(geometryRef.current));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, isMobile]);
+  }, [open]);
 
   const onDragStart = useCallback(
     (e: React.MouseEvent) => {
@@ -194,53 +193,6 @@ export function Modal({
   if (!open) return null;
 
   const a11yDescription = description ?? `${title} dialog`;
-
-  /* ------------------------------------------------------------------ mobile sheet */
-
-  if (isMobile) {
-    return (
-      <Sheet open={open} onOpenChange={(next) => !next && onClose()}>
-        <SheetContent
-          side="bottom"
-          showCloseButton={false}
-          onEscapeKeyDown={onEscapeKeyDown}
-          className="h-dvh max-h-dvh w-full gap-0 rounded-none border-0 p-0 sm:max-w-none"
-        >
-          <div
-            ref={containerRef}
-            onKeyDownCapture={onKeyDownCapture}
-            onFocusCapture={onFocusCapture}
-            className="flex h-full min-h-0 flex-col"
-          >
-            {/* Sticky header: an escape hatch on the left, the title in the middle. */}
-            <div className="bg-background safe-top sticky top-0 z-10 flex shrink-0 items-center gap-2 border-b px-2 py-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={onClose}
-                aria-label="Cancel"
-                className="touch-target"
-              >
-                <XIcon />
-              </Button>
-              <SheetTitle className="min-w-0 flex-1 truncate text-base">{title}</SheetTitle>
-            </div>
-            <SheetDescription className="sr-only">{a11yDescription}</SheetDescription>
-
-            <div className="min-h-0 flex-1 overflow-y-auto p-4">{children}</div>
-
-            {footer && (
-              <div className="bg-background safe-bottom sticky bottom-0 z-10 flex shrink-0 flex-col-reverse gap-2 border-t p-3 *:w-full">
-                {footer}
-              </div>
-            )}
-          </div>
-        </SheetContent>
-      </Sheet>
-    );
-  }
-
-  /* --------------------------------------------------------- desktop floating window */
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>

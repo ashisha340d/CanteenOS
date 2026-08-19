@@ -731,6 +731,123 @@ async function main() {
   });
   check('unknown setting key rejected 404', unknownSetting.status === 404, unknownSetting.body);
 
+  /* ------------------------------------------ equipment & maintenance */
+
+  section('Equipment & maintenance');
+  const categories = await call('GET', '/equipment-categories', { token: admin });
+  check('equipment categories seeded', categories.status === 200 && categories.body.data.length > 0);
+
+  const tree = await call('GET', '/equipment-locations/tree', { token: admin });
+  const seededLocation = tree.body?.data?.floors?.[0]?.areas?.[0]?.locations?.[0] ?? null;
+  check('location tree returns a seeded location', seededLocation !== null, tree.body);
+
+  const oven = await call('POST', '/equipment', {
+    token: admin,
+    body: {
+      name: `Smoke Oven ${Date.now()}`,
+      categoryId: categories.body.data[0].id,
+      locationId: seededLocation?.id ?? null,
+      brand: 'SmokeTest',
+    },
+  });
+  check('equipment registered', oven.status === 201, oven.body);
+  const assetId = oven.body?.data?.assetId ?? '';
+  check('asset id allocated server-side', /^[A-Z0-9]+-[A-Z0-9]+-[A-Z0-9]+-\d+$/.test(assetId), assetId);
+
+  const resolved = await call('GET', `/equipment/resolve?code=${encodeURIComponent(assetId)}`, {
+    token: admin,
+  });
+  check('asset id resolves to the equipment', resolved.body?.data?.id === oven.body.data.id);
+
+  // A safety/electrical fault opens CRITICAL whatever the reporter asked for.
+  const ticket = await call('POST', '/maintenance/tickets', {
+    token: admin,
+    body: { equipmentId: oven.body.data.id, problemCategory: 'ELECTRICAL', description: 'Smoke test fault' },
+  });
+  check('ticket raised', ticket.status === 201, ticket.body);
+  check('electrical fault opens CRITICAL', ticket.body?.data?.priority === 'CRITICAL', ticket.body?.data?.priority);
+  check(
+    'ticket number is server-sequential',
+    /^MTK-\d{8}-\d{4}$/.test(ticket.body?.data?.ticketNumber ?? ''),
+    ticket.body?.data?.ticketNumber,
+  );
+
+  const afterReport = await call('GET', `/equipment/${oven.body.data.id}`, { token: admin });
+  check('reporting takes the asset to PROBLEM', afterReport.body?.data?.status === 'PROBLEM');
+  check('open ticket counter refreshed', afterReport.body?.data?.openTicketCount === 1);
+
+  const acknowledged = await call('POST', `/maintenance/tickets/${ticket.body.data.id}/status`, {
+    token: admin,
+    body: { status: 'ACKNOWLEDGED' },
+  });
+  check('ticket acknowledged', acknowledged.body?.data?.status === 'ACKNOWLEDGED', acknowledged.body);
+
+  const backwards = await call('POST', `/maintenance/tickets/${ticket.body.data.id}/status`, {
+    token: admin,
+    body: { status: 'REPORTED' },
+  });
+  check('backwards transition refused', backwards.status === 409, backwards.body);
+
+  const completed = await call('POST', `/maintenance/tickets/${ticket.body.data.id}/complete`, {
+    token: admin,
+    body: { resolutionNotes: 'Smoke test fix' },
+  });
+  check('ticket completed', completed.body?.data?.status === 'RESOLVED', completed.body);
+
+  const afterFix = await call('GET', `/equipment/${oven.body.data.id}`, { token: admin });
+  check('asset restored to service', afterFix.body?.data?.status === 'OPERATIONAL');
+  // Resolved is not terminal: the asset is usable again, but the ticket stays on the books
+  // until somebody verifies or closes it.
+  check('resolved ticket still counts as open', afterFix.body?.data?.openTicketCount === 1);
+
+  const supplier = await call('POST', '/suppliers', {
+    token: admin,
+    body: { name: `Smoke Service Co ${Date.now()}`, phone: '9876543210', whatsapp: '+91 98765 43210' },
+  });
+  check('supplier created', supplier.status === 201, supplier.body);
+  check('whatsapp number normalised to digits', supplier.body?.data?.whatsapp === '919876543210');
+
+  const linked = await call('PUT', `/equipment/${oven.body.data.id}/suppliers`, {
+    token: admin,
+    body: { supplierId: supplier.body.data.id, role: 'MAINTENANCE', isDefault: true },
+  });
+  check('supplier linked to the asset', linked.status === 200 && linked.body.data.length === 1, linked.body);
+
+  const draft = await call('POST', '/suppliers/whatsapp/draft', {
+    token: admin,
+    body: { equipmentId: oven.body.data.id },
+  });
+  check(
+    'whatsapp draft composed server-side',
+    typeof draft.body?.data?.deepLink === 'string' && draft.body.data.deepLink.includes('wa.me/919876543210'),
+    draft.body,
+  );
+  check('draft quotes the asset id', (draft.body?.data?.message ?? '').includes(assetId));
+
+  const equipmentDashboard = await call('GET', '/equipment/dashboard', { token: admin });
+  check(
+    'equipment dashboard loads',
+    equipmentDashboard.status === 200 &&
+    typeof equipmentDashboard.body.data.counts.totalEquipment === 'number',
+    equipmentDashboard.body,
+  );
+
+  // The whole module is deliberately reachable from the phone.
+  const androidEquipment = await call('GET', '/equipment', { token: androidToken, clientType: 'ANDROID' });
+  check('equipment readable from Android', androidEquipment.status === 200, androidEquipment.body);
+
+  const closed = await call('POST', `/maintenance/tickets/${ticket.body.data.id}/status`, {
+    token: admin,
+    body: { status: 'CLOSED' },
+  });
+  check('ticket closed', closed.body?.data?.status === 'CLOSED', closed.body);
+
+  const afterClose = await call('GET', `/equipment/${oven.body.data.id}`, { token: admin });
+  check('counter cleared once closed', afterClose.body?.data?.openTicketCount === 0);
+
+  const removed = await call('DELETE', `/equipment/${oven.body.data.id}`, { token: admin });
+  check('equipment deleted once nothing is open', removed.status === 204, removed.body);
+
   /* ------------------------------------------------------ validation */
 
   section('Validation hardening');

@@ -31,12 +31,12 @@ class SyncEngine {
     });
     connectSocket();
 
+    // Runs regardless of what the probe answers — see runCycle. A wrong "offline" reading at
+    // startup must not leave the device with no data at all.
     void isNetworkConnected().then((online) => {
       useSyncStatusStore.getState().setOnline(online);
-      if (online) {
-        void this.runCycle();
-      }
     });
+    void this.runCycle();
 
     this.unsubscribeNetwork = startNetworkMonitoring((online) => {
       if (online && this.running) {
@@ -95,8 +95,12 @@ class SyncEngine {
       this.rerunRequested = true;
       return;
     }
-    const { isOnline } = useSyncStatusStore.getState();
-    if (!isOnline) return;
+    // NetInfo's job is to *trigger* a sync, never to veto one. This used to `return` when
+    // `isOnline` was false, which on web is a hard stop: NetInfo there reports from
+    // `navigator.onLine`, which is wrong often enough — and stays wrong — that a browser tab
+    // could sit permanently at `isOnline: false` and never pull again. The device then only
+    // ever showed its own local writes, which is exactly "I posted an order and the other
+    // window never saw it". A genuinely offline attempt fails fast and is caught below.
 
     this.active = true;
     useSyncStatusStore.getState().setSyncing(true);

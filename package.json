@@ -6,7 +6,9 @@
   "workspaces": [
     "shared",
     "backend",
-    "admin"
+    "admin",
+    "CustomerKiosk",
+    "kds"
   ],
   "engines": {
     "node": ">=20.11.0",
@@ -16,11 +18,19 @@
     "build:shared": "npm run build --workspace @menuboard/shared",
     "build:backend": "npm run build --workspace @menuboard/backend",
     "build:admin": "npm run build --workspace @menuboard/admin",
-    "build": "npm run build:shared && npm run build:backend && npm run build:admin",
+    "build:kiosk": "npm run build --workspace @menuboard/customer-kiosk",
+    "build:kds": "npm run build --workspace @menuboard/kds",
+    "build": "npm run build:shared && npm run build:backend && npm run build:admin && npm run build:kiosk && npm run build:kds",
+    "predev:backend": "node scripts/free-ports.js 4000",
     "dev:backend": "npm run dev --workspace @menuboard/backend",
+    "predev:admin": "node scripts/free-ports.js 5173",
     "dev:admin": "npm run dev --workspace @menuboard/admin",
-    "predev": "node scripts/free-ports.js",
-    "dev": "concurrently -n backend,admin -c blue,magenta \"npm:dev:backend\" \"npm:dev:admin\"",
+    "predev:kiosk": "node scripts/free-ports.js 5180",
+    "dev:kiosk": "npm run dev --workspace @menuboard/customer-kiosk",
+    "predev:kds": "node scripts/free-ports.js 5185",
+    "dev:kds": "npm run dev --workspace @menuboard/kds",
+    "predev": "node scripts/free-ports.js && node scripts/dev-banner.js",
+    "dev": "concurrently -n backend,admin,kiosk,kds -c blue,magenta,yellow,cyan \"npm:dev:backend\" \"npm:dev:admin\" \"npm:dev:kiosk\" \"npm:dev:kds\"",
     "start:backend": "npm run start --workspace @menuboard/backend",
     "start:admin": "npm run preview --workspace @menuboard/admin -- --host",
     "start": "concurrently -n backend,admin -c blue,magenta \"npm:start:backend\" \"npm:start:admin\"",

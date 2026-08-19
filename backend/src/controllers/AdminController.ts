@@ -3,15 +3,18 @@ import type {
   BillingStatus,
   BoardRole,
   Capability,
+  CreateKioskDeviceRequest,
   GenerateBillingRequest,
   ReportKind,
   ReportQuery,
+  UpdateKioskDeviceRequest,
   UserRole,
 } from '@menuboard/shared';
 import { ANDROID_FORBIDDEN_CAPABILITIES } from '@menuboard/shared';
 import { getPool } from '../db/pool';
 import { auditService } from '../services/AuditService';
 import { billingService } from '../services/BillingService';
+import { kioskService } from '../services/KioskService';
 import { notificationService } from '../services/NotificationService';
 import { permissionsCacheService } from '../services/PermissionsCacheService';
 import { reportService } from '../services/ReportService';
@@ -129,6 +132,27 @@ export const AdminController = {
   async updateSetting(req: Request, res: Response): Promise<void> {
     const input = req.body as { value: unknown };
     ok(res, await settingsService.set(req.params.key as string, input.value, actorFrom(req)));
+  },
+
+  /* --------------------------------------------------------- kiosk devices */
+
+  async listKioskDevices(_req: Request, res: Response): Promise<void> {
+    ok(res, await kioskService.listDevices());
+  },
+
+  async createKioskDevice(req: Request, res: Response): Promise<void> {
+    const input = req.body as CreateKioskDeviceRequest;
+    created(res, await kioskService.createDevice(input, actorFrom(req)));
+  },
+
+  async updateKioskDevice(req: Request, res: Response): Promise<void> {
+    const input = req.body as UpdateKioskDeviceRequest;
+    ok(res, await kioskService.updateDevice(req.params.id as string, input, actorFrom(req)));
+  },
+
+  async deleteKioskDevice(req: Request, res: Response): Promise<void> {
+    await kioskService.deleteDevice(req.params.id as string, actorFrom(req));
+    noContent(res);
   },
 };
 

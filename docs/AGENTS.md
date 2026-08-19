@@ -51,6 +51,7 @@ it points to the specific document that has the detail you need.
 | `shared/` | `@menuboard/shared` — types, enums, DTOs, permissions, constants | Yes |
 | `backend/` | `@menuboard/backend` — Express API + MariaDB | Yes |
 | `admin/` | `@menuboard/admin` — Web Admin Portal (React + Vite + TS + MUI) | Yes |
+| `CustomerKiosk/` | `@menuboard/customer-kiosk` — guest self-service ordering kiosk, a tablet web app (MENUBOARD_SPEC.md §3d) | Yes |
 | `app/` | Android operational app (Expo + React Native + TS) | **No** — Metro and npm workspaces interact badly; consumes `@menuboard/shared` via `file:../shared` |
 | `docs/` | Product/technical documentation (this tree) | — |
 | `tasks/` | Phase-by-phase build briefs | — |
@@ -62,9 +63,17 @@ npm install
 npm run build            # shared → backend → admin, in order
 npm run migrate          # backend: creates DB if absent, applies migrations
 npm run seed             # backend: idempotent reference data
+npm run dev              # all three: backend 4000, admin 5173, kiosk 5180
+                         # `predev` frees those ports and prints the addresses first
+
 npm run dev:backend      # backend: http://localhost:4000
-npm run dev --workspace @menuboard/admin   # admin: http://localhost:5173
+npm run dev:admin        # admin:   http://localhost:5173
+npm run dev:kiosk        # kiosk:   http://localhost:5180
+                         # each has its own `pre` hook freeing only its own port
+
 npm run lint --workspace @menuboard/admin
+npm run typecheck --workspace @menuboard/customer-kiosk
+npm run lint --workspace @menuboard/customer-kiosk
 
 cd app && npm install && npm run typecheck && npm run lint && npm run start
 ```

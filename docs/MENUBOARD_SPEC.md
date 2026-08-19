@@ -73,6 +73,11 @@ customer-facing table ordering, and inventory/stock levels. "Printing Groups" ar
 routing metadata (e.g. "Kitchen", "Bar") for an external system to key off — MenuBoard does
 not talk to a printer.
 
+Superseded by §3d: **a guest ordering for themselves, at a fixed self-service kiosk standing
+in the canteen hall, and paying for it by UPI, is now in scope** — as one more POS client,
+not as a second POS. Ordering from a guest's *own* phone (table QR ordering), delivery
+platforms, guest accounts and loyalty remain excluded.
+
 If a request maps to what's still on this list, it is out of scope — say so before writing
 any code. Do not implement it "just in case," and do not build a generic abstraction whose
 obvious purpose is to host one of them later.
@@ -80,7 +85,7 @@ obvious purpose is to host one of them later.
 ### 3a. Menu Master (extension)
 
 `menu_items` (the pre-existing table) remains the **Food Item Master** — one row per dish,
-never duplicated per menu. Layered on top, added in `backend/src/db/migrations/012_menu_master.sql`:
+never duplicated per menu. Layered on top, added in `backend/src/db/migrations/001_schema.sql`:
 
 - **`menus`** — configurable named menus (e.g. a canteen's public menu, a function's
   members-only menu). Names/codes are data, never hardcoded enum values.
@@ -119,7 +124,7 @@ without needing to understand the relational model.
 
 ### 3b. Point of Sale and the Entity master (extension)
 
-Added in `backend/src/db/migrations/022_entities_and_pos.sql`. The POS is an Admin-Portal
+Added in `backend/src/db/migrations/001_schema.sql`. The POS is an Admin-Portal
 surface; the Android app gains nothing from this extension.
 
 - **`entities`** — the party master. One row per customer, employee, vendor or other body,
@@ -152,6 +157,171 @@ surface; the Android app gains nothing from this extension.
 
 Still excluded, and not made reachable by this extension: printer/cash-drawer hardware, a
 general ledger, accounting, loyalty, coupons, and inventory.
+
+### 3c. Equipment Monitoring & Maintenance Management (extension)
+
+Added in `backend/src/db/migrations/001_schema.sql`. Unlike §3a and §3b, this
+extension reaches **both** clients and reaches further down the roster than any other module:
+the person standing in front of a broken oven is the person who must be able to report it.
+
+- **One module, not two.** An equipment record and its maintenance history are the same
+  object seen from two angles. Every maintenance row hangs off `equipment.id`, and a ticket
+  derives its asset id, location and supplier from the equipment rather than restating them.
+- **Low data entry is architectural, not UI polish.** Opening a ticket requires an
+  `equipmentId` and nothing else; the asset id, location, supplier, priority, reporter and
+  timestamps are all resolved server-side. `captured_via` records which path a row came in
+  through, so the module can be measured against its own premise.
+- **AI proposes, the user disposes.** Photograph→identification, document→OCR and
+  text/voice→problem classification return `*Draft` types that are never persisted on their
+  own; they are confirmed (and editable) before they become records, and
+  `maintenance_problems` keeps the AI's suggestion beside the human's confirmation. **An
+  automatic technical diagnosis nobody confirmed is never produced.** With `GEMINI_API_KEY`
+  unset the three AI endpoints refuse with a clear message and every other part of the module
+  — registration, reporting, scheduling, supplier contact — works unchanged.
+- **No IoT dependency.** `equipment.status` is a human/workflow column set by people and by
+  the ticket lifecycle. `telemetry_device_id` is a nullable string that nothing reads, so a
+  sensor can be associated with an asset later without a schema change. There is deliberately
+  **no telemetry table**: storing readings nobody consumes would be exactly the "generic
+  abstraction whose obvious purpose is to host a future feature" this section forbids.
+- **Asset ids are server-allocated** — `MTC-KIT-OVN-001` = prefix · area segment · category
+  segment · sequence, with the prefix and sequence width configurable through `settings`.
+  **Ticket numbers are server-sequential** (`MTK-YYYYMMDD-NNNN`) for the same reason POS bill
+  numbers are: a ticket is raised online and quoted to a supplier over the phone.
+- **Files reuse the `media_assets` library** (§3a/012) through link tables, served by the
+  existing signed-URL route. The module adds no second blob store, and `attachments` (001) is
+  not reused because it is board-scoped while equipment belongs to no board.
+- **Audit stays in one place.** There is no `equipment_audit_logs`; the global `audit_logs`
+  records every mutation. `maintenance_activities` is a different thing and both exist: it is
+  the operator-facing timeline, written as prose at write time, while `audit_logs` remains the
+  security record.
+- **Derived state is never stored.** Warranty status is computed from the expiry date on every
+  read; ticket counters, next-service dates and warranty expiry are recomputed from their
+  source tables inside the transaction that changed them, never incremented.
+- **Floor-plan coordinates are fractions (0..1), never pixels**, so a plan re-uploaded at a
+  different size keeps every pin where it was.
+- **Suppliers link to the Entity master** (§3b) through a nullable `entity_id` rather than
+  duplicating it, and the WhatsApp/call wording is composed server-side so the phone and the
+  portal cannot word the same request differently. Nothing is *sent* by the server: it returns
+  a `wa.me` link the client opens, and records that it did.
+- **Two audiences, deliberately unequal** (seeded by 025, corrected by 028 — the grants in
+  `role_capabilities` and in `shared/src/permissions/index.ts` must always agree):
+  - **Monitoring and managing is Manager and Admin.** `equipment.view` and everything above it
+    — the register, the dashboard, floor plans, the location and category masters, timelines,
+    schedules, the supplier master and supplier contact — is an office job.
+  - **Reporting is User and above.** `equipment.report_problem` grants exactly two reads —
+    resolve one machine by its QR code or asset id, and read that machine, both returning a
+    payload trimmed to its identity and the problems already open against it — plus the media
+    upload that carries the photo or video of the fault, and `maintenance.create` /
+    `maintenance.view` to open the ticket and follow it. It grants **no** way to browse the
+    estate: a reporter sees the machine in front of them and no other.
+  - **An Employee holds no part of the module.** They carry out work handed to them; a fault
+    report opens a ticket somebody is then accountable for.
+  - Deleting an asset or a ticket — which erases its history — is **Admin**.
+  - `ANDROID_FORBIDDEN_CAPABILITIES` stays empty, so the whole module is reachable from the
+    phone: a Manager gets the monitoring surface there, a User gets scan-and-report.
+- **A fault report carries photos *and* video.** `MEDIA.VIDEO_MIME_TYPES` is accepted by this
+  module's upload endpoint alone — not by `attachments` (001) and not by the Menu Master media
+  library — because a noise, a leak or a flame that will not hold cannot be photographed.
+
+Still excluded, and not made reachable by this extension: IoT ingestion and telemetry storage,
+a spare-parts inventory, purchase orders, depreciation and asset accounting, and any automatic
+technical diagnosis that a human has not confirmed.
+
+### 3d. Self-service ordering kiosk (extension)
+
+The `CustomerKiosk/` workspace: a guest-facing web app run full-screen in a tablet browser
+(kiosk mode) on a stand in the hall. A guest reads the menu, builds an order, pays by UPI and
+takes a printed GST bill with their token number. Nobody signs in; nobody stands behind it.
+
+- **It is a POS client, not a second POS.** The kiosk writes the same `pos_orders` /
+  `pos_order_items` / `pos_payments` rows through the same `PosService`, over the same
+  `POST /pos/orders` and `POST /pos/orders/:id/checkout` endpoints the counter uses. There
+  are no kiosk tables, no kiosk pricing path and no second tax engine. Money and tax are
+  still resolved server-side from the Menu Master and the line's tax profile (§3b), so a
+  tablet in a public hall cannot sell a thali for one rupee. A kiosk sale is an ordinary
+  TAKEAWAY ticket and appears on the POS dashboard beside the counter's own.
+- **The kiosk session is default-deny.** `ClientType.KIOSK` exists alongside `ANDROID` and
+  `ADMIN`, and its capabilities are *intersected with an allowlist* —
+  `KIOSK_ALLOWED_CAPABILITIES` = `MASTER_READ`, `POS_READ`, `POS_OPERATE`, `POS_CHECKOUT` —
+  rather than filtered through a denylist. The polarity is the opposite of the Android rule
+  on purpose: a phone is held by an identified member of staff, a kiosk is unattended
+  furniture, and the token on it must be assumed readable by whoever picks the device up.
+  Administrative accounts are refused a kiosk session outright, on login *and* on refresh.
+- **One published menu, one screen.** The kiosk reads
+  `GET /menus/by-code/:code/tree` for the menu named in its own configuration and renders
+  every visible item in a single scrolling view, grouped by category but never gated behind a
+  category drill-down: a guest must be able to see the whole canteen at once. Availability
+  and the per-menu visibility flags (§3a) decide what appears; nothing is hidden in kiosk
+  code that the Admin Portal did not hide in the data.
+- **The estimate is data, not decoration.** "Ready in ~14 min · 7:42 PM" is computed from
+  `preparation_time_minutes` on the item/variant, which the resolved tree now carries. Where
+  the Menu Master states no preparation time, the kiosk shows no promise.
+- **UPI is the only tender, and the QR is a demo until a gateway exists.** The kiosk composes
+  a standard `upi://pay` intent and renders it as a QR. No payment gateway is integrated, so
+  settlement is not verified with a bank — the demo path is explicitly flagged in the UI and
+  behind `VITE_KIOSK_DEMO_PAYMENT`. Whatever replaces it must settle through the same
+  checkout endpoint and record an ordinary `UPI` `pos_payments` row; it must not grow a
+  second settlement path. Cash, card and account tender stay at the staffed counter.
+- **The bill is printed by ESC/POS, and the hardware exclusion is now bounded rather than
+  absolute.** MenuBoard drives exactly one class of device — a thermal receipt printer — and
+  only ever to print a bill for a sale it has already settled. There are two routes and they
+  emit the same bytes, because the encoder and the bill composer live in
+  `@menuboard/shared`: the kiosk writes to a printer attached to its own tablet over WebUSB,
+  and the backend writes to a networked counter printer over RAW/9100. Which one a stand
+  tries first is a field on its row in the registry; the other is the fallback.
+  - There is **no third route**. An HTML rendering printed through the browser's own dialog
+    existed and was removed rather than demoted: it produced an approximation of a tax
+    document on whatever paper the tablet's default printer held, took seconds to rasterise,
+    and raised a modal an unattended guest could not dismiss. Worse than any of those, it
+    made a misconfigured stand look like a working one. A stand either drives a printer as a
+    printer or prints at the counter.
+  - The printer's **destination is never named by the client**. The network route prints to
+    the host in `pos.printer_host`; accepting one from a tablet in a public hall would make
+    the endpoint an arbitrary outbound TCP connection with the server's network position.
+  - Receipts are **Latin-only**. A thermal printer has no Devanagari glyphs and cannot be
+    taught any, so the bill stays in English — which is also what a tax document should be.
+  - Still excluded: cash drawers, customer displays, weighing scales, card terminals, label
+    printers, and any device MenuBoard would have to *read* from.
+- **A settled bill may be sent to the guest's own WhatsApp.** Over Meta's WhatsApp Cloud API,
+  as an approved template, to a number the guest types on the kiosk's own number pad after
+  paying. It is optional at three levels and silent at all of them: unset credentials, the
+  `kiosk.whatsapp_bill_enabled` setting, and the guest declining. This is not messaging —
+  MenuBoard gains no inbox, no conversation and no way to reach a guest again; it sends one
+  copy of one document the guest asked for, and audits that it did.
+- **How a kiosk looks is the organisation's decision, not the device's.** Skin
+  (`kiosk.skin`, four of them), language (`kiosk.language_mode` — English, हिंदी, or both at
+  once), the greeting (`kiosk.greeting` / `kiosk.greeting_hi`), whether the kiosk may suggest
+  a drink or a sweet before payment (`kiosk.recommendations`), the idle timeout, the receipt
+  width and footer, and the **billing identity** (`organisation.legal_name`,
+  `organisation.address_line`, `organisation.gstin`) are set once in the Admin Portal and read
+  by every kiosk from `GET /pos/kiosk-profile`. A GSTIN is a registration, and four tablets in
+  one hall must not be able to issue bills under four different ones. A guest may switch the
+  language for their own order; the kiosk drops that choice on reset.
+- **A stand is a row, not a browser's local storage.** `kiosk_devices` holds every
+  self-service stand — its code, its menu, its station, its payee VPA, its printer route, and
+  the order it shows categories in — and is edited in the Admin Portal under **Kiosks**. The
+  tablet's entire local state is the *code* of the stand it is standing at; it quotes that on
+  `GET /pos/kiosk-profile?device=CODE` and is told everything else. This is what makes a hall
+  of six stands administrable: the settings can be compared side by side, changing them is
+  audited (`kiosk.device.*`), and re-pointing the hall at a festival menu is one edit rather
+  than six walks. A stand deleted or deactivated unbinds its tablet at the next poll.
+  - The **one thing that cannot move to the portal** is the WebUSB grant: a browser hands a
+    USB device only to a gesture made on the machine it is plugged into. Pairing therefore
+    stays on the tablet's staff screen, which is otherwise reduced to picking the stand.
+  - The **category order is a per-stand override**, not a replacement for the menu's own
+    `sort_order` — anything the operator did not place falls to the end in the menu's order,
+    so adding a category in the Menu Master can never make dishes invisible at a stand
+    nobody remembered to re-sort.
+  - The kiosk's category rail **filters and never persists**. Every guest arrives on "All";
+    a stand that opened on the previous guest's filter would show the next person a menu with
+    most of it missing and no way to know that is what they were looking at.
+- **The kiosk never reverses anything.** No void, no refund, no edit after settlement. A
+  mistake is handled by staff in the Admin Portal, which holds `POS_VOID`.
+
+Still excluded, and not made reachable by this extension: ordering from the guest's own phone
+(table/QR ordering), delivery platforms, guest accounts, loyalty, coupons, promotional
+content, cash or card tender at the kiosk, and hardware integration beyond the receipt
+printer described above.
 
 ### The Android exclusion is structural, not cosmetic
 
@@ -194,6 +364,13 @@ Admin Portal — the Android app never promotes an ad-hoc line into the catalogu
 - **Menu Master** — see §3a: menus, menu category/item assignments, variants (with price),
   media library, counters, printing groups, modifiers, schedules. Admin-managed, exposed
   read-only to POS/MenuBoard-class consumers.
+- **Equipment** — see §3c: a physical asset with a server-allocated asset id, a location on
+  the floor/area/location tree, a human-set status, documents, warranties, supplier links and
+  preventive schedules. Its maintenance tickets and their operator timeline are part of the
+  same object, not a separate system.
+- **POS ticket** — see §3b: a counter sale with server-sequential bill number, frozen line
+  amounts and an append-only payment ledger. A kiosk sale (§3d) is one of these, raised by
+  the guest instead of by an operator; there is no separate kiosk order object.
 
 ## 5. Offline-first as a product requirement, not an implementation detail
 

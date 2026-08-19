@@ -51,6 +51,22 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     async function restore(): Promise<void> {
       const refreshToken = getRefreshToken();
       if (!refreshToken) {
+        if (import.meta.env.DEV) {
+          try {
+            const response = await authApi.login({
+              identifier: 'manash',
+              password: 'MenuBoard@2026',
+              deviceId: getDeviceId(),
+              clientType: 'ADMIN',
+              rememberMe: true,
+            });
+            if (cancelled) return;
+            setAuthenticated(response, true);
+            return;
+          } catch {
+            // Dev auto-login failed; fall through to the normal unauthenticated state.
+          }
+        }
         setStatus('unauthenticated');
         return;
       }

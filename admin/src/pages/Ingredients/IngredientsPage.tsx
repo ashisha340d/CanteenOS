@@ -36,7 +36,7 @@ export function IngredientsPage(): JSX.Element {
 
   const { data: categoryOptions } = useQuery({
     queryKey: ['ingredient-category-filter-options'],
-    queryFn: () => ingredientCategoriesApi.list({ page: 1, pageSize: 200 }),
+    queryFn: () => ingredientCategoriesApi.list({ page: 1, pageSize: 100 }),
   });
 
   const query = useMemo(

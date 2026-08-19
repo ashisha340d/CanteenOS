@@ -11,6 +11,7 @@ import {
   menuCategoriesApi,
   menuItemsApi,
   stationsApi,
+  type CatalogueScopedListQuery,
   type MasterListQuery,
 } from '../api/masters';
 
@@ -76,7 +77,7 @@ export function useDeleteActivityType() {
 
 /* -------------------------------------------------------------- menu categories */
 
-export function useMenuCategories(query: MasterListQuery) {
+export function useMenuCategories(query: CatalogueScopedListQuery) {
   return useQuery({ queryKey: ['menu-categories', query], queryFn: () => menuCategoriesApi.list(query), placeholderData: (p) => p });
 }
 export function useCreateMenuCategory() {

@@ -4,6 +4,7 @@ import {
   ANDROID_FORBIDDEN_CAPABILITIES,
   ClientType,
   ERROR_CODES,
+  KIOSK_ALLOWED_CAPABILITIES,
   type AccessTokenClaims,
   type Capability,
   type UserRole,
@@ -86,10 +87,14 @@ export class TokenService {
   /**
    * Effective global capabilities for a session. Android sessions have the administrative
    * capabilities stripped even when the user is an Admin, so the mobile app can never
-   * reach billing, masters, reports or user management.
+   * reach billing, masters, reports or user management. A kiosk session is narrowed the
+   * other way round — intersected with an allowlist — because the device is unattended.
    */
   capabilitiesFor(role: UserRole, clientType: ClientType): Capability[] {
     const base = permissionsCacheService.getRoleCapabilities(role);
+    if (clientType === ClientType.KIOSK) {
+      return base.filter((capability) => KIOSK_ALLOWED_CAPABILITIES.includes(capability));
+    }
     if (clientType !== ClientType.ANDROID) return base;
     return base.filter((capability) => !ANDROID_FORBIDDEN_CAPABILITIES.includes(capability));
   }

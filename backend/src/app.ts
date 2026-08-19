@@ -27,7 +27,10 @@ export function createApp(): Express {
 
   app.use(
     helmet({
-      // The API serves JSON and media, never HTML, so a CSP would have nothing to protect.
+      // CSP is off deliberately. The one HTML page served here is the Digital Menu Board, whose
+      // markup ships in this repository — there is no user-supplied content in it to protect
+      // against — and it loads Google Fonts and a Lottie bundle from a CDN, which a useful
+      // policy would have to enumerate and keep in step for no gain.
       contentSecurityPolicy: false,
       crossOriginResourcePolicy: { policy: 'cross-origin' },
       hsts: config.security.forceHttps
@@ -76,6 +79,45 @@ export function createApp(): Express {
   });
 
   app.use('/api/v1', buildApiRouter());
+
+  // The Digital Menu Board page itself, so a screen needs a URL and nothing else — no launcher,
+  // no local server, no install. Serving it from the API's own origin is what keeps it that
+  // simple: the board's fetches are same-origin, so no screen has to appear in CORS_ORIGINS.
+  //
+  // `index: 'index.html'` and a single named file rather than the whole `digitalmenu/` folder:
+  // that directory also holds tooling config, and static middleware pointed at a directory
+  // serves everything in it, including whatever lands there later.
+  app.get('/menu-board', (_req, res) => {
+    // Helmet's blanket `X-Frame-Options: SAMEORIGIN` (above) is right for every other response
+    // but wrong for this one: the admin portal's board layout editor frames this page so an
+    // operator can drag the Today panel and the ads over the *actual* menu, and the portal is a
+    // different origin from the API in every setup where they are not behind one reverse proxy
+    // — in development it is always :5173 against :4000. SAMEORIGIN makes the browser refuse to
+    // render the frame at all, with nothing in the page to explain why.
+    //
+    // It is replaced for this page only, and only with the framing rule relaxed: the modern
+    // `frame-ancestors` equivalent, scoped to exactly the origins already trusted to call the
+    // API. That mirrors `isAllowedCorsOrigin` deliberately — permissive outside production,
+    // where the portal is opened from whatever LAN or Tailscale address it has that day and an
+    // exact list cannot be written ahead of time, and the strict configured allowlist in
+    // production. This page carries no session and no user-supplied markup, so what a frame
+    // could be tricked into doing is limited to displaying a menu.
+    res.removeHeader('X-Frame-Options');
+    const ancestors = config.isProduction
+      ? ["'self'", ...config.corsOrigins].join(' ')
+      : '*';
+    res.setHeader('Content-Security-Policy', `frame-ancestors ${ancestors}`);
+
+    // Helmet's default `Cross-Origin-Opener-Policy: same-origin` has to go for the same
+    // reason, and it is the less obvious of the two. The portal opens this page in a window
+    // of its own to edit it, and the two hold a conversation through that handle: the editor
+    // asks for an access token, the portal answers, and nothing about the editor turns on
+    // until it does. Under `same-origin` the browser severs that relationship the moment the
+    // window opens — across ports it is a cross-origin open — leaving `window.opener` null
+    // and the editor permanently inert, with no error anywhere to say why.
+    res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
+    res.sendFile(config.menuBoard.pagePath);
+  });
 
   app.use(notFoundHandler);
   app.use(errorHandler);

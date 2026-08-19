@@ -6,11 +6,11 @@ import { asyncHandler } from '../middleware/errorHandler';
 import { validate } from '../middleware/validate';
 import {
   assignCounterRouteSchema,
-  assignItemGroupSchema,
   assignMenuCategorySchema,
   assignMenuItemSchema,
   assignModifierGroupSchema,
   assignPrintingRouteSchema,
+  catalogueScopedListQuerySchema,
   createCounterSchema,
   createItemGroupSchema,
   createMenuSchema,
@@ -25,6 +25,7 @@ import {
   menuItemAssignmentListQuerySchema,
   menuItemScheduleBulkSchema,
   menuListQuerySchema,
+  menuShiftApplyQuerySchema,
   routableEntityRefSchema,
   updateCounterSchema,
   updateItemGroupSchema,
@@ -219,7 +220,7 @@ export function menuMasterRoutes(): Router {
   );
 
   /* item groups */
-  router.get('/item-groups', read, validate({ query: menuListQuerySchema }), asyncHandler(MenuMasterController.listItemGroups));
+  router.get('/item-groups', read, validate({ query: catalogueScopedListQuerySchema }), asyncHandler(MenuMasterController.listItemGroups));
   router.post(
     '/item-groups',
     write,
@@ -238,25 +239,6 @@ export function menuMasterRoutes(): Router {
     validate({ params: idParam }),
     asyncHandler(MenuMasterController.deleteItemGroup),
   );
-  router.get(
-    '/item-groups/for-item/:foodItemId',
-    read,
-    validate({ params: foodItemIdParam }),
-    asyncHandler(MenuMasterController.listItemGroupsForFoodItem),
-  );
-  router.post(
-    '/item-groups/assign',
-    write,
-    validate({ body: assignItemGroupSchema }),
-    asyncHandler(MenuMasterController.assignItemGroup),
-  );
-  router.delete(
-    '/item-group-assignments/:id',
-    write,
-    validate({ params: idParam }),
-    asyncHandler(MenuMasterController.removeItemGroupAssignment),
-  );
-
   /* food item schedules */
   router.get(
     '/menu-items/:foodItemId/schedule',
@@ -415,6 +397,19 @@ export function menuMasterRoutes(): Router {
     write,
     validate({ params: idParam }),
     asyncHandler(MenuMasterController.removeSchedule),
+  );
+
+  /**
+   * Forces the morning/evening shift auto-reset now, rather than waiting for the automatic
+   * sweep. See MenuShiftSchedulerService — this never marks anything unavailable, only reverses
+   * an UNAVAILABLE/SOLD_OUT flag that the new shift's schedule (or, for EVENING, the whole
+   * catalogue) says should be back.
+   */
+  router.post(
+    '/menu-shift/apply',
+    write,
+    validate({ query: menuShiftApplyQuerySchema }),
+    asyncHandler(MenuMasterController.applyMenuShiftReset),
   );
 
   return router;

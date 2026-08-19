@@ -1,0 +1,121 @@
+.skin-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px;
+  text-align: left;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--card);
+  cursor: pointer;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+
+.skin-card:hover {
+  border-color: color-mix(in oklch, var(--primary) 45%, transparent);
+}
+
+.skin-card:focus-visible {
+  outline: 3px solid color-mix(in oklch, var(--ring) 50%, transparent);
+  outline-offset: 1px;
+}
+
+.skin-card--active {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+
+/* ------------------------------------------------------------------ miniature desktop */
+
+.skin-preview {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius-lg) - 4px);
+}
+
+.skin-preview__icons {
+  position: absolute;
+  top: 7%;
+  left: 4%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.skin-preview__icon {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+}
+
+.skin-preview__window {
+  position: absolute;
+  top: 20%;
+  left: 22%;
+  width: 68%;
+  height: 56%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid;
+  border-radius: 4px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.22);
+}
+
+.skin-preview__titlebar {
+  display: flex;
+  align-items: center;
+  gap: 2.5px;
+  height: 10px;
+  flex-shrink: 0;
+  padding: 0 4px;
+  border-bottom: 1px solid;
+}
+
+.skin-preview__light {
+  width: 3.5px;
+  height: 3.5px;
+  border-radius: 50%;
+}
+
+.skin-preview__lines {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+}
+
+.skin-preview__lines > span {
+  height: 3px;
+  width: 100%;
+  border-radius: 2px;
+  opacity: 0.75;
+}
+
+.skin-preview__lines > span:first-child {
+  width: 38%;
+  opacity: 1;
+}
+
+.skin-preview__bar {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  height: 11%;
+  padding: 0 4px;
+  border-top: 1px solid;
+}
+
+.skin-preview__task {
+  width: 26%;
+  height: 45%;
+  border-radius: 2px;
+  opacity: 0.8;
+}

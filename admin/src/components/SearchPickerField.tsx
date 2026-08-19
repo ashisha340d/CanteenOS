@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CheckIcon, SearchIcon } from 'lucide-react';
+import { CheckIcon, SearchIcon, XIcon } from 'lucide-react';
 import {
   Command,
   CommandEmpty,
@@ -33,6 +33,7 @@ interface SearchPickerFieldProps {
   loading?: boolean;
   onSearchChange: (search: string) => void;
   onSelect: (option: PickerOption) => void;
+  onClear?: () => void;
   disabled?: boolean;
   required?: boolean;
 }
@@ -52,6 +53,7 @@ export function SearchPickerField({
   loading,
   onSearchChange,
   onSelect,
+  onClear,
   disabled,
   required,
 }: SearchPickerFieldProps): JSX.Element {
@@ -95,6 +97,21 @@ export function SearchPickerField({
             }}
             className="cursor-pointer"
           />
+          {onClear && value !== null && !disabled && (
+            <InputGroupAddon>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClear();
+                }}
+                aria-label={`Clear ${label}`}
+                className="text-muted-foreground hover:text-foreground focus:outline-none"
+              >
+                <XIcon className="size-4" />
+              </button>
+            </InputGroupAddon>
+          )}
         </InputGroup>
       </Field>
 

@@ -13,6 +13,21 @@ export function todayIsoDate(): string {
   return toIsoDate(new Date());
 }
 
+/**
+ * The local calendar day an ISO-8601 instant falls on.
+ *
+ * Never slice an instant's first ten characters to get this. `nowIso()` writes UTC, so at
+ * UTC+5:30 anything sent between local midnight and 05:30 carries *yesterday's* UTC date — a
+ * message posted at 2am read as a day old, dropped out of a "today only" filter, and put a
+ * wrong date separator in the feed. Parsing and re-formatting in local time is the fix.
+ *
+ * Returns '' for an unparseable value so callers can compare without a crash.
+ */
+export function localDayOf(iso: string): string {
+  const parsed = new Date(iso);
+  return Number.isNaN(parsed.getTime()) ? '' : toIsoDate(parsed);
+}
+
 export function toIsoDate(date: Date): string {
   const yyyy = String(date.getFullYear()).padStart(4, '0');
   const mm = String(date.getMonth() + 1).padStart(2, '0');

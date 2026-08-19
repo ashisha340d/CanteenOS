@@ -40,6 +40,20 @@ export function buildPage<T>(
   };
 }
 
+/**
+ * Turns the `catalogueId` query parameter into the tri-state the repositories expect.
+ *
+ * A query string cannot carry a null, so the Admin Portal sends the literal `NONE` to ask for
+ * rows filed under no Menu Catalogue. Absent stays absent, which means "any catalogue" — a
+ * genuinely different question from "no catalogue".
+ */
+export function catalogueFilterFrom(
+  raw: string | undefined,
+): { catalogueId: string | null } | Record<string, never> {
+  if (raw === undefined) return {};
+  return { catalogueId: raw === 'NONE' ? null : raw };
+}
+
 /** Clamps client-supplied paging into a safe range and returns the SQL offset. */
 export function resolvePaging(input: { page?: number; pageSize?: number }): {
   page: number;

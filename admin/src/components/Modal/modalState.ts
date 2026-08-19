@@ -71,6 +71,7 @@ export function usePersistedFormState<T extends object>(
 ): { value: T; setValue: (next: T) => void; clear: () => void } {
   const key = FORM_PREFIX + modalId;
   const initialRef = useRef(initial);
+  initialRef.current = initial;
   const [value, setValueState] = useState<T>(() => {
     try {
       const raw = localStorage.getItem(key);

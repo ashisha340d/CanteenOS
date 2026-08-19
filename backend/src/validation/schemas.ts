@@ -6,13 +6,25 @@ import {
   BillingStatus,
   BoardRole,
   BoardStatus,
+  CallOutcome,
+  CallStatus,
   Capability,
+  CaptureSource,
   ClientType,
   EntityType,
+  EquipmentDocumentType,
+  EquipmentStatus,
+  EquipmentSupplierRole,
+  FLOOR_PLAN_COORDINATE_MAX,
   GstTaxability,
   HsnSacCodeType,
   ItcEligibility,
   LIMITS,
+  MaintenanceAttachmentKind,
+  MaintenanceFrequency,
+  MaintenancePriority,
+  MaintenanceRequestKind,
+  MaintenanceTicketStatus,
   MasterStatus,
   OrderPriority,
   OrderStatus,
@@ -21,6 +33,8 @@ import {
   PosOrderType,
   PosPaymentMethod,
   PosPaymentStatus,
+  ProblemCategory,
+  ReceiptTransport,
   RecipeDifficulty,
   RecipeIngredientScaling,
   ReportKind,
@@ -32,6 +46,7 @@ import {
   TaskStatus,
   UserRole,
   UserStatus,
+  WarrantyStatus,
   YoutubeImportStatus,
 } from '@menuboard/shared';
 import {
@@ -260,6 +275,17 @@ export const masterListQuerySchema = pageQuery
   .extend({ status: enumOf(MasterStatus).optional() })
   .strict();
 
+/**
+ * A Menu Category and a Menu Group each belong to one Menu Catalogue. The literal `NONE` asks
+ * for the rows filed under no catalogue at all — a question the Admin Portal asks explicitly,
+ * and one an absent parameter cannot express, since absent already means "any catalogue".
+ */
+export const CATALOGUE_NONE = 'NONE';
+
+export const catalogueScopedListQuerySchema = masterListQuerySchema.extend({
+  catalogueId: z.union([uuid, z.literal(CATALOGUE_NONE)]).optional(),
+});
+
 export const stationListQuerySchema = masterListQuerySchema;
 
 export const createStationSchema = z
@@ -291,6 +317,9 @@ export const updateActivityTypeSchema = createActivityTypeSchema.partial().stric
 export const createMenuCategorySchema = z
   .object({
     ...masterBase,
+    // Nullable rather than required: a category may be drafted before anyone has decided which
+    // catalogue it belongs on, and the two pre-existing unfiled categories must stay editable.
+    catalogueId: uuid.nullable().optional(),
     name: text(LIMITS.MENU_CATEGORY_NAME_MAX, 'Category name'),
     nameHi: optionalText(LIMITS.MENU_CATEGORY_NAME_MAX),
     imagePath: optionalText(500),
@@ -301,12 +330,14 @@ export const updateMenuCategorySchema = createMenuCategorySchema.partial().stric
 
 export const menuItemListQuerySchema = masterListQuerySchema.extend({
   categoryId: uuid.optional(),
+  groupId: uuid.optional(),
 });
 
 export const createMenuItemSchema = z
   .object({
     ...masterBase,
     categoryId: uuid,
+    groupId: uuid.nullable().optional(),
     name: text(LIMITS.MENU_ITEM_NAME_MAX, 'Item name'),
     nameHi: optionalText(LIMITS.MENU_ITEM_NAME_MAX),
     unit: text(LIMITS.UNIT_MAX, 'Unit'),
@@ -315,6 +346,7 @@ export const createMenuItemSchema = z
     basePrice: z.coerce.number().min(LIMITS.PRICE_MIN).max(LIMITS.PRICE_MAX).nullable().optional(),
     taxProfileId: uuid.nullable().optional(),
     alwaysAvailable: z.boolean().optional(),
+    prepSeconds: z.coerce.number().int().min(1).max(86400).nullable().optional(),
   })
   .strict();
 
@@ -454,20 +486,13 @@ export const updateCounterSchema = createCounterSchema.partial().strict();
 export const createItemGroupSchema = z
   .object({
     ...masterBase,
+    catalogueId: uuid.nullable().optional(),
     name: text(LIMITS.COUNTER_NAME_MAX, 'Item group name'),
     code: optionalText(60),
   })
   .strict();
 
 export const updateItemGroupSchema = createItemGroupSchema.partial().strict();
-
-export const assignItemGroupSchema = z
-  .object({
-    foodItemId: uuid,
-    groupId: uuid,
-    status: enumOf(MasterStatus).optional(),
-  })
-  .strict();
 
 export const menuItemScheduleBulkSchema = z
   .object({
@@ -482,6 +507,11 @@ export const menuItemScheduleBulkSchema = z
         .strict(),
     ),
   })
+  .strict();
+
+/** Manual trigger for MenuShiftSchedulerService — see menuMaster.routes.ts `/menu-shift/apply`. */
+export const menuShiftApplyQuerySchema = z
+  .object({ shift: z.enum(['MORNING', 'EVENING']) })
   .strict();
 
 export const variantCatalogPriceSchema = z
@@ -1531,6 +1561,401 @@ export const posDashboardQuerySchema = z
 
 export const posOrderIdParam = z.object({ posOrderId: uuid }).strict();
 
+/**
+ * The print request names no printer. The destination is a server-side setting, so a tablet
+ * standing in a public hall cannot point the backend at an arbitrary host and port.
+ */
+export const printPosBillSchema = z
+  .object({ copies: z.coerce.number().int().min(1).max(5).optional() })
+  .strict();
+export const sendPosBillWhatsAppSchema = z
+  .object({
+    // Free-form on purpose: a guest types ten digits, a counter may paste a number with a
+    // country code and spaces, and `normalisePhone` reconciles both.
+    phone: z.string().trim().min(6).max(20).optional(),
+  })
+  .strict();
+/** The stand a tablet says it is. Optional: an unprovisioned kiosk still reads the profile. */
+export const kioskProfileQuerySchema = z
+  .object({ device: z.string().trim().min(1).max(40).optional() })
+  .strict();
+
+/* ------------------------------------------------------------------ kds / cds */
+
+export const kdsCounterIdParam = z.object({ counterId: uuid }).strict();
+export const kdsPrintingGroupIdParam = z.object({ printingGroupId: uuid }).strict();
+export const kdsLineIdParam = z.object({ lineId: uuid }).strict();
+export const kdsOrderIdParam = z.object({ orderId: uuid }).strict();
+
+/** Which counter's lines a "serve all" bumps — the kitchen flow is counter-scoped. */
+export const kdsServeAllSchema = z.object({ counterId: uuid }).strict();
+
+/**
+ * Shape only, like the POS line schema: the service re-checks every line against the order,
+ * resolves each addition's price itself, and re-verifies expectedValue to the paisa.
+ */
+export const kdsExchangeSchema = z
+  .object({
+    lineIds: z.array(uuid).min(1).max(LIMITS.POS_ITEMS_PER_ORDER_MAX),
+    additions: z
+      .array(
+        z
+          .object({
+            menuItemId: uuid,
+            variantId: uuid.nullable().optional(),
+            quantity: z.coerce
+              .number()
+              .gt(0, 'Quantity must be greater than zero')
+              .max(LIMITS.QUANTITY_MAX)
+              .refine((value) => Number.isInteger(value * 1000), 'At most 3 decimal places'),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(LIMITS.POS_ITEMS_PER_ORDER_MAX),
+    expectedValue: posMoney,
+  })
+  .strict();
+
+/** Which screen's menu file is being read or written. */
+export const kdsStationMenuParam = z
+  .object({ kind: z.enum(['counter', 'kitchen']), stationId: uuid })
+  .strict();
+export const kdsStationMenuItemParam = kdsStationMenuParam.extend({ menuItemId: uuid }).strict();
+
+/**
+ * Send only what changed; a null displayName hands the dish its master name back, and a null
+ * openingQty forgets the count entirely (rather than counting zero, which means "none left").
+ */
+export const kdsStationMenuUpsertSchema = z
+  .object({
+    displayName: z.string().trim().min(1).max(160).nullish(),
+    isFinished: z.boolean().optional(),
+    openingQty: z.coerce
+      .number()
+      .min(0)
+      .max(LIMITS.QUANTITY_MAX)
+      .refine((value) => Number.isInteger(value * 1000), 'At most 3 decimal places')
+      .nullish(),
+  })
+  .strict();
+/* ------------------------------------------------------------------ kiosk devices */
+/**
+ * A stand in the hall. `code` is what a member of staff types into the tablet once, so it is
+ * kept to characters that survive being read off a printed label and typed on a touch keyboard.
+ */
+const kioskDeviceFields = {
+  code: z
+    .string()
+    .trim()
+    .min(2)
+    .max(40)
+    .regex(/^[A-Za-z0-9][A-Za-z0-9 _-]*$/, 'Use letters, digits, spaces, hyphens or underscores'),
+  label: z.string().trim().min(1).max(120),
+  menuCode: z.string().trim().min(1).max(60),
+  stationId: uuid.nullable().optional(),
+  outletName: z.string().trim().min(1).max(120),
+  outletNameHi: z.string().trim().max(160).nullable().optional(),
+  upiVpa: z.string().trim().max(120).optional(),
+  upiPayeeName: z.string().trim().max(120).optional(),
+  receiptTransport: enumOf(ReceiptTransport).optional(),
+  // The stand's own category order. Ids the menu no longer has are harmless — the kiosk reads
+  // this as a preference and falls back to the menu's own order for anything unlisted.
+  categoryOrder: z.array(uuid).max(200).optional(),
+  status: enumOf(MasterStatus).optional(),
+};
+export const createKioskDeviceSchema = z.object(kioskDeviceFields).strict();
+export const updateKioskDeviceSchema = z
+  .object(kioskDeviceFields)
+  .partial()
+  .strict()
+  .refine((body) => Object.keys(body).length > 0, { message: 'No changes supplied' });
+
+/* ------------------------------------------------------- digital menu board screens */
+
+/** A font size, padding or gap in CSS pixels. Bounded so a typo cannot blank a wall screen. */
+const boardPixels = z.coerce.number().min(0).max(400);
+
+/**
+ * The twelve celebration animations the canvas layer knows how to draw — `fireworks`, `pushpa`
+ * (flower fall), `rose`, `deep` (diyas), `aarti`, `morpankh` (peacock feather), `tulsi`, `om`,
+ * `shankh`, `rangoli`, `gulal` and `kanak` (golden shower). Both `board.fx.anim` and each
+ * festival day's `a` name one of these; anything else is a typo the picker in the portal
+ * cannot itself produce, so this is the one place that has to catch it.
+ */
+const CELEBRATION_ANIMATIONS = [
+  'fireworks',
+  'pushpa',
+  'rose',
+  'deep',
+  'aarti',
+  'morpankh',
+  'tulsi',
+  'om',
+  'shankh',
+  'rangoli',
+  'gulal',
+  'kanak',
+] as const;
+
+/** Percent of the viewport — the unit every position/size on the board is stored in. */
+const boardPercent = z.coerce.number().min(0).max(100);
+/** A type scale relative to the board's own sizes. Bounded so nothing can be scaled off-screen. */
+const boardScale = z.coerce.number().min(0.6).max(2);
+/** Minutes between repeats of something periodic. Floor of 1 keeps a typo from spinning a loop. */
+const everyMinutes = z.coerce.number().min(1).max(720);
+
+const menuBoardAdSchema = z
+  .object({
+    id: z.string().trim().min(1).max(60),
+    on: z.boolean().optional(),
+    title: z.string().trim().max(80).optional(),
+    hi: z.string().trim().max(80).optional(),
+    text: z.string().trim().max(200).optional(),
+    // Free text, not a number: the board only prefixes a ₹ when it looks numeric, so a seasonal
+    // line like "Ask at the counter" is a legitimate value here.
+    price: z.string().trim().max(20).optional(),
+    // Split evenly across `forSec` and crossfaded — capped at 6 so a single ad cannot stretch
+    // its own slot into a slideshow nobody scheduled.
+    images: z.array(z.string().trim().max(500)).max(6).optional(),
+    // Menu Master item ids this ad advertises. Capped for the same reason as `images`: an ad
+    // slot holds a few lines, and a list longer than that is a menu, not an advertisement.
+    items: z.array(z.string().trim().max(60)).max(8).optional(),
+    everyMin: everyMinutes.optional(),
+    forSec: z.coerce.number().min(3).max(60).optional(),
+    x: boardPercent.optional(),
+    y: boardPercent.optional(),
+    // An ad narrower than 14% or shorter than 8% of the screen stops being legible from across
+    // a hall — the same floor the board's own placement UI enforced.
+    w: z.coerce.number().min(14).max(100).optional(),
+    h: z.coerce.number().min(8).max(100).optional(),
+    fs: boardScale.optional(),
+    fsTitle: boardScale.optional(),
+    fsHi: boardScale.optional(),
+    fsText: boardScale.optional(),
+    fsPrice: boardScale.optional(),
+    anim: z.string().trim().max(40).optional(),
+    img: z
+      .object({
+        x: boardPercent.optional(),
+        y: boardPercent.optional(),
+        w: boardPercent.optional(),
+        h: boardPercent.optional(),
+        fit: z.enum(['cover', 'contain']).optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+
+const menuBoardBoardConfigSchema = z
+  .object({
+    panel: z
+      .object({
+        on: z.boolean().optional(),
+        x: boardPercent.optional(),
+        y: boardPercent.optional(),
+        // The Today panel carries a clock face and, optionally, a weather card and a festival
+        // line — collapsing it much past these floors clips its own contents.
+        w: z.coerce.number().min(8).max(96).optional(),
+        h: z.coerce.number().min(3.5).max(70).optional(),
+        wx: z.boolean().optional(),
+        fest: z.boolean().optional(),
+        fs: boardScale.optional(),
+      })
+      .strict()
+      .optional(),
+    wx: z
+      .object({
+        lat: z.coerce.number().min(-90).max(90).optional(),
+        lon: z.coerce.number().min(-180).max(180).optional(),
+        place: z.string().trim().max(60).optional(),
+        unit: z.enum(['C', 'F']).optional(),
+        // Only meaningful while `float` is on, but stored either way so turning the card loose
+        // and putting it back does not lose where it was last placed.
+        float: z.boolean().optional(),
+        x: boardPercent.optional(),
+        y: boardPercent.optional(),
+        w: z.coerce.number().min(10).max(60).optional(),
+        h: z.coerce.number().min(5).max(40).optional(),
+        fs: boardScale.optional(),
+      })
+      .strict()
+      .optional(),
+    fx: z
+      .object({
+        on: z.boolean().optional(),
+        anim: z.enum(CELEBRATION_ANIMATIONS).optional(),
+        everyMin: everyMinutes.optional(),
+        forSec: z.coerce.number().min(2).max(60).optional(),
+      })
+      .strict()
+      .optional(),
+    hol: z
+      .object({
+        // A Calendarific API key is a secret typed once by an operator, so this stores it
+        // rather than proxying the import through the backend — the same trust boundary the
+        // vanilla board already had, just moved from a browser field to this row.
+        key: z.string().trim().max(200).optional(),
+        country: z
+          .string()
+          .trim()
+          .toUpperCase()
+          .regex(/^[A-Z]{2,3}$/, 'Use a two-letter country code, e.g. IN')
+          .optional(),
+        lastSync: z.string().trim().max(40).optional(),
+      })
+      .strict()
+      .optional(),
+    divAnim: z
+      .object({
+        on: z.boolean().optional(),
+        style: z.enum(['slide', 'drawer', 'flip', 'zoom', 'fade', 'swing', 'random']).optional(),
+        everyMin: everyMinutes.optional(),
+      })
+      .strict()
+      .optional(),
+    // MM-DD repeats yearly; a lunar festival whose date moves needs the full YYYY-MM-DD and is
+    // re-entered each year rather than computed — the same convention the board has always used.
+    days: z
+      .array(
+        z
+          .object({
+            d: z.string().trim().regex(/^(\d{4}-)?\d{2}-\d{2}$/, 'Use MM-DD or YYYY-MM-DD'),
+            n: z.string().trim().min(1).max(60),
+            h: z.string().trim().max(60).optional(),
+            a: z.enum(CELEBRATION_ANIMATIONS).optional(),
+          })
+          .strict(),
+      )
+      .max(60)
+      .optional(),
+    ads: z.array(menuBoardAdSchema).max(20).optional(),
+    sort: z.enum(['menu', 'name', 'price']).optional(),
+    // Item id -> category name, applied on this screen only. Bounded so a malformed config
+    // cannot carry an unbounded map onto a display nobody is standing in front of.
+    moves: z.record(z.string().trim().max(60), z.string().trim().max(80)).optional(),
+    cats: z
+      .record(
+        z.string().trim().max(80),
+        z
+          .object({
+            label: z.string().trim().max(80).optional(),
+            labelHi: z.string().trim().max(80).optional(),
+            fs: z.coerce.number().min(0.7).max(1.8).optional(),
+            x: boardPercent.optional(),
+            y: boardPercent.optional(),
+            w: boardPercent.optional(),
+            h: boardPercent.optional(),
+          })
+          .strict(),
+      )
+      .optional(),
+  })
+  .strict();
+
+/**
+ * The board's presentation blob.
+ *
+ * Validated field by field rather than accepted as free-form JSON: this reaches a screen that
+ * nobody is standing in front of, so a value that makes the board unreadable is only noticed
+ * by a guest.
+ */
+const menuBoardConfigSchema = z
+  .object({
+    identity: z
+      .object({
+        restaurantName: z.string().trim().max(80).optional(),
+        restaurantNameHi: z.string().trim().max(80).optional(),
+        langSwitchSeconds: z.coerce.number().int().min(4).max(30).optional(),
+        morningFrom: clockTime.optional(),
+        morningTo: clockTime.optional(),
+        eveningFrom: clockTime.optional(),
+        eveningTo: clockTime.optional(),
+      })
+      .strict()
+      .optional(),
+    typography: z
+      .object({
+        Font_RestaurantName: z.string().trim().max(60).optional(),
+        FontSize_RestaurantName: boardPixels.optional(),
+        Font_CategoryName: z.string().trim().max(60).optional(),
+        FontSize_CategoryName: boardPixels.optional(),
+        Font_ItemName_EN: z.string().trim().max(60).optional(),
+        FontSize_ItemName_EN: boardPixels.optional(),
+        Font_ItemName_HI: z.string().trim().max(60).optional(),
+        FontSize_ItemName_HI: boardPixels.optional(),
+        Font_Price: z.string().trim().max(60).optional(),
+        FontSize_Price: boardPixels.optional(),
+        FontSize_Min: boardPixels.optional(),
+        Padding_Header: boardPixels.optional(),
+        Padding_CategoryHeader: boardPixels.optional(),
+        Padding_Item: boardPixels.optional(),
+        Padding_Item_Horizontal: boardPixels.optional(),
+        Gap_Columns: boardPixels.optional(),
+        Gap_Outer: boardPixels.optional(),
+        Gap_Categories: boardPixels.optional(),
+      })
+      .strict()
+      .optional(),
+    layout: z
+      .object({
+        // Always three columns; the board folds them for display on a narrow screen rather
+        // than rewriting the arrangement the wall screen depends on.
+        columns: z.array(z.array(z.string().trim().max(120)).max(60)).max(3).optional(),
+        fonts: z.record(z.coerce.number().min(0.7).max(1.8)).optional(),
+      })
+      .strict()
+      .optional(),
+    board: z.record(z.unknown()).optional(),
+  })
+  .strict();
+
+/**
+ * One physical screen. `code` appears in the screen's URL and is typed by hand into a browser
+ * on a machine with no keyboard shortcuts to help, so it is kept short and unambiguous.
+ */
+const menuBoardScreenFields = {
+  code: z
+    .string()
+    .trim()
+    .min(2)
+    .max(40)
+    .regex(/^[A-Za-z0-9][A-Za-z0-9_-]*$/, 'Use letters, digits, hyphens or underscores'),
+  name: z.string().trim().min(1).max(120),
+  // Blank is meaningful: it defers to the `pos.default_menu_code` setting, so a single-menu
+  // operation configures its menu once rather than once per screen.
+  menuCode: z.string().trim().max(60),
+  // Floor of 15s so a misconfigured screen cannot turn into a load generator; the tree
+  // resolution behind a snapshot is several queries deep.
+  pollSeconds: z.coerce.number().int().min(15).max(3600).optional(),
+  config: menuBoardConfigSchema.optional(),
+  status: enumOf(MasterStatus).optional(),
+};
+
+export const createMenuBoardScreenSchema = z.object(menuBoardScreenFields).strict();
+export const updateMenuBoardScreenSchema = z
+  .object(menuBoardScreenFields)
+  .partial()
+  .strict()
+  .refine((body) => Object.keys(body).length > 0, { message: 'No changes supplied' });
+
+/** The screen asking. Optional: a bare URL resolves to the default screen. */
+export const menuBoardQuerySchema = z
+  .object({
+    screen: z.string().trim().min(1).max(40).optional(),
+    /**
+     * Set by the Admin Portal's layout editor, which frames this same page to drag the panel
+     * and ads over the real menu. It suppresses the heartbeat only: a screen's `lastSeenAt` is
+     * the one signal that tells an operator a wall display is switched on, and an editor tab
+     * open on a desk would otherwise report every screen as Live.
+     */
+    preview: z.enum(['1']).optional(),
+  })
+  .strict();
+
+/* ------------------------------------------------------------------ tasks */
+
 /* ------------------------------------------------------------------ tasks */
 
 export const taskListQuerySchema = pageQuery
@@ -1577,5 +2002,521 @@ export const updateTaskSchema = z
   })
   .strict()
   .refine((value) => Object.keys(value).length > 0, 'No changes supplied');
+
+/* ------------------------------------- equipment monitoring & maintenance */
+/**
+ * Everything below follows the module's one architectural rule: the client sends what it
+ * genuinely knows and nothing more. That is why almost every field here is optional and why
+ * `equipmentId` is the only thing a report-problem request must carry — the asset id,
+ * location, supplier, priority, reporter and timestamps are all resolved server-side.
+ */
+const booleanFlag = z
+  .union([z.boolean(), z.enum(['true', 'false'])])
+  .transform((value) => value === true || value === 'true')
+  .optional();
+/** Three letters that become a segment of an asset id: KIT, OVN. */
+const assetSegment = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .regex(/^[A-Z0-9]{2,4}$/, 'Must be 2-4 letters or digits');
+const phoneField = optionalText(LIMITS.SUPPLIER_PHONE_MAX);
+const emailField = z
+  .string()
+  .trim()
+  .max(LIMITS.SUPPLIER_EMAIL_MAX)
+  .email('Must be a valid email address')
+  .nullable()
+  .optional()
+  .or(z.literal('').transform(() => null));
+/* -------------------------------------------------------- location & category */
+export const equipmentFloorSchema = z
+  .object({
+    code: text(40, 'Code'),
+    name: text(LIMITS.EQUIPMENT_FLOOR_NAME_MAX, 'Floor name'),
+    levelIndex: z.coerce.number().int().min(-20).max(200).optional(),
+  })
+  .strict();
+export const updateEquipmentFloorSchema = equipmentFloorSchema
+  .extend({ status: enumOf(MasterStatus) })
+  .partial()
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, 'No changes supplied');
+export const equipmentAreaSchema = z
+  .object({
+    floorId: uuid,
+    code: text(40, 'Code'),
+    name: text(LIMITS.EQUIPMENT_AREA_NAME_MAX, 'Area name'),
+    assetSegment,
+    sortOrder: z.coerce.number().int().min(0).optional(),
+  })
+  .strict();
+export const updateEquipmentAreaSchema = equipmentAreaSchema
+  .extend({ status: enumOf(MasterStatus) })
+  .partial()
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, 'No changes supplied');
+export const equipmentLocationSchema = z
+  .object({
+    areaId: uuid,
+    name: text(LIMITS.EQUIPMENT_LOCATION_NAME_MAX, 'Location name'),
+    room: optionalText(LIMITS.EQUIPMENT_ROOM_MAX),
+    section: optionalText(LIMITS.EQUIPMENT_SECTION_MAX),
+    position: optionalText(LIMITS.EQUIPMENT_POSITION_MAX),
+    sortOrder: z.coerce.number().int().min(0).optional(),
+  })
+  .strict();
+export const updateEquipmentLocationSchema = equipmentLocationSchema
+  .extend({ status: enumOf(MasterStatus) })
+  .partial()
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, 'No changes supplied');
+export const equipmentMasterQuerySchema = z
+  .object({
+    floorId: uuid.optional(),
+    areaId: uuid.optional(),
+    includeInactive: booleanFlag,
+  })
+  .strict();
+const equipmentCategoryShape = {
+  code: text(LIMITS.EQUIPMENT_CATEGORY_CODE_MAX, 'Code'),
+  name: text(LIMITS.EQUIPMENT_CATEGORY_NAME_MAX, 'Category name'),
+  assetSegment,
+  description: optionalText(1000),
+  defaultFrequency: enumOf(MaintenanceFrequency).nullable().optional(),
+  defaultIntervalDays: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(LIMITS.MAINTENANCE_INTERVAL_DAYS_MAX)
+    .nullable()
+    .optional(),
+  sortOrder: z.coerce.number().int().min(0).optional(),
+  status: enumOf(MasterStatus).optional(),
+};
+export const equipmentCategorySchema = z.object(equipmentCategoryShape).strict();
+export const updateEquipmentCategorySchema = z
+  .object(equipmentCategoryShape)
+  .partial()
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, 'No changes supplied');
+/* ------------------------------------------------------------------ equipment */
+const equipmentSpecificationsSchema = z
+  .object({
+    capacity: optionalText(LIMITS.EQUIPMENT_SPEC_VALUE_MAX),
+    voltage: optionalText(LIMITS.EQUIPMENT_SPEC_VALUE_MAX),
+    powerRating: optionalText(LIMITS.EQUIPMENT_SPEC_VALUE_MAX),
+    dimensions: optionalText(LIMITS.EQUIPMENT_SPEC_VALUE_MAX),
+    weight: optionalText(LIMITS.EQUIPMENT_SPEC_VALUE_MAX),
+    fuelType: optionalText(LIMITS.EQUIPMENT_SPEC_VALUE_MAX),
+    temperatureRange: optionalText(LIMITS.EQUIPMENT_SPEC_VALUE_MAX),
+    other: z
+      .record(z.string().trim().max(LIMITS.EQUIPMENT_SPEC_VALUE_MAX))
+      .refine((value) => Object.keys(value).length <= LIMITS.EQUIPMENT_SPEC_KEYS_MAX, `At most ${LIMITS.EQUIPMENT_SPEC_KEYS_MAX} extra specifications`)
+      .optional(),
+  })
+  .strict()
+  .nullable()
+  .optional();
+const equipmentCoreShape = {
+  name: text(LIMITS.EQUIPMENT_NAME_MAX, 'Equipment name'),
+  equipmentType: optionalText(LIMITS.EQUIPMENT_TYPE_MAX),
+  brand: optionalText(LIMITS.EQUIPMENT_BRAND_MAX),
+  model: optionalText(LIMITS.EQUIPMENT_MODEL_MAX),
+  serialNumber: optionalText(LIMITS.EQUIPMENT_SERIAL_MAX),
+  manufacturer: optionalText(LIMITS.EQUIPMENT_MANUFACTURER_MAX),
+  categoryId: uuid.nullable().optional(),
+  locationId: uuid.nullable().optional(),
+  status: enumOf(EquipmentStatus).optional(),
+  imageMediaId: uuid.nullable().optional(),
+  specifications: equipmentSpecificationsSchema,
+  purchaseDate: isoDate.nullable().optional(),
+  installationDate: isoDate.nullable().optional(),
+  purchasePrice: z.coerce.number().min(0).max(LIMITS.PRICE_MAX).nullable().optional(),
+  invoiceNumber: optionalText(LIMITS.EQUIPMENT_INVOICE_NUMBER_MAX),
+  supplierName: optionalText(LIMITS.SUPPLIER_NAME_MAX),
+  warrantyExpiry: isoDate.nullable().optional(),
+  nfcTagId: optionalText(LIMITS.EQUIPMENT_NFC_TAG_MAX),
+  notes: optionalText(LIMITS.EQUIPMENT_NOTES_MAX),
+};
+export const createEquipmentSchema = z
+  .object({
+    ...equipmentCoreShape,
+    capturedVia: enumOf(CaptureSource).optional(),
+    documentIds: z.array(uuid).max(LIMITS.EQUIPMENT_DOCUMENTS_PER_ASSET_MAX).optional(),
+    suppliers: z
+      .array(z
+        .object({
+          supplierId: uuid,
+          role: enumOf(EquipmentSupplierRole),
+          isDefault: z.boolean().optional(),
+        })
+        .strict())
+      .max(3)
+      .optional(),
+    schedule: z
+      .object({
+        frequency: enumOf(MaintenanceFrequency),
+        intervalDays: z.coerce
+          .number()
+          .int()
+          .min(1)
+          .max(LIMITS.MAINTENANCE_INTERVAL_DAYS_MAX)
+          .nullable()
+          .optional(),
+        anchorDate: isoDate.optional(),
+      })
+      .strict()
+      .nullable()
+      .optional(),
+    position: z
+      .object({
+        floorPlanId: uuid,
+        x: z.coerce.number().min(0).max(FLOOR_PLAN_COORDINATE_MAX),
+        y: z.coerce.number().min(0).max(FLOOR_PLAN_COORDINATE_MAX),
+      })
+      .strict()
+      .nullable()
+      .optional(),
+  })
+  .strict();
+/**
+ * `status` is absent on purpose: it moves through `POST /equipment/:id/status`, which writes
+ * the history row and the timeline entry. Accepting it here and ignoring it would make an
+ * ordinary edit look as though it had changed the status when it had not.
+ */
+export const updateEquipmentSchema = z
+  .object(equipmentCoreShape)
+  .omit({ status: true })
+  .partial()
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, 'No changes supplied');
+export const equipmentListQuerySchema = pageQuery
+  .extend({
+    status: enumOf(EquipmentStatus).optional(),
+    categoryId: uuid.optional(),
+    floorId: uuid.optional(),
+    areaId: uuid.optional(),
+    locationId: uuid.optional(),
+    supplierId: uuid.optional(),
+    warrantyStatus: enumOf(WarrantyStatus).optional(),
+    hasOpenProblems: booleanFlag,
+    maintenanceDue: booleanFlag,
+    maintenanceOverdue: booleanFlag,
+  })
+  .strict();
+/** A scanned QR payload, an NFC tag or a typed asset id — all three resolve the same way. */
+export const equipmentResolveQuerySchema = z
+  .object({ code: text(LIMITS.EQUIPMENT_QR_CODE_MAX, 'Code') })
+  .strict();
+export const equipmentStatusChangeSchema = z
+  .object({
+    status: enumOf(EquipmentStatus),
+    note: optionalText(LIMITS.EQUIPMENT_STATUS_NOTE_MAX),
+  })
+  .strict();
+export const equipmentMoveSchema = z
+  .object({
+    locationId: uuid,
+    note: optionalText(LIMITS.EQUIPMENT_STATUS_NOTE_MAX),
+  })
+  .strict();
+const documentExtractionSchema = z
+  .object({
+    purchaseDate: isoDate.nullable().optional(),
+    supplierName: optionalText(LIMITS.SUPPLIER_NAME_MAX),
+    invoiceNumber: optionalText(LIMITS.EQUIPMENT_INVOICE_NUMBER_MAX),
+    warrantyMonths: z.coerce.number().int().min(0).max(600).nullable().optional(),
+    warrantyExpiry: isoDate.nullable().optional(),
+    purchasePrice: z.coerce.number().min(0).max(LIMITS.PRICE_MAX).nullable().optional(),
+    serialNumber: optionalText(LIMITS.EQUIPMENT_SERIAL_MAX),
+    notes: optionalText(1000),
+  })
+  .strict();
+export const equipmentDocumentSchema = z
+  .object({
+    mediaId: uuid,
+    docType: enumOf(EquipmentDocumentType).optional(),
+    title: optionalText(LIMITS.EQUIPMENT_DOCUMENT_TITLE_MAX),
+    extracted: documentExtractionSchema.nullable().optional(),
+    applyWarranty: z.boolean().optional(),
+  })
+  .strict();
+export const equipmentWarrantySchema = z
+  .object({
+    provider: optionalText(LIMITS.SUPPLIER_NAME_MAX),
+    policyNumber: optionalText(LIMITS.EQUIPMENT_INVOICE_NUMBER_MAX),
+    startDate: isoDate.nullable().optional(),
+    expiryDate: isoDate.nullable().optional(),
+    months: z.coerce.number().int().min(0).max(600).nullable().optional(),
+    terms: optionalText(1000),
+    documentId: uuid.nullable().optional(),
+  })
+  .strict()
+  .refine((value) => (value.expiryDate ?? null) !== null ||
+    ((value.startDate ?? null) !== null && (value.months ?? null) !== null), 'Give an expiry date, or a start date and a number of months');
+export const equipmentSupplierLinkSchema = z
+  .object({
+    supplierId: uuid,
+    role: enumOf(EquipmentSupplierRole),
+    isDefault: z.boolean().optional(),
+  })
+  .strict();
+export const equipmentSupplierRoleParam = z
+  .object({ id: uuid, role: enumOf(EquipmentSupplierRole) })
+  .strict();
+export const equipmentMediaQuerySchema = z
+  .object({ title: z.string().trim().max(200).optional() })
+  .strict();
+/* ------------------------------------------------------------------ AI drafts */
+export const equipmentIdentifySchema = z.object({ mediaId: uuid }).strict();
+export const equipmentDocumentScanSchema = z
+  .object({ mediaId: uuid, docType: enumOf(EquipmentDocumentType) })
+  .strict();
+export const problemClassifySchema = z
+  .object({
+    equipmentId: uuid.nullable().optional(),
+    text: optionalText(LIMITS.MAINTENANCE_DESCRIPTION_MAX),
+    mediaId: uuid.nullable().optional(),
+  })
+  .strict()
+  .refine((value) => (value.text ?? null) !== null || (value.mediaId ?? null) !== null, 'Describe the problem, record it, or attach a photo');
+/* ---------------------------------------------------------------- floor plans */
+export const floorPlanQuerySchema = z.object({ floorId: uuid.optional() }).strict();
+export const floorIdParam = z.object({ floorId: uuid }).strict();
+export const createFloorPlanSchema = z
+  .object({
+    floorId: uuid,
+    name: text(120, 'Plan name'),
+    mediaId: uuid,
+    width: z.coerce.number().int().min(1).max(20000).nullable().optional(),
+    height: z.coerce.number().int().min(1).max(20000).nullable().optional(),
+  })
+  .strict();
+export const updateFloorPlanSchema = z
+  .object({ name: text(120, 'Plan name').optional(), isActive: z.boolean().optional() })
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, 'No changes supplied');
+export const floorPlanPositionSchema = z
+  .object({
+    equipmentId: uuid,
+    x: z.coerce.number().min(0).max(FLOOR_PLAN_COORDINATE_MAX),
+    y: z.coerce.number().min(0).max(FLOOR_PLAN_COORDINATE_MAX),
+  })
+  .strict();
+export const floorPlanPositionParam = z.object({ id: uuid, equipmentId: uuid }).strict();
+/* --------------------------------------------------------- maintenance tickets */
+const maintenanceAttachmentSchema = z
+  .object({
+    mediaId: uuid,
+    kind: enumOf(MaintenanceAttachmentKind),
+    transcript: optionalText(LIMITS.MAINTENANCE_TRANSCRIPT_MAX),
+  })
+  .strict();
+export const createMaintenanceTicketSchema = z
+  .object({
+    equipmentId: uuid,
+    kind: enumOf(MaintenanceRequestKind).optional(),
+    problemCategory: enumOf(ProblemCategory).nullable().optional(),
+    description: optionalText(LIMITS.MAINTENANCE_DESCRIPTION_MAX),
+    title: optionalText(LIMITS.MAINTENANCE_TITLE_MAX),
+    priority: enumOf(MaintenancePriority).optional(),
+    attachments: z
+      .array(maintenanceAttachmentSchema)
+      .max(LIMITS.MAINTENANCE_ATTACHMENTS_PER_TICKET_MAX)
+      .optional(),
+    aiSuggestedCategory: enumOf(ProblemCategory).nullable().optional(),
+    aiConfidence: z.coerce.number().min(0).max(1).nullable().optional(),
+    capturedVia: enumOf(CaptureSource).optional(),
+  })
+  .strict();
+export const updateMaintenanceTicketSchema = z
+  .object({
+    title: text(LIMITS.MAINTENANCE_TITLE_MAX, 'Title').optional(),
+    description: optionalText(LIMITS.MAINTENANCE_DESCRIPTION_MAX),
+    priority: enumOf(MaintenancePriority).optional(),
+    problemCategory: enumOf(ProblemCategory).nullable().optional(),
+    partsRequired: optionalText(LIMITS.MAINTENANCE_PARTS_MAX),
+    costAmount: z.coerce.number().min(0).max(LIMITS.MAINTENANCE_COST_MAX).nullable().optional(),
+    resolutionNotes: optionalText(LIMITS.MAINTENANCE_RESOLUTION_MAX),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, 'No changes supplied');
+export const maintenanceStatusChangeSchema = z
+  .object({
+    status: enumOf(MaintenanceTicketStatus),
+    note: optionalText(LIMITS.MAINTENANCE_NOTE_MAX),
+    resolutionNotes: optionalText(LIMITS.MAINTENANCE_RESOLUTION_MAX),
+    partsRequired: optionalText(LIMITS.MAINTENANCE_PARTS_MAX),
+    costAmount: z.coerce.number().min(0).max(LIMITS.MAINTENANCE_COST_MAX).nullable().optional(),
+  })
+  .strict();
+export const maintenanceAssignSchema = z
+  .object({
+    assignedTo: uuid.nullable().optional(),
+    supplierId: uuid.nullable().optional(),
+    technicianName: optionalText(LIMITS.MAINTENANCE_TECHNICIAN_NAME_MAX),
+    technicianPhone: phoneField,
+    scheduledAt: isoDateTime.nullable().optional(),
+    notes: optionalText(LIMITS.MAINTENANCE_NOTE_MAX),
+  })
+  .strict()
+  .refine((value) => (value.assignedTo ?? null) !== null ||
+    (value.supplierId ?? null) !== null ||
+    (value.technicianName ?? null) !== null, 'Choose a person, a supplier or name the technician');
+export const maintenanceCompleteSchema = z
+  .object({
+    resolutionNotes: optionalText(LIMITS.MAINTENANCE_RESOLUTION_MAX),
+    partsReplaced: optionalText(LIMITS.MAINTENANCE_PARTS_MAX),
+    costAmount: z.coerce.number().min(0).max(LIMITS.MAINTENANCE_COST_MAX).nullable().optional(),
+    attachments: z
+      .array(maintenanceAttachmentSchema)
+      .max(LIMITS.MAINTENANCE_ATTACHMENTS_PER_TICKET_MAX)
+      .optional(),
+    restoreEquipment: z.boolean().optional(),
+  })
+  .strict();
+export const maintenanceAttachmentsSchema = z
+  .object({
+    attachments: z
+      .array(maintenanceAttachmentSchema)
+      .min(1)
+      .max(LIMITS.MAINTENANCE_ATTACHMENTS_PER_TICKET_MAX),
+  })
+  .strict();
+export const maintenanceNoteSchema = z
+  .object({ note: text(LIMITS.MAINTENANCE_NOTE_MAX, 'Note') })
+  .strict();
+export const maintenanceTicketListQuerySchema = pageQuery
+  .extend({
+    equipmentId: uuid.optional(),
+    status: enumOf(MaintenanceTicketStatus).optional(),
+    priority: enumOf(MaintenancePriority).optional(),
+    kind: enumOf(MaintenanceRequestKind).optional(),
+    problemCategory: enumOf(ProblemCategory).optional(),
+    supplierId: uuid.optional(),
+    assignedTo: uuid.optional(),
+    reportedBy: uuid.optional(),
+    floorId: uuid.optional(),
+    areaId: uuid.optional(),
+    openOnly: booleanFlag,
+    mine: booleanFlag,
+  })
+  .strict();
+/* ------------------------------------------------------- maintenance schedules */
+const maintenanceScheduleShape = {
+  equipmentId: uuid,
+  title: text(LIMITS.MAINTENANCE_TITLE_MAX, 'Title').optional(),
+  frequency: enumOf(MaintenanceFrequency),
+  intervalDays: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(LIMITS.MAINTENANCE_INTERVAL_DAYS_MAX)
+    .nullable()
+    .optional(),
+  anchorDate: isoDate.optional(),
+  reminderDays: z.coerce.number().int().min(0).max(LIMITS.MAINTENANCE_REMINDER_DAYS_MAX).optional(),
+  assignedTo: uuid.nullable().optional(),
+  supplierId: uuid.nullable().optional(),
+  instructions: optionalText(LIMITS.MAINTENANCE_INSTRUCTIONS_MAX),
+  isActive: z.boolean().optional(),
+};
+export const createMaintenanceScheduleSchema = z.object(maintenanceScheduleShape).strict();
+export const updateMaintenanceScheduleSchema = z
+  .object(maintenanceScheduleShape)
+  .partial()
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, 'No changes supplied');
+export const maintenanceScheduleListQuerySchema = pageQuery
+  .extend({
+    equipmentId: uuid.optional(),
+    assignedTo: uuid.optional(),
+    dueBefore: isoDate.optional(),
+    includeInactive: booleanFlag,
+  })
+  .strict();
+/* ------------------------------------------------------------------ suppliers */
+const supplierShape = {
+  name: text(LIMITS.SUPPLIER_NAME_MAX, 'Supplier name'),
+  code: optionalText(LIMITS.SUPPLIER_CODE_MAX),
+  contactPerson: optionalText(LIMITS.SUPPLIER_CONTACT_NAME_MAX),
+  phone: phoneField,
+  whatsapp: phoneField,
+  email: emailField,
+  serviceCategory: optionalText(LIMITS.SUPPLIER_SERVICE_CATEGORY_MAX),
+  categoryIds: z.array(uuid).max(50).optional(),
+  serviceArea: optionalText(LIMITS.SUPPLIER_SERVICE_AREA_MAX),
+  notes: optionalText(LIMITS.SUPPLIER_NOTES_MAX),
+  entityId: uuid.nullable().optional(),
+  status: enumOf(MasterStatus).optional(),
+};
+export const createSupplierSchema = z.object(supplierShape).strict();
+export const updateSupplierSchema = z
+  .object(supplierShape)
+  .partial()
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, 'No changes supplied');
+export const supplierListQuerySchema = pageQuery
+  .extend({
+    status: enumOf(MasterStatus).optional(),
+    categoryId: uuid.optional(),
+  })
+  .strict();
+const supplierContactShape = {
+  name: text(LIMITS.SUPPLIER_CONTACT_NAME_MAX, 'Contact name'),
+  role: optionalText(120),
+  phone: phoneField,
+  whatsapp: phoneField,
+  email: emailField,
+  isPrimary: z.boolean().optional(),
+};
+export const createSupplierContactSchema = z.object(supplierContactShape).strict();
+export const updateSupplierContactSchema = z
+  .object(supplierContactShape)
+  .partial()
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, 'No changes supplied');
+/* ------------------------------------------------------- supplier communication */
+export const callLogSchema = z
+  .object({
+    equipmentId: uuid,
+    ticketId: uuid.nullable().optional(),
+    supplierId: uuid.nullable().optional(),
+    contactId: uuid.nullable().optional(),
+    phoneNumber: text(LIMITS.SUPPLIER_PHONE_MAX, 'Phone number'),
+  })
+  .strict();
+export const callOutcomeSchema = z
+  .object({
+    outcome: enumOf(CallOutcome),
+    status: enumOf(CallStatus).optional(),
+    durationSeconds: z.coerce.number().int().min(0).max(86_400).nullable().optional(),
+    notes: optionalText(1000),
+  })
+  .strict();
+export const communicationLogQuerySchema = z
+  .object({
+    equipmentId: uuid.optional(),
+    ticketId: uuid.optional(),
+    supplierId: uuid.optional(),
+    outcome: enumOf(CallOutcome).optional(),
+  })
+  .strict();
+export const whatsappDraftSchema = z
+  .object({
+    equipmentId: uuid,
+    ticketId: uuid.nullable().optional(),
+    supplierId: uuid.nullable().optional(),
+  })
+  .strict();
+export const whatsappSendSchema = z
+  .object({
+    equipmentId: uuid,
+    ticketId: uuid.nullable().optional(),
+    supplierId: uuid.nullable().optional(),
+    message: optionalText(LIMITS.WHATSAPP_MESSAGE_MAX),
+  })
+  .strict();
 
 export { idParam, boardIdParam, orderIdParam };

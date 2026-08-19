@@ -76,7 +76,7 @@ function daysUntil(date: string | null, today = new Date()): number | null {
 }
 
 /** "Main Kitchen · Hot Line · Position 3" — assembled once here, never by a client. */
-function locationPathOf(parts: {
+export function locationPathOf(parts: {
   floor_name?: string | null;
   area_name?: string | null;
   location_name?: string | null;
@@ -402,9 +402,9 @@ export function mapFloorPlanPosition(
     ...(row.status !== undefined ? { status: row.status } : {}),
     ...(row.image_media_id !== undefined
       ? {
-          imageUrl:
-            row.image_media_id === null ? null : signMenuMediaUrl(row.image_media_id, userId),
-        }
+        imageUrl:
+          row.image_media_id === null ? null : signMenuMediaUrl(row.image_media_id, userId),
+      }
       : {}),
     ...(row.category_name !== undefined ? { categoryName: row.category_name } : {}),
     ...(row.open_ticket_count !== undefined
@@ -556,11 +556,11 @@ export function mapMaintenanceTicket(
     ...(row.equipment_name !== undefined ? { equipmentName: row.equipment_name } : {}),
     ...(row.equipment_image_media_id !== undefined
       ? {
-          equipmentImageUrl:
-            row.equipment_image_media_id === null
-              ? null
-              : signMenuMediaUrl(row.equipment_image_media_id, userId),
-        }
+        equipmentImageUrl:
+          row.equipment_image_media_id === null
+            ? null
+            : signMenuMediaUrl(row.equipment_image_media_id, userId),
+      }
       : {}),
     ...(row.category_name !== undefined ? { categoryName: row.category_name } : {}),
     ...(locationPath !== '' ? { locationPath } : {}),

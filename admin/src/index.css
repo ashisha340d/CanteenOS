@@ -2,6 +2,7 @@
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
 @import '@fontsource-variable/geist';
+@import './theme/desktopSkins.css';
 
 /*
  * Three skins, one token set.
@@ -433,5 +434,11 @@ html[data-text-size='large'] {
     .pos-line-flash {
       animation-duration: 0.01ms;
     }
+  }
+
+  /* When a page is embedded inside a tabbed module shell, suppress its own page header so
+     the module title and tab bar remain the only chrome at the top. */
+  .embedded-page .page-header {
+    display: none;
   }
 }

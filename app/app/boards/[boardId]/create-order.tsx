@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -33,7 +34,12 @@ import { PressableScale } from '../../../src/components/PressableScale';
 import { PickerSheet } from '../../../src/components/PickerSheet';
 import { Card } from '../../../src/components/Card';
 import { OrderItemsEditor, type DraftLine } from '../../../src/components/order/OrderItemsEditor';
-import { DateTimeFields, defaultRequiredDate, defaultRequiredTime } from '../../../src/components/order/DateTimeFields';
+import {
+  DateTimeFields,
+  defaultRequiredDate,
+  defaultRequiredTime,
+  isValidRequiredDateTime,
+} from '../../../src/components/order/DateTimeFields';
 import { newId } from '../../../src/utils/uuid';
 import { compressImageForUpload } from '../../../src/utils/imageCompression';
 import { colors, radii, spacing, typography, fonts } from '../../../src/theme/tokens';
@@ -68,6 +74,8 @@ export default function CreateOrderScreen(): React.JSX.Element {
   const [categories, setCategories] = useState<MenuCategoryDto[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItemDto[]>([]);
   const [members, setMembers] = useState<BoardMemberDto[]>([]);
+  const [venues, setVenues] = useState<string[]>([]);
+  const [venueFocused, setVenueFocused] = useState(false);
 
   const [step, setStep] = useState(0);
   const [activityTypeId, setActivityTypeId] = useState<string | null>(null);
@@ -92,18 +100,28 @@ export default function CreateOrderScreen(): React.JSX.Element {
 
   useEffect(() => {
     (async () => {
-      const [a, c, i, m] = await Promise.all([
+      const [a, c, i, m, v] = await Promise.all([
         masterRepository.listActiveActivityTypes(),
         masterRepository.listActiveMenuCategories(),
         masterRepository.listActiveMenuItems(),
         boardId ? boardRepository.listMembers(boardId) : Promise.resolve([]),
+        boardId ? orderRepository.listDistinctVenues(boardId) : Promise.resolve([]),
       ]);
       setActivityTypes(a);
       setCategories(c);
       setMenuItems(i);
       setMembers(m);
+      setVenues(v);
+      // A new order always starts by naming what it's for — open the activity picker the
+      // moment its options are ready rather than waiting for a tap on the selector card.
+      setShowActivitySheet(true);
     })();
   }, [boardId]);
+
+  const venueSuggestions = useMemo(() => {
+    const query = venue.trim().toLowerCase();
+    return venues.filter((v) => v.toLowerCase() !== query && (query === '' || v.toLowerCase().includes(query))).slice(0, 5);
+  }, [venues, venue]);
 
   const activityLabel = useMemo(() => {
     const found = activityTypes.find((a) => a.id === activityTypeId);
@@ -192,6 +210,16 @@ export default function CreateOrderScreen(): React.JSX.Element {
 
   const onSubmit = async (): Promise<void> => {
     if (!user || !boardId) return;
+    // Re-checked at the moment of posting, not just when the step was left: the date/time rule
+    // is time-dependent, so a form that was valid two minutes ago may not be now.
+    const problem = firstProblem(STEPS.length - 1);
+    if (problem !== null) {
+      setError(problem);
+      // Send the user back to where the problem actually is rather than leaving them on the
+      // review step reading about a field they cannot see.
+      setStep(blockingReason(0) !== null ? 0 : 1);
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -222,7 +250,7 @@ export default function CreateOrderScreen(): React.JSX.Element {
       for (const attachment of pendingAttachments) {
         await attachmentRepository.bindOwner(attachment.id, 'ORDER', order.id);
       }
-      router.replace({ pathname: '/boards/[boardId]', params: { boardId } });
+      router.back();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create the order.');
     } finally {
@@ -230,15 +258,84 @@ export default function CreateOrderScreen(): React.JSX.Element {
     }
   };
 
-  const canAdvance = (): boolean => {
-    if (step === 0) {
-      return (
-        (!!activityTypeId || customActivity.trim().length > 0) && venue.trim().length > 0
-      );
+  /**
+   * Why the current step cannot be left, or null when it can.
+   *
+   * Returning the *reason* rather than a boolean is the point: the Next button used to grey
+   * out silently, so a missing pax or venue looked like the button was broken. The same
+   * function gates the step header, the Next button and the final submit, so the three cannot
+   * disagree about what a complete order is.
+   */
+  const blockingReason = (forStep: number): string | null => {
+    if (forStep === 0) {
+      if (!activityTypeId && customActivity.trim().length === 0) return 'Choose an activity, or type a custom one.';
+      if (venue.trim().length === 0) return 'Venue is required.';
+      // A catering order for nobody is not a real order, and `Number('') || 0` used to let
+      // one straight through to the kitchen.
+      const paxCount = Number(pax);
+      if (pax.trim() === '' || !Number.isFinite(paxCount) || paxCount <= 0) {
+        return 'Enter how many people this order is for.';
+      }
+      if (!Number.isInteger(paxCount)) return 'Pax must be a whole number.';
+      // The compose screen can sit open long enough for the pre-filled time to fall into the
+      // past. Catching it here beats the server rejecting the order after the user hits Post.
+      if (!isValidRequiredDateTime(requiredDate, requiredTime)) {
+        return 'That time has passed — pick a new date and time.';
+      }
+      return null;
     }
-    if (step === 1) return lines.length > 0;
-    return true;
+    if (forStep === 1) {
+      if (lines.length === 0) return 'Add at least one item.';
+      if (lines.some((line) => !(line.quantity > 0))) return 'Every item needs a quantity above zero.';
+      return null;
+    }
+    return null;
   };
+
+  /** Every step up to and including `forStep` must be clean, not just the one on screen. */
+  const firstProblem = (throughStep: number): string | null => {
+    for (let i = 0; i <= throughStep; i += 1) {
+      const reason = blockingReason(i);
+      if (reason !== null) return reason;
+    }
+    return null;
+  };
+
+  const canAdvance = (): boolean => blockingReason(step) === null;
+
+  /** Backing out of a half-typed order should be deliberate, but always possible. */
+  const onCancel = (): void => {
+    const started =
+      activityTypeId !== null ||
+      customActivity.trim() !== '' ||
+      venue.trim() !== '' ||
+      pax.trim() !== '' ||
+      lines.length > 0 ||
+      pendingAttachments.length > 0;
+
+    if (!started) {
+      router.back();
+      return;
+    }
+    Alert.alert('Discard this order?', 'What you have entered will not be saved.', [
+      { text: 'Keep editing', style: 'cancel' },
+      { text: 'Discard', style: 'destructive', onPress: () => router.back() },
+    ]);
+  };
+
+  const TopBar = (
+    <View style={styles.topBar}>
+      <PressableScale onPress={onCancel} hitSlop={8} accessibilityRole="button" accessibilityLabel="Cancel">
+        <View style={styles.topBarButton}>
+          <Ionicons name="close" size={22} color={colors.textPrimary} />
+        </View>
+      </PressableScale>
+      <Text style={styles.topBarTitle}>New order</Text>
+      <PressableScale onPress={onCancel} hitSlop={8}>
+        <Text style={styles.topBarCancel}>Cancel</Text>
+      </PressableScale>
+    </View>
+  );
 
   const StepHeader = (
     <View style={styles.stepHeader}>
@@ -287,14 +384,38 @@ export default function CreateOrderScreen(): React.JSX.Element {
               />
             ) : null}
 
-            <FormInput
-              ref={venueRef}
-              label="Venue"
-              value={venue}
-              onChangeText={setVenue}
-              placeholder="e.g. Main Hall"
-              returnKeyType="next"
-            />
+            <View style={styles.venueWrap}>
+              <FormInput
+                ref={venueRef}
+                label="Venue"
+                value={venue}
+                onChangeText={setVenue}
+                placeholder="e.g. Main Hall"
+                returnKeyType="next"
+                onFocus={() => setVenueFocused(true)}
+                onBlur={() => setTimeout(() => setVenueFocused(false), 150)}
+              />
+              {venueFocused && venueSuggestions.length > 0 ? (
+                <View style={styles.venueSuggestions}>
+                  {venueSuggestions.map((suggestion) => (
+                    <PressableScale
+                      key={suggestion}
+                      onPress={() => {
+                        setVenue(suggestion);
+                        setVenueFocused(false);
+                      }}
+                    >
+                      <View style={styles.venueSuggestionRow}>
+                        <Ionicons name="location-outline" size={15} color={colors.gray400} />
+                        <Text style={styles.venueSuggestionText} numberOfLines={1}>
+                          {suggestion}
+                        </Text>
+                      </View>
+                    </PressableScale>
+                  ))}
+                </View>
+              ) : null}
+            </View>
             <FormInput label="Pax" value={pax} onChangeText={setPax} keyboardType="numeric" placeholder="0" />
             <View style={styles.dateTimeWrap}>
               <DateTimeFields
@@ -412,6 +533,7 @@ export default function CreateOrderScreen(): React.JSX.Element {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
+      {TopBar}
       {StepHeader}
       <ScrollView
         contentContainerStyle={styles.scrollContent}
@@ -421,21 +543,28 @@ export default function CreateOrderScreen(): React.JSX.Element {
         {renderStep()}
       </ScrollView>
 
-      <View style={styles.navBar}>
-        {step > 0 ? (
-          <PrimaryButton label="Back" variant="secondary" onPress={() => setStep((s) => s - 1)} />
-        ) : (
-          <View style={styles.navSpacer} />
-        )}
-        {step < STEPS.length - 1 ? (
-          <PrimaryButton
-            label={step === 1 ? `Review (${lines.length})` : 'Next'}
-            onPress={() => setStep((s) => s + 1)}
-            disabled={!canAdvance()}
-          />
-        ) : (
-          <PrimaryButton label="Post order" onPress={onSubmit} loading={submitting} />
-        )}
+      <View style={styles.navWrap}>
+        {/* Says *why* the button is dead. A greyed-out Next with no explanation was the single
+            most confusing thing about this flow. */}
+        {blockingReason(step) !== null ? (
+          <Text style={styles.blockingHint}>{blockingReason(step)}</Text>
+        ) : null}
+        <View style={styles.navBar}>
+          {step > 0 ? (
+            <PrimaryButton label="Back" variant="secondary" onPress={() => setStep((s) => s - 1)} />
+          ) : (
+            <View style={styles.navSpacer} />
+          )}
+          {step < STEPS.length - 1 ? (
+            <PrimaryButton
+              label={step === 1 ? `Review (${lines.length})` : 'Next'}
+              onPress={() => setStep((s) => s + 1)}
+              disabled={!canAdvance()}
+            />
+          ) : (
+            <PrimaryButton label="Post order" onPress={onSubmit} loading={submitting} />
+          )}
+        </View>
       </View>
 
       <PickerSheet
@@ -523,6 +652,40 @@ const styles = StyleSheet.create({
   row2: { flexDirection: 'row', gap: spacing[3] },
   flex1: { flex: 1 },
   dateTimeWrap: { marginBottom: spacing[4] },
+  venueWrap: { position: 'relative', zIndex: 10 },
+  venueSuggestions: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    marginTop: -spacing[3],
+    marginBottom: spacing[3],
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    borderRadius: radii.md,
+    backgroundColor: colors.white,
+    overflow: 'hidden',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  venueSuggestionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2.5],
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray100,
+  },
+  venueSuggestionText: {
+    flex: 1,
+    fontFamily: fonts.sans,
+    fontSize: typography.body.size,
+    color: colors.textPrimary,
+  },
   fieldLabel: {
     fontFamily: fonts.sansBold,
     fontSize: typography.caption.size,
@@ -609,14 +772,49 @@ const styles = StyleSheet.create({
   photoRow: { flexDirection: 'row', gap: spacing[2], marginBottom: spacing[3], flexWrap: 'wrap' },
   thumb: { width: 72, height: 72, borderRadius: radii.md, backgroundColor: colors.gray200 },
   error: { color: colors.danger500, marginTop: spacing[3], fontWeight: '600' },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing[3],
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray200,
+    backgroundColor: colors.surface,
+  },
+  topBarButton: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
+  topBarTitle: {
+    flex: 1,
+    fontFamily: fonts.sansBold,
+    fontSize: typography.title3.size,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  topBarCancel: {
+    fontFamily: fonts.sansSemibold,
+    fontSize: typography.body.size,
+    fontWeight: '600',
+    color: colors.primary,
+    paddingHorizontal: spacing[2],
+  },
+  navWrap: {
+    borderTopWidth: 1,
+    borderTopColor: colors.gray200,
+    backgroundColor: colors.surface,
+  },
+  blockingHint: {
+    fontFamily: fonts.sansMedium,
+    fontSize: typography.callout.size,
+    color: colors.textMuted,
+    paddingHorizontal: spacing[4],
+    paddingTop: spacing[3],
+  },
   navBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[4],
-    borderTopWidth: 1,
-    borderTopColor: colors.gray200,
-    backgroundColor: colors.surface,
     gap: spacing[3],
   },
   navSpacer: { flex: 1 },

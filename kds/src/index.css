@@ -1,0 +1,79 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Segoe UI', system-ui, sans-serif;
+
+  --text-base: clamp(1rem, 0.9rem + 0.4vw, 1.2rem);
+  --text-lg: clamp(1.2rem, 1rem + 0.8vw, 1.6rem);
+  --text-xl: clamp(1.5rem, 1.2rem + 1.2vw, 2.1rem);
+  --text-2xl: clamp(1.9rem, 1.4rem + 2vw, 3rem);
+  --text-3xl: clamp(2.4rem, 1.7rem + 3vw, 4rem);
+
+  --color-canvas: #0e1013;
+  --color-surface: #171a1f;
+  --color-surface-raised: #1f232a;
+  --color-line: #2a2f38;
+
+  --color-ink: #f2f3f5;
+  --color-ink-soft: #a8aeb8;
+  --color-ink-faint: #6b7280;
+
+  --color-accent: #f59e0b;
+  --color-accent-deep: #b45309;
+  --color-on-accent: #14110a;
+
+  --color-ok: #34d399;
+  --color-danger: #f87171;
+
+  --radius-sm: 0.75rem;
+  --radius-md: 1rem;
+  --radius-lg: 1.5rem;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    overscroll-behavior: none;
+  }
+
+  body,
+  button {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    user-select: none;
+  }
+
+  button {
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: none;
+    cursor: pointer;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 3px;
+  }
+
+  ::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+}
+
+@layer utilities {
+  .numeric {
+    font-variant-numeric: tabular-nums;
+  }
+}

@@ -86,6 +86,8 @@ export interface ActivityTypeRow {
 
 export interface MenuCategoryRow {
   id: string;
+  /** The Menu Catalogue this category belongs to; null while it is unfiled. */
+  catalogue_id: string | null;
   name: string;
   /** Devanagari name; null falls back to `name`. */
   name_hi: string | null;
@@ -103,6 +105,8 @@ export interface MenuCategoryRow {
 export interface MenuItemRow {
   id: string;
   category_id: string;
+  /** The single Item Group this dish belongs to; null means ungrouped. */
+  group_id: string | null;
   name: string;
   /** Devanagari name; null falls back to `name`. */
   name_hi: string | null;

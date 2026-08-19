@@ -31,6 +31,14 @@
           "photosPermission": "MenuBoard needs access to your photos to attach images to orders."
         }
       ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "MenuBoard uses the camera to scan the QR label on a machine and to photograph or film a fault.",
+          "microphonePermission": "MenuBoard records audio with a fault video so you can say what is wrong while filming it.",
+          "recordAudioAndroid": true
+        }
+      ],
       "expo-asset"
     ],
     "experiments": {

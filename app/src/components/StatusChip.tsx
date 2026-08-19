@@ -1,7 +1,18 @@
 import React from 'react';
 import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import type { BoardStatus } from '@menuboard/shared';
+import type {
+  BoardStatus,
+  EquipmentStatus,
+  MaintenancePriority,
+  MaintenanceTicketStatus,
+  WarrantyStatus,
+} from '@menuboard/shared';
+import {
+  EQUIPMENT_STATUS_LABELS,
+  MAINTENANCE_PRIORITY_LABELS,
+  MAINTENANCE_TICKET_STATUS_LABELS,
+} from '@menuboard/shared';
 import { colors, radii, spacing, typography } from '../theme/tokens';
 
 /**
@@ -64,6 +75,126 @@ export function BoardStatusChip({
   style?: ViewStyle;
 }): React.JSX.Element {
   return <StatusChip label={BOARD_LABEL[status]} tone={BOARD_TONE[status]} style={style} />;
+}
+
+/**
+ * Equipment & maintenance tones.
+ *
+ * Reuses the order-status palette from `tokens.ts` rather than introducing a parallel one:
+ * "working normally" is the emerald that already means delivered, work in progress keeps the
+ * amber, and anything that stops service takes the danger red. A cook reading a chip should not
+ * have to learn a second colour language for machines.
+ */
+const EQUIPMENT_TONE: Record<EquipmentStatus, ChipTone> = {
+  OPERATIONAL: { ...colors.statusDelivered, border: colors.success100 },
+  RUNNING: { ...colors.statusDelivered, border: colors.success100 },
+  IDLE: { ...colors.statusPending, border: colors.gray300 },
+  NEEDS_ATTENTION: { ...colors.statusWorkInProgress, border: colors.warning100 },
+  PROBLEM: { ...colors.statusCancelled, border: colors.danger100 },
+  UNDER_MAINTENANCE: { ...colors.statusPreparation, border: colors.warning100 },
+  OUT_OF_SERVICE: { ...colors.statusCancelled, border: colors.danger100 },
+  RETIRED: { ...colors.statusDone, border: colors.gray300 },
+};
+
+const TICKET_TONE: Record<MaintenanceTicketStatus, ChipTone> = {
+  REPORTED: { ...colors.statusCancelled, border: colors.danger100 },
+  ACKNOWLEDGED: { ...colors.statusAcknowledged, border: colors.primary200 },
+  ASSIGNED: { ...colors.statusAcknowledged, border: colors.primary200 },
+  SUPPLIER_CONTACTED: { ...colors.statusOnShopping, border: colors.info50 },
+  TECHNICIAN_SCHEDULED: { ...colors.statusOnShopping, border: colors.info50 },
+  UNDER_MAINTENANCE: { ...colors.statusWorkInProgress, border: colors.warning100 },
+  WAITING_FOR_PARTS: { ...colors.statusPreparation, border: colors.warning100 },
+  RESOLVED: { ...colors.statusDelivered, border: colors.success100 },
+  VERIFIED: { ...colors.statusDelivered, border: colors.success100 },
+  CLOSED: { ...colors.statusDone, border: colors.gray300 },
+  CANCELLED: { ...colors.statusDone, border: colors.gray300 },
+};
+
+const PRIORITY_TONE: Record<MaintenancePriority, ChipTone> = {
+  LOW: { ...colors.statusPending, border: colors.gray300 },
+  NORMAL: { ...colors.statusAcknowledged, border: colors.primary200 },
+  HIGH: { ...colors.statusWorkInProgress, border: colors.warning100 },
+  CRITICAL: { ...colors.statusCancelled, border: colors.danger100 },
+};
+
+const WARRANTY_TONE: Record<WarrantyStatus, ChipTone> = {
+  UNKNOWN: { ...colors.statusPending, border: colors.gray300 },
+  ACTIVE: { ...colors.statusDelivered, border: colors.success100 },
+  EXPIRING_SOON: { ...colors.statusWorkInProgress, border: colors.warning100 },
+  EXPIRED: { ...colors.statusCancelled, border: colors.danger100 },
+};
+
+const WARRANTY_LABEL: Record<WarrantyStatus, string> = {
+  UNKNOWN: 'No warranty on file',
+  ACTIVE: 'In warranty',
+  EXPIRING_SOON: 'Warranty expiring',
+  EXPIRED: 'Warranty expired',
+};
+
+export function EquipmentStatusChip({
+  status,
+  style,
+}: {
+  status: EquipmentStatus;
+  style?: ViewStyle;
+}): React.JSX.Element {
+  return (
+    <StatusChip
+      label={EQUIPMENT_STATUS_LABELS[status].toUpperCase()}
+      tone={EQUIPMENT_TONE[status]}
+      style={style}
+    />
+  );
+}
+
+export function TicketStatusChip({
+  status,
+  style,
+}: {
+  status: MaintenanceTicketStatus;
+  style?: ViewStyle;
+}): React.JSX.Element {
+  return (
+    <StatusChip
+      label={MAINTENANCE_TICKET_STATUS_LABELS[status].toUpperCase()}
+      tone={TICKET_TONE[status]}
+      style={style}
+    />
+  );
+}
+
+export function PriorityChip({
+  priority,
+  style,
+}: {
+  priority: MaintenancePriority;
+  style?: ViewStyle;
+}): React.JSX.Element {
+  return (
+    <StatusChip
+      label={MAINTENANCE_PRIORITY_LABELS[priority].toUpperCase()}
+      tone={PRIORITY_TONE[priority]}
+      icon={priority === 'CRITICAL' || priority === 'HIGH' ? 'priority-high' : undefined}
+      style={style}
+    />
+  );
+}
+
+export function WarrantyChip({
+  status,
+  style,
+}: {
+  status: WarrantyStatus;
+  style?: ViewStyle;
+}): React.JSX.Element {
+  return (
+    <StatusChip
+      label={WARRANTY_LABEL[status].toUpperCase()}
+      tone={WARRANTY_TONE[status]}
+      icon="verified-user"
+      style={style}
+    />
+  );
 }
 
 const styles = StyleSheet.create({

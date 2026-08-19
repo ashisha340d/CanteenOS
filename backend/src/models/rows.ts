@@ -28,6 +28,7 @@ import type {
   OrderPriority,
   OrderStatus,
   PosDiscountType,
+  PosKdsLineStatus,
   PosOrderItemStatus,
   PosOrderStatus,
   PosOrderType,
@@ -49,7 +50,7 @@ import type {
 } from '@menuboard/shared';
 
 /**
- * Row types mapped 1:1 to the tables in 001_core_schema.sql.
+ * Row types mapped 1:1 to the tables in 001_schema.sql.
  *
  * `dateStrings: true` on the pool means DATE / DATETIME / TIME arrive as strings, and
  * DECIMAL / BIGINT arrive as strings too — reflected here so mapping code cannot forget to
@@ -128,6 +129,7 @@ export interface ActivityTypeRow extends RowDataPacket, SyncColumns {
 
 export interface MenuCategoryRow extends RowDataPacket, SyncColumns {
   id: string;
+  catalogue_id: string | null;
   name: string;
   name_hi: string | null;
   description: string | null;
@@ -135,11 +137,14 @@ export interface MenuCategoryRow extends RowDataPacket, SyncColumns {
   status: MasterStatus;
   sort_order: number;
   created_by: string | null;
+  /** Joined from `menus` for display, not a column on menu_categories. */
+  catalogue_name?: string | null;
 }
 
 export interface MenuItemRow extends RowDataPacket, SyncColumns {
   id: string;
   category_id: string;
+  group_id: string | null;
   name: string;
   name_hi: string | null;
   unit: string;
@@ -150,9 +155,14 @@ export interface MenuItemRow extends RowDataPacket, SyncColumns {
   base_price: string | null;
   tax_profile_id: string | null;
   always_available: number;
+  prep_seconds: number | null;
   status: MasterStatus;
   sort_order: number;
   created_by: string | null;
+  /** Joined from `menu_categories` for display; not a column on menu_items. */
+  category_name?: string | null;
+  /** Joined from `item_groups` for display; not a column on menu_items. */
+  group_name?: string | null;
 }
 
 /* ------------------------------------------------------------- menu master */
@@ -366,21 +376,15 @@ export interface MenuScheduleRow extends RowDataPacket, SyncColumns {
 
 export interface ItemGroupRow extends RowDataPacket, SyncColumns {
   id: string;
+  catalogue_id: string | null;
   name: string;
   code: string | null;
   description: string | null;
   status: MasterStatus;
   sort_order: number;
   created_by: string | null;
-}
-
-export interface ItemGroupAssignmentRow extends RowDataPacket, SyncColumns {
-  id: string;
-  food_item_id: string;
-  group_id: string;
-  status: MasterStatus;
-  created_by: string | null;
-  group_name?: string;
+  /** Joined from `menus` for display, not a column on item_groups. */
+  catalogue_name?: string | null;
 }
 
 export interface MenuItemScheduleRow extends RowDataPacket, SyncColumns {
@@ -976,6 +980,12 @@ export interface PosOrderItemRow extends RowDataPacket {
   status: PosOrderItemStatus;
   cancelled_at: string | null;
   cancelled_by: string | null;
+  kds_status: PosKdsLineStatus;
+  cancel_reason: string | null;
+  acknowledged_at: string | null;
+  acknowledged_by: string | null;
+  served_at: string | null;
+  served_by: string | null;
   created_at: string;
   updated_at: string;
 }

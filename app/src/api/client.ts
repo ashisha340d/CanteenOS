@@ -23,20 +23,94 @@ function resolveApiBaseUrl(): string {
  * The single axios-backed API funnel for the whole app (per app/AGENTS.md). Every domain
  * module in `src/api/*` goes through this instance — nothing else in the app constructs
  * its own axios client or calls `fetch` against the backend directly.
+ *
+ * The initial value is a best guess; `discoverApiBaseUrl()` may replace it at startup.
  */
 export const API_BASE_URL: string = resolveApiBaseUrl();
+
+/**
+ * The endpoint actually in use. Starts as the configured guess and is narrowed by
+ * `discoverApiBaseUrl`, so anything reading it *after* startup gets the working host.
+ */
+let activeBaseUrl: string = API_BASE_URL;
+
+export function getApiBaseUrl(): string {
+  return activeBaseUrl;
+}
 
 console.log('[API] Connection options:');
 console.log(`  HOST      : ${HOST_URL}`);
 console.log(`  LOCALHOST : ${LOCALHOST_URL}`);
 console.log(`  NETWORK   : ${NETWORK_URL}`);
 console.log(`  TAILSCALE : ${TAILSCALE_URL}`);
-console.log(`[API] Active endpoint: ${API_BASE_URL} (platform: ${Platform.OS})`);
+console.log(`[API] Configured endpoint: ${API_BASE_URL} (platform: ${Platform.OS})`);
 
 export const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   timeout: 20000,
 });
+
+/**
+ * Finds a backend this device can actually reach, and points the client at it.
+ *
+ * A single hard-coded host cannot be right for every way this app is run: the Tailscale
+ * address only resolves when Tailscale is up on the phone, `10.0.2.2` only means anything
+ * inside the Android emulator, and the LAN address changes with the network. Configuring one
+ * of them made the app unreachable in every other situation — which is the "Expo cannot reach
+ * the server" case.
+ *
+ * Candidates are raced rather than tried in sequence, so the fastest reachable host wins and
+ * a dead address costs one timeout instead of blocking the ones behind it. If none answer the
+ * configured value is kept, leaving the normal offline behaviour intact.
+ */
+export async function discoverApiBaseUrl(): Promise<string> {
+  const candidates = [
+    ...new Set(
+      [
+        process.env.API_BASE_URL,
+        Platform.OS === 'web'
+          ? (Constants.expoConfig?.extra?.apiBaseUrlWeb as string | undefined)
+          : (Constants.expoConfig?.extra?.apiBaseUrl as string | undefined),
+        // The Metro host the bundle was served from is the strongest signal on a physical
+        // device: whatever address Expo reached the phone on, the backend is almost always
+        // on that same machine.
+        metroHostCandidate(),
+        NETWORK_URL,
+        TAILSCALE_URL,
+        Platform.OS === 'android' ? HOST_URL : undefined,
+        LOCALHOST_URL,
+      ].filter((url): url is string => typeof url === 'string' && url.length > 0),
+    ),
+  ];
+
+  const winner = await Promise.any(
+    candidates.map(async (url) => {
+      const result = await pingApi(url);
+      if (!result.ok) throw new Error(`unreachable: ${url}`);
+      return url;
+    }),
+  ).catch(() => null);
+
+  if (winner === null) {
+    console.warn(`[API] No candidate reachable; staying on ${activeBaseUrl}`);
+    return activeBaseUrl;
+  }
+
+  activeBaseUrl = winner;
+  apiClient.defaults.baseURL = winner;
+  console.log(`[API] Active endpoint: ${winner}`);
+  return winner;
+}
+
+/** `http://192.168.1.37:8081` -> `http://192.168.1.37:4000/api/v1`. */
+function metroHostCandidate(): string | undefined {
+  const hostUri =
+    Constants.expoConfig?.hostUri ??
+    (Constants.expoGoConfig as { debuggerHost?: string } | undefined)?.debuggerHost;
+  const host = typeof hostUri === 'string' ? hostUri.split(':')[0] : undefined;
+  if (host === undefined || host === '') return undefined;
+  return `http://${host}:4000/api/v1`;
+}
 
 export async function pingApi(url = API_BASE_URL): Promise<{ ok: boolean; status?: number; latencyMs: number; error?: string }> {
   const start = Date.now();

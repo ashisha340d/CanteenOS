@@ -3,15 +3,18 @@ import type {
   BillingStatus,
   BoardRole,
   Capability,
+  CreateKioskDeviceRequest,
   GenerateBillingRequest,
   ReportKind,
   ReportQuery,
+  UpdateKioskDeviceRequest,
   UserRole,
 } from '@menuboard/shared';
 import {
   auditApi,
   billingApi,
   dashboardApi,
+  kioskDevicesApi,
   permissionsApi,
   reportsApi,
   settingsApi,
@@ -109,5 +112,42 @@ export function useUpdateSetting() {
   return useMutation({
     mutationFn: ({ key, value }: { key: string; value: unknown }) => settingsApi.update(key, value),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['settings'] }),
+  });
+}
+
+/* ------------------------------------------------------------------ kiosk devices */
+
+export function useKioskDevices() {
+  // Polled: `lastSeenAt` is the only signal the portal has that a stand in a hall two floors
+  // away is actually switched on, and a stale one is read as a dead kiosk.
+  return useQuery({
+    queryKey: ['kiosk-devices'],
+    queryFn: kioskDevicesApi.list,
+    refetchInterval: 60_000,
+  });
+}
+
+export function useCreateKioskDevice() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateKioskDeviceRequest) => kioskDevicesApi.create(body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['kiosk-devices'] }),
+  });
+}
+
+export function useUpdateKioskDevice() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: UpdateKioskDeviceRequest }) =>
+      kioskDevicesApi.update(id, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['kiosk-devices'] }),
+  });
+}
+
+export function useDeleteKioskDevice() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => kioskDevicesApi.remove(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['kiosk-devices'] }),
   });
 }

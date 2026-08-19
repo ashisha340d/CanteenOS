@@ -650,6 +650,24 @@ export const MaintenanceRepository = {
     );
   },
 
+  /**
+   * Active schedules whose own reminder window has opened but which are not yet due. Each
+   * schedule carries its own `reminder_days`, so the window is per row rather than global.
+   */
+  async listSchedulesNeedingReminder(db: Db, limit: number): Promise<MaintenanceScheduleRow[]> {
+    return selectRows<MaintenanceScheduleRow>(
+      db,
+      `${SCHEDULE_SELECT}
+        WHERE s.deleted_at IS NULL AND s.is_active = 1
+          AND e.deleted_at IS NULL AND e.status <> 'RETIRED'
+          AND s.next_due_at > CURDATE()
+          AND s.next_due_at <= DATE_ADD(CURDATE(), INTERVAL s.reminder_days DAY)
+        ORDER BY s.next_due_at
+        LIMIT ?`,
+      [limit],
+    );
+  },
+
   /* -------------------------------------------------------------------- dashboard */
 
   /**

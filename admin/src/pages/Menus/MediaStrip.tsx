@@ -18,27 +18,38 @@ import { notify } from '@/lib/notify';
  * first/primary one badged), a remove button per thumbnail, and one "+" tile that opens the
  * shared MediaPicker to attach another existing or newly uploaded asset.
  */
+/** Thumbnail edge length. `sm` fits a dense row of form fields; `md` is the gallery default. */
+const TILE_SIZE = { sm: 'size-10', md: 'size-16' } as const;
+const BADGE_OFFSET = { sm: '-top-1 -left-1', md: '-top-1.5 -left-1.5' } as const;
+const ADD_ICON_SIZE = { sm: 'size-3', md: 'size-4' } as const;
+
 export function MediaStrip({
   entityType,
   entityId,
   onChanged,
+  size = 'md',
 }: {
   entityType: MediaEntityType;
   entityId: string;
   /** Called after any add/remove/primary change, for callers whose own lists show the image. */
   onChanged?: () => void;
+  /** `sm` for a thumbnail sitting inline in a dense row (e.g. one variant's photo); `md` (the
+   *  default) for a standalone gallery section with room to breathe. */
+  size?: 'sm' | 'md';
 }): JSX.Element {
   const [pickerOpen, setPickerOpen] = useState(false);
   const { data: assignments } = useMediaForEntity(entityType, entityId);
   const assign = useAssignMedia();
   const unassign = useUnassignMedia();
   const setPrimary = useSetPrimaryMedia();
+  const tile = TILE_SIZE[size];
+  const badgeOffset = BADGE_OFFSET[size];
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-1.5">
       {(assignments ?? []).map((assignment) => (
         <div key={assignment.id} className="group relative">
-          <div className="bg-muted size-16 overflow-hidden rounded-md border">
+          <div className={`bg-muted ${tile} overflow-hidden rounded-md border`}>
             {assignment.media && (
               <img
                 src={assignment.media.url}
@@ -48,8 +59,11 @@ export function MediaStrip({
             )}
           </div>
           {assignment.isPrimary ? (
-            <Badge variant="secondary" className="absolute -top-1.5 -left-1.5 px-1 py-0 text-[10px]">
-              Primary
+            <Badge
+              variant="secondary"
+              className={`absolute ${badgeOffset} px-1 py-0 text-[9px] leading-tight`}
+            >
+              {size === 'sm' ? '★' : 'Primary'}
             </Badge>
           ) : (
             <Tooltip>
@@ -57,7 +71,7 @@ export function MediaStrip({
                 <Button
                   variant="secondary"
                   size="icon-sm"
-                  className="absolute -top-1.5 -left-1.5 size-5 opacity-0 transition-opacity group-hover:opacity-100"
+                  className={`absolute ${badgeOffset} size-4 opacity-0 transition-opacity group-hover:opacity-100`}
                   onClick={async () => {
                     try {
                       await setPrimary.mutateAsync({ id: assignment.id, entityType, entityId });
@@ -69,7 +83,7 @@ export function MediaStrip({
                   }}
                   aria-label="Make primary image"
                 >
-                  <StarIcon />
+                  <StarIcon className="size-2.5" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Make primary — this is the thumbnail shown everywhere</TooltipContent>
@@ -78,7 +92,7 @@ export function MediaStrip({
           <Button
             variant="destructive"
             size="icon-sm"
-            className="absolute -top-1.5 -right-1.5 size-5 opacity-0 transition-opacity group-hover:opacity-100"
+            className="absolute -top-1 -right-1 size-4 opacity-0 transition-opacity group-hover:opacity-100"
             onClick={async () => {
               try {
                 await unassign.mutateAsync({ id: assignment.id, entityType, entityId });
@@ -90,18 +104,18 @@ export function MediaStrip({
             }}
             aria-label="Remove image"
           >
-            <XIcon />
+            <XIcon className="size-2.5" />
           </Button>
         </div>
       ))}
 
       <Button
         variant="outline"
-        className="text-muted-foreground size-16 flex-col gap-0.5"
+        className={`text-muted-foreground ${tile} flex-col gap-0.5 p-0`}
         onClick={() => setPickerOpen(true)}
       >
-        <PlusIcon className="size-4" />
-        <span className="text-[10px]">Add</span>
+        <PlusIcon className={ADD_ICON_SIZE[size]} />
+        {size === 'md' && <span className="text-[10px]">Add</span>}
       </Button>
 
       <MediaPicker

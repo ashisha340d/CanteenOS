@@ -5,6 +5,7 @@ import { requireCapability } from '../middleware/authorize';
 import { asyncHandler } from '../middleware/errorHandler';
 import { validate } from '../middleware/validate';
 import {
+  catalogueScopedListQuerySchema,
   createActivityTypeSchema,
   createMenuCategorySchema,
   createMenuItemSchema,
@@ -93,7 +94,7 @@ export function masterRoutes(): Router {
   router.get(
     '/menu-categories',
     read,
-    validate({ query: masterListQuerySchema }),
+    validate({ query: catalogueScopedListQuerySchema }),
     asyncHandler(MasterController.listMenuCategories),
   );
   router.post(

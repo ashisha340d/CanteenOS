@@ -125,6 +125,7 @@ CREATE INDEX IF NOT EXISTS ix_activity_types_status ON activity_types (status, s
 
 CREATE TABLE IF NOT EXISTS menu_categories (
   id                TEXT PRIMARY KEY NOT NULL,
+  catalogue_id      TEXT,
   name              TEXT NOT NULL,
   description       TEXT,
   image_path        TEXT,
@@ -141,6 +142,7 @@ CREATE INDEX IF NOT EXISTS ix_menu_categories_status ON menu_categories (status,
 CREATE TABLE IF NOT EXISTS menu_items (
   id                TEXT PRIMARY KEY NOT NULL,
   category_id       TEXT NOT NULL,
+  group_id          TEXT,
   name              TEXT NOT NULL,
   unit              TEXT NOT NULL DEFAULT 'NOS',
   image_path        TEXT,

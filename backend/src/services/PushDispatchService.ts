@@ -1,5 +1,6 @@
 import { Expo, type ExpoPushTicket } from 'expo-server-sdk';
 import type { NotificationDto, NotificationType } from '@menuboard/shared';
+import { MESSAGE_CHANNEL_ID, ORDER_CHANNEL_ID } from '@menuboard/shared';
 import { getPool } from '../db/pool';
 import { refreshTokenRepository } from '../repositories/RefreshTokenRepository';
 import { settingsService } from './SettingsService';
@@ -15,6 +16,7 @@ const PUSH_NOTIFICATION_TYPE_TO_EXPO: Record<
   | 'invitation'
   | 'status'
   | 'alarm'
+  | 'maintenance'
 > = {
   NEW_ORDER: 'order',
   MENTION: 'mention',
@@ -24,6 +26,44 @@ const PUSH_NOTIFICATION_TYPE_TO_EXPO: Record<
   BOARD_INVITATION: 'invitation',
   // Its own channel so the buzzer can bypass the quiet settings the other categories honour.
   ALERT: 'alarm',
+
+  MAINTENANCE_DUE: 'maintenance',
+  MAINTENANCE_OVERDUE: 'maintenance',
+  // A critical fault or an asset out of service rings on the alarm channel: somebody is
+  // standing in front of a machine that has stopped, and a quiet badge is not enough.
+  MAINTENANCE_CRITICAL: 'alarm',
+  MAINTENANCE_REPORTED: 'maintenance',
+  MAINTENANCE_ASSIGNED: 'maintenance',
+  MAINTENANCE_COMPLETED: 'maintenance',
+  EQUIPMENT_OUT_OF_SERVICE: 'alarm',
+  WARRANTY_EXPIRING: 'maintenance',
+  SUPPLIER_FOLLOW_UP: 'maintenance',
+};
+
+/**
+ * Which Android channel each notification lands on.
+ *
+ * Chat gets its own so it is audibly distinct from an order and can be muted separately;
+ * everything operational shares the order channel, which is the loud one.
+ */
+const CHANNEL_BY_NOTIFICATION_TYPE: Record<NotificationType, string> = {
+  THREAD_REPLY: MESSAGE_CHANNEL_ID,
+  MENTION: MESSAGE_CHANNEL_ID,
+  ACKNOWLEDGEMENT: MESSAGE_CHANNEL_ID,
+  BOARD_INVITATION: MESSAGE_CHANNEL_ID,
+
+  NEW_ORDER: ORDER_CHANNEL_ID,
+  STATUS_CHANGED: ORDER_CHANNEL_ID,
+  ALERT: ORDER_CHANNEL_ID,
+  MAINTENANCE_DUE: ORDER_CHANNEL_ID,
+  MAINTENANCE_OVERDUE: ORDER_CHANNEL_ID,
+  MAINTENANCE_CRITICAL: ORDER_CHANNEL_ID,
+  MAINTENANCE_REPORTED: ORDER_CHANNEL_ID,
+  MAINTENANCE_ASSIGNED: ORDER_CHANNEL_ID,
+  MAINTENANCE_COMPLETED: ORDER_CHANNEL_ID,
+  EQUIPMENT_OUT_OF_SERVICE: ORDER_CHANNEL_ID,
+  WARRANTY_EXPIRING: ORDER_CHANNEL_ID,
+  SUPPLIER_FOLLOW_UP: ORDER_CHANNEL_ID,
 };
 
 interface PushTarget {
@@ -84,6 +124,15 @@ export class PushDispatchService {
         orderId: target.notification.orderId,
       },
       categoryId: PUSH_NOTIFICATION_TYPE_TO_EXPO[target.notification.type],
+      // Android 8+ takes importance and sound from the channel, not from the message, so
+      // without naming one every alert lands on the system default: no heads-up banner and,
+      // on many devices, no sound. The app creates this channel at startup
+      // (`ORDER_CHANNEL_ID` in app/src/utils/pushNotifications.ts) with MAX importance.
+      channelId: CHANNEL_BY_NOTIFICATION_TYPE[target.notification.type],
+      // Wakes a dozing device rather than letting the alert wait for the next maintenance
+      // window — an order due in twenty minutes cannot be delivered whenever Android feels
+      // like it.
+      priority: 'high' as const,
     }));
 
     const chunks = this.expo.chunkPushNotifications(messages);

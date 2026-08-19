@@ -40,7 +40,24 @@ export function kindForMimeType(mimeType: string): AttachmentKind {
   throw new UnsupportedMediaTypeError(`Files of type ${mimeType} are not accepted`);
 }
 
-export function maxBytesForKind(kind: AttachmentKind): number {
+/**
+ * `AttachmentKind` plus video.
+ *
+ * Video is deliberately *not* a member of `AttachmentKind`: that enum is the `attachments.kind`
+ * column (001), a sync-replicated table with a three-member DB enum, and widening it would need
+ * a device-side schema change for a table this module does not use. The shared media library
+ * (`media_assets.media_type`) already has VIDEO, so only the storage folder needs the extra
+ * name — which is all `StorageKind` is for.
+ */
+export type StorageKind = AttachmentKind | 'VIDEO';
+
+/** Resolves a MIME type for callers that accept video — currently only the Equipment module. */
+export function storageKindForMimeType(mimeType: string): StorageKind {
+  if ((MEDIA.VIDEO_MIME_TYPES as readonly string[]).includes(mimeType)) return 'VIDEO';
+  return kindForMimeType(mimeType);
+}
+
+export function maxBytesForKind(kind: StorageKind): number {
   switch (kind) {
     case AttachmentKind.IMAGE:
       return MEDIA.IMAGE_MAX_BYTES;
@@ -48,6 +65,8 @@ export function maxBytesForKind(kind: AttachmentKind): number {
       return MEDIA.AUDIO_MAX_BYTES;
     case AttachmentKind.DOCUMENT:
       return MEDIA.DOCUMENT_MAX_BYTES;
+    case 'VIDEO':
+      return MEDIA.VIDEO_MAX_BYTES;
     default:
       return MEDIA.IMAGE_MAX_BYTES;
   }
@@ -64,6 +83,11 @@ const EXTENSION_BY_MIME: Record<string, string> = {
   'audio/mpeg': '.mp3',
   'audio/webm': '.webm',
   'application/pdf': '.pdf',
+  'video/mp4': '.mp4',
+  'video/quicktime': '.mov',
+  // Shares its extension with audio/webm; harmless, because a video only ever reaches the
+  // client through `media_assets.mime_type`, never through the extension guesser below.
+  'video/webm': '.webm',
 };
 
 export function extensionForMimeType(mimeType: string): string {
@@ -96,7 +120,8 @@ export async function storeUploadedFile(input: {
   attachmentId: string;
   tempPath: string;
   mimeType: string;
-  kind: AttachmentKind;
+  /** Only ever the folder name — see {@link StorageKind} for why video is not an AttachmentKind. */
+  kind: StorageKind;
 }): Promise<StoredFile> {
   const now = new Date();
   const year = String(now.getUTCFullYear());
@@ -173,6 +198,30 @@ export function signMediaUrl(attachmentId: string, userId: string): string {
  */
 export function signMenuMediaUrl(mediaId: string, userId: string): string {
   const expiresAt = Math.floor(Date.now() / 1000) + config.media.urlTtlMinutes * 60;
+  const signature = mediaSignature(mediaId, userId, expiresAt);
+  const query = new URLSearchParams({
+    expires: String(expiresAt),
+    uid: userId,
+    sig: signature,
+  });
+  return `${config.publicUrl}/api/v1/media/${mediaId}/file?${query.toString()}`;
+}
+
+/**
+ * A signed menu-media URL that stays byte-identical while it is valid, by rounding the expiry
+ * down to a fixed bucket instead of "now + TTL".
+ *
+ * {@link signMenuMediaUrl} produces a different string on every call, which is correct for a
+ * one-off download but ruinous for a screen that re-reads a list on a timer: the `<img>` src
+ * changes every poll, so the browser re-downloads photography it already has. A polling client
+ * asks for this variant and its images come out of cache until the bucket turns over.
+ */
+export function signMenuMediaUrlStable(mediaId: string, userId: string): string {
+  const ttlSeconds = config.media.urlTtlMinutes * 60;
+  // Half the TTL as the bucket: a URL handed out at the end of one bucket is still valid for
+  // at least half its lifetime, so a client never receives a nearly-expired link.
+  const bucket = Math.max(60, Math.floor(ttlSeconds / 2));
+  const expiresAt = (Math.floor(Date.now() / 1000 / bucket) + 2) * bucket;
   const signature = mediaSignature(mediaId, userId, expiresAt);
   const query = new URLSearchParams({
     expires: String(expiresAt),

@@ -77,6 +77,18 @@ export class UserRepository {
     );
   }
 
+  /** Active accounts holding any of these roles — the audience for an escalation. */
+  async findActiveByRoles(db: Db, roles: readonly UserRole[]): Promise<UserRow[]> {
+    if (roles.length === 0) return [];
+    const placeholders = roles.map(() => '?').join(', ');
+    return selectRows<UserRow>(
+      db,
+      `SELECT ${SELECT_COLUMNS} FROM users
+        WHERE deleted_at IS NULL AND status = 'ACTIVE' AND role IN (${placeholders})`,
+      roles,
+    );
+  }
+
   /**
    * Resolves a login identifier against username, phone or email in one pass, so the
    * client does not have to declare which kind it typed.

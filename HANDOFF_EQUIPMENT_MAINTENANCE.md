@@ -3,8 +3,9 @@
 Working document for the Equipment & Maintenance module. Written because it was explicitly
 asked for; `docs/AGENTS.md` otherwise bars unsolicited summary/planning files.
 
-**Status:** in progress. Shared contract, database and the first two repositories are done and
-verified; services, HTTP layer and both clients are outstanding. Section 6 is the resume point.
+**Status:** complete. Shared contract, database, repositories, services, HTTP layer, the Admin
+Portal, the Android app and the spec/API/database documentation are all in place and verified —
+see §6 for what was built and §8 for how it was checked.
 
 ---
 
@@ -15,10 +16,10 @@ new Equipment/Maintenance module is formally out of scope until the spec says ot
 spec has an established pattern for this: §3a admitted the Menu Master, §3b admitted the POS,
 each as a numbered extension that supersedes the exclusion list.
 
-**This module was built on the user's explicit instruction.** The matching spec amendment
-(a §3c "Equipment Monitoring & Maintenance (extension)" section) is listed as an outstanding
-task in §6 and must land before the module is considered complete, so the product contract and
-the code do not disagree.
+**This module was built on the user's explicit instruction**, and the matching spec amendment
+has landed: `docs/MENUBOARD_SPEC.md` §3c "Equipment Monitoring & Maintenance Management
+(extension)" now admits it the same way §3a admitted the Menu Master. The product contract and
+the code agree.
 
 What stays excluded and was *not* built: IoT ingestion/telemetry storage, a spare-parts
 inventory, purchase orders, depreciation/asset accounting, and any automatic technical
@@ -54,29 +55,36 @@ Action-based, composed by nesting (each tier is the one below plus its own grant
 `shared/src/permissions/index.ts` and seeded into `role_capabilities` by the migration. Both
 must be edited together — `PermissionsCacheService` serves the DB rows as authoritative.
 
+Revised by `028_equipment_role_scope.sql`. **Monitoring and managing is Manager/Admin;
+reporting is User and above; an Employee holds no part of the module.**
+
 | Capability | EMPLOYEE | USER | MANAGER | ADMIN | SUPER_ADMIN |
 | --- | :-: | :-: | :-: | :-: | :-: |
-| `equipment.view` | ✔ | ✔ | ✔ | ✔ | ✔ |
-| `equipment.report_problem` | ✔ | ✔ | ✔ | ✔ | ✔ |
-| `maintenance.view` | ✔ | ✔ | ✔ | ✔ | ✔ |
-| `maintenance.create` | ✔ | ✔ | ✔ | ✔ | ✔ |
-| `equipment.upload_document` | | ✔ | ✔ | ✔ | ✔ |
-| `supplier.view` | | ✔ | ✔ | ✔ | ✔ |
-| `supplier.contact` | | ✔ | ✔ | ✔ | ✔ |
+| `equipment.report_problem` | | ✔ | ✔ | ✔ | ✔ |
+| `maintenance.view` | | ✔ | ✔ | ✔ | ✔ |
+| `maintenance.create` | | ✔ | ✔ | ✔ | ✔ |
+| `equipment.view` | | | ✔ | ✔ | ✔ |
 | `equipment.create` / `.edit` | | | ✔ | ✔ | ✔ |
+| `equipment.upload_document` | | | ✔ | ✔ | ✔ |
 | `equipment.manage_location` / `.manage_floorplan` | | | ✔ | ✔ | ✔ |
 | `maintenance.assign` / `.approve` / `.close` / `.schedule` | | | ✔ | ✔ | ✔ |
-| `supplier.manage` | | | ✔ | ✔ | ✔ |
+| `supplier.view` / `.contact` / `.manage` | | | ✔ | ✔ | ✔ |
 | `equipment.delete` / `maintenance.delete` | | | | ✔ | ✔ |
 
-`ANDROID_FORBIDDEN_CAPABILITIES` is left empty, so the whole module is reachable from the phone
-for Admin, Manager and User alike — as the brief requires.
+`equipment.report_problem` is narrower than it looks and wider than its name: it grants the two
+reads a reporter cannot do without — `GET /equipment/resolve` and `GET /equipment/:id`, both
+returning a payload trimmed to the machine's identity and its open problems — plus
+`POST /equipment/media`, because the person who may report a fault must be able to show it. It
+grants no way to browse the estate.
+
+`ANDROID_FORBIDDEN_CAPABILITIES` is left empty, so the whole module is reachable from the phone —
+a Manager gets the monitoring surface there, a User gets scan-and-report.
 
 ---
 
 ## 4. Data model
 
-23 tables in `backend/src/db/migrations/025_equipment_maintenance.sql`, applied and verified
+23 tables in `backend/src/db/migrations/001_schema.sql`, applied and verified
 against the live database.
 
 ```
@@ -126,52 +134,50 @@ Notes:
 | Shared permissions | `shared/src/permissions/index.ts` — 18 capabilities + role composition |
 | Shared limits | `shared/src/constants/index.ts` — `LIMITS.EQUIPMENT_*`, `SUPPLIER_*`, `MAINTENANCE_*` |
 | Shared DTOs | `shared/src/dto/equipment.ts` (new, exported from `shared/src/index.ts`) — full wire contract incl. `*Draft` AI types, dashboard and `MyMaintenanceDto` |
-| Migration | `backend/src/db/migrations/025_equipment_maintenance.sql` |
+| Migration | `backend/src/db/migrations/001_schema.sql` |
 | Row types | `backend/src/models/equipmentRows.ts` (re-exported by `models/rows.ts`) |
 | Mappers | `backend/src/models/equipmentMappers.ts` (re-exported by `models/mappers.ts`) |
 | Repositories | `backend/src/repositories/EquipmentRepository.ts` (+ `EquipmentLocationRepository`, `EquipmentCategoryRepository`), `backend/src/repositories/MaintenanceRepository.ts` |
 
-Verified so far:
-- `npm run build:shared` — passes.
-- `npm run migrate` — 025 applied cleanly to the live database (297 ms).
-
 ---
 
-## 6. Outstanding — resume here
+## 6. The rest of the module
 
-In dependency order. Nothing below has been started unless stated.
+| Area | Files |
+| --- | --- |
+| Repositories | `SupplierRepository.ts` (master, contacts, service categories, call + WhatsApp logs), `FloorPlanRepository.ts` (plans, pins, unplaced assets) |
+| Activity timeline | `services/MaintenanceActivityService.ts` — the one place the operator-facing prose is composed, called by four services inside their own transactions |
+| Services | `EquipmentService`, `MaintenanceService`, `SupplierService`, `FloorPlanService`, `EquipmentAiService`, `MaintenanceSchedulerService` |
+| Audit | `AuditService.AuditAction` — 29 new members (`equipment.*`, `maintenance.*`, `supplier.*`) |
+| Scheduler wiring | `server.ts` starts/stops `maintenanceSchedulerService` beside the YouTube worker; it sweeps every 6 h and on boot |
+| HTTP | `validation/schemas.ts` (+~600 lines, all `.strict()`), `EquipmentController`, `MaintenanceController`, `equipment.routes.ts`, `maintenance.routes.ts`, mounted in `routes/index.ts` |
+| Admin | `api/equipment.ts`, `hooks/useEquipment.ts`, `pages/Equipment/*` (dashboard, register, detail, locations & categories, floor plan, status/move modals, tone map), `pages/Maintenance/*` (tickets, ticket, schedules, report/assign/complete modals), `pages/Suppliers/SuppliersPage.tsx`, 9 routes, an "Equipment" nav section |
+| App | `src/api/equipment.ts`, `app/equipment/*` (list, profile, register, report, my-maintenance, ticket, scan), `src/hooks/useSupplierContact.ts`, `src/components/equipment/*`, entry point on the Boards top bar |
+| Docs | `MENUBOARD_SPEC.md` §3c, `API.md` §17c, `DATABASE.md` "Equipment & Maintenance (025…)" |
 
-1. **`backend/src/repositories/SupplierRepository.ts`** — supplier master, `supplier_contacts`,
-   `supplier_service_categories`, plus the call/WhatsApp log tables.
-2. **`backend/src/repositories/FloorPlanRepository.ts`** — plans and pin positions.
-3. **Services** (`backend/src/services/`):
-   - `EquipmentService` — registration, asset-id allocation, status/location change (each
-     writing history + activity), documents, warranties, supplier links, QR payload.
-   - `MaintenanceService` — ticket lifecycle (`canTransitionMaintenanceStatus` in shared is the
-     authority), assignment, completion, activity timeline, counter refresh, notifications.
-   - `SupplierService`, `FloorPlanService`.
-   - `EquipmentAiService` — photo→identification, document→OCR, voice/text→problem
-     classification. Must reuse `GeminiService` (`generateGeminiText`, `transcribeAudio`,
-     `extractJson`) and degrade to a clear "not configured" error when `GEMINI_API_KEY` is
-     unset, exactly like the recipe importer. **The module must stay fully usable with AI off.**
-   - `MaintenanceSchedulerService` — sweep due schedules into tickets
-     (`listDueSchedulesWithoutTicket` is already written to be idempotent), advance `next_due_at`,
-     raise due/overdue/warranty notifications.
-4. **HTTP layer** — `validation/schemas.ts` additions (zod, `.strict()`), `EquipmentController`,
-   `MaintenanceController`, `equipment.routes.ts`, `maintenance.routes.ts`, mounted in
-   `routes/index.ts`. Media upload for this module needs its own endpoint gated by
-   `equipment.upload_document` rather than reusing the `MASTER_WRITE`-gated media route.
-5. **Admin web** (`admin/src/`) — `api/equipment.ts`, `hooks/useEquipment.ts`, pages for
-   dashboard, list/cards, detail, floor plan, tickets, calendar, suppliers, warranty, schedules;
-   route entries in `routes.tsx` and a nav section in `layouts/navigation.ts`.
-6. **Android app** (`app/`) — `src/api/equipment.ts`; screens under `app/equipment/` for scan/
-   register (camera→AI→confirm), profile, report problem (photo + voice), my maintenance,
-   complete work; `Linking` for `tel:` and `wa.me`; QR handled via deep link + typed asset id.
-   **Note:** camera-based QR scanning would need `expo-camera` (a native dep requiring a
-   rebuild). The plan is deep-link + manual asset-id entry unless the user asks for the dep.
-7. **Spec amendment** — add §3c to `docs/MENUBOARD_SPEC.md` (see §1 above).
-8. **Verification** — `npm run build`, `npm run lint --workspace @menuboard/admin`,
-   `cd app && npm run typecheck && npm run lint`, `npm run smoke`.
+Decisions taken while finishing, worth knowing:
+
+- **`POST /equipment/media` is gated by `equipment.report_problem`, not
+  `equipment.upload_document`.** An Employee holds the former and not the latter, and the whole
+  design rests on a cook photographing the machine that stopped. `upload_document` still gates
+  *binding* a document to an asset and the OCR endpoint, which is what it describes.
+- **`PATCH /equipment/:id` refuses `status`** rather than silently ignoring it: status moves
+  through its own endpoint because that is what writes the history row and the timeline entry.
+- **"Open" means `status NOT IN ('CLOSED','CANCELLED')`** everywhere, so a RESOLVED ticket still
+  counts against the asset even though the asset is already back in service. Verifying or
+  closing it clears the counter.
+- **The asset-id scheme is editable from the Settings page** — `equipment.assetIdPrefix` and
+  `equipment.assetIdSequenceDigits` were added to `SETTING_DEFINITIONS`, which is a closed set;
+  without that the migration's rows would have been unreachable.
+- **The phone scans QR codes; nothing renders them.** `equipment.qr_code` holds
+  `menuboard://equipment/<assetId>`, which any label printer can encode. `app/equipment/scan.tsx`
+  reads it with `expo-camera` (`CameraView` + `useCameraPermissions`, `CAMERA` declared in
+  `app.json`) and resolves it through `GET /equipment/resolve`, falling back to typed/pasted
+  entry when permission is refused. Rendering a QR image would need `qrcode` and no surface asks
+  for one.
+- **Warranty and calendar are views, not pages.** Warranty is a filter on the equipment register
+  plus a dashboard tile; the "calendar" is the schedules page ordered by due date, because
+  "6 days overdue" answers the question a month grid only implies.
 
 ---
 
@@ -183,7 +189,7 @@ Learned from the Tasks module (023/024), which is the closest precedent.
   repositories never contain business rules. Services own transactions via `withTransaction`.
 - **Repositories take a `Db`** (pool *or* connection) so they join the caller's transaction.
 - **Every mutation writes an audit row** in the same transaction, via
-  `auditService.record(connection, actor, …)`. New `AuditAction` members are needed.
+  `auditService.record(connection, actor, …)`.
 - **Validation**: zod schemas in `backend/src/validation/schemas.ts`, always `.strict()`, using
   the `text()` / `optionalText()` / `enumOf()` / `pageQuery` helpers from `validation/common.ts`.
 - **Responses**: `ok()` / `created()` / `paginated()` / `noContent()` from `utils/http.ts`.
@@ -196,7 +202,7 @@ Learned from the Tasks module (023/024), which is the closest precedent.
   (nothing hardcoded), `useCapabilities().has()` for gating, online-only API modules that treat a
   failed request as an ordinary outcome rather than an exception.
 
-## 8. Commands
+## 8. Commands and what they reported
 
 ```bash
 npm run build:shared                        # after any shared/ change — both clients consume dist
@@ -207,4 +213,22 @@ npm run smoke                               # REST surface, requires a running b
 cd app && npm install && npm run typecheck && npm run lint
 ```
 
+Last run on this machine:
+
+| Command | Result |
+| --- | --- |
+| `npm run migrate:status` | 025, 028, 029, 030 APPLIED |
+| `npm run build` | passes (shared → backend → admin → kiosk) |
+| `npm run lint --workspace @menuboard/admin` | passes, 0 warnings |
+| `cd app && npm run typecheck && npm run lint` | both pass |
+| Live REST exercise against `localhost:4000` | 39/39 checks, plus the multipart media upload |
+| `npm run smoke` | **could not run here** — the dev database's seeded `admin` password is no longer `MenuBoard@2026`, so the script cannot log in. Re-run it with `SEED_PASSWORD=<real password>`; the equipment section added to `scripts/smoke.mjs` covers registration, the ticket ladder, counter refresh, supplier linking, the WhatsApp draft and deletion. |
+
 `shared/dist` must be rebuilt before `app/` installs, per `docs/AGENTS.md`.
+
+One defect outside this module's scope was found while verifying the permission tiers and fixed
+rather than left: `audit_logs.actor_role` never gained the `EMPLOYEE` member that 003 added to
+`users.role`, so under `STRICT_TRANS_TABLES` every audited EMPLOYEE action — including
+`auth.login` — aborted its own transaction. `030_audit_actor_role_employee.sql` widens the enum;
+no data changed, because strict mode had refused the inserts outright rather than truncating
+them.

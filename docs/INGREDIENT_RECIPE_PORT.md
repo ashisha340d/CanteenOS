@@ -31,7 +31,7 @@ pairs); recorded here so they aren't re-litigated:
    auto-resolution, audio transcription), gated behind an optional `GEMINI_API_KEY` env var so
    the feature degrades to a clear error message rather than crashing when unset.
 
-## Database (`backend/src/db/migrations/005_ingredients_recipes_v2.sql`)
+## Database (`backend/src/db/migrations/001_schema.sql`)
 
 - New `ingredient_categories` table (mirrors `menu_categories`).
 - New `ingredients` table (mirrors `menu_items`, narrower — see decision 1). Unique on `name`.

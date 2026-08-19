@@ -9,3 +9,4 @@ export * from './sync';
 export * from './attachments';
 export * from './shopping';
 export * from './tasks';
+export * from './equipment';

@@ -5,14 +5,17 @@ import type {
   BillingStatus,
   BoardRole,
   Capability,
+  CreateKioskDeviceRequest,
   DashboardSummary,
   GenerateBillingRequest,
   IsoDate,
+  KioskDeviceDto,
   PageQuery,
   Paginated,
   ReportKind,
   ReportQuery,
   SettingDto,
+  UpdateKioskDeviceRequest,
   UserRole,
 } from '@menuboard/shared';
 import { http, unwrap, unwrapPaged } from './client';
@@ -86,4 +89,17 @@ export const auditApi = {
 export const settingsApi = {
   list: () => unwrap<SettingDto[]>(http.get('/admin/settings')),
   update: (key: string, value: unknown) => unwrap<SettingDto>(http.put(`/admin/settings/${key}`, { value })),
+};
+
+/**
+ * The self-service stands. Provisioning a kiosk used to mean standing in front of it with a
+ * password; it is now a row edited from here, and the tablet holds nothing but the code.
+ */
+export const kioskDevicesApi = {
+  list: () => unwrap<KioskDeviceDto[]>(http.get('/admin/kiosk-devices')),
+  create: (body: CreateKioskDeviceRequest) =>
+    unwrap<KioskDeviceDto>(http.post('/admin/kiosk-devices', body)),
+  update: (id: string, body: UpdateKioskDeviceRequest) =>
+    unwrap<KioskDeviceDto>(http.patch(`/admin/kiosk-devices/${id}`, body)),
+  remove: (id: string) => unwrap<null>(http.delete(`/admin/kiosk-devices/${id}`)),
 };

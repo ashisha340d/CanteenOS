@@ -3,6 +3,7 @@ import {
   ANDROID_FORBIDDEN_CAPABILITIES,
   Capability,
   ClientType,
+  KIOSK_ALLOWED_CAPABILITIES,
   type UserRole,
 } from '@menuboard/shared';
 import { getPool } from '../db/pool';
@@ -29,9 +30,54 @@ export function requireCapability(capability: Capability): RequestHandler {
         throw new ClientNotPermittedError();
       }
 
+      // The kiosk is allowlisted rather than denylisted, so a capability added to the product
+      // later is unreachable from the tablet until it is deliberately named as kiosk-safe.
+      if (
+        auth.clientType === ClientType.KIOSK &&
+        !KIOSK_ALLOWED_CAPABILITIES.includes(capability)
+      ) {
+        throw new ClientNotPermittedError();
+      }
+
       if (!auth.capabilities.includes(capability)) {
         throw new ForbiddenError();
       }
+      next();
+    } catch (error) {
+      next(error);
+    }
+  };
+}
+
+/**
+ * Requires **any one** of several global capabilities.
+ *
+ * Used where one endpoint legitimately serves two audiences with different powers — reading a
+ * single machine, which a monitor does through `equipment.view` and a reporter through
+ * `equipment.report_problem`. Expressing that as two routes would mean two paths for one
+ * resource; expressing it as the weaker capability alone would hand a reporter the whole estate.
+ */
+export function requireAnyCapability(...capabilities: readonly Capability[]): RequestHandler {
+  return (req: Request, _res: Response, next: NextFunction): void => {
+    try {
+      const auth = requireAuth(req);
+
+      if (
+        auth.clientType === ClientType.ANDROID &&
+        capabilities.every((capability) => ANDROID_FORBIDDEN_CAPABILITIES.includes(capability))
+      ) {
+        throw new ClientNotPermittedError();
+      }
+
+      const granted = capabilities.filter(
+        (capability) =>
+          auth.capabilities.includes(capability) &&
+          !(
+            auth.clientType === ClientType.ANDROID &&
+            ANDROID_FORBIDDEN_CAPABILITIES.includes(capability)
+          ),
+      );
+      if (granted.length === 0) throw new ForbiddenError();
       next();
     } catch (error) {
       next(error);

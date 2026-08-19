@@ -48,7 +48,8 @@ const POS_ITEM_COLUMNS = `id, pos_order_id, menu_item_id, variant_id, custom_ite
     item_name, variant_name, quantity, unit, unit_price, gross_amount, discount_type,
     discount_value, discount_amount, taxable_amount, tax_profile_id, tax_rate, cgst_amount,
     sgst_amount, igst_amount, cess_amount, tax_amount, line_total, allow_decimal_quantity,
-    notes, sort_order, status, cancelled_at, cancelled_by, created_at, updated_at`;
+    notes, sort_order, status, cancelled_at, cancelled_by, kds_status, cancel_reason,
+    acknowledged_at, acknowledged_by, served_at, served_by, created_at, updated_at`;
 
 const POS_PAYMENT_COLUMNS = `id, pos_order_id, method, amount, tendered_amount, change_amount,
     reference, notes, entity_id, is_reversal, received_by, received_at, created_at, updated_at`;
@@ -176,6 +177,19 @@ export interface PosDashboardCountRow extends RowDataPacket {
   total: number;
   total_amount: string;
   balance_amount: string;
+}
+
+export interface PosCounterLoadRow extends RowDataPacket {
+  counter_id: string;
+  code: string | null;
+  name: string;
+  active_count: number;
+  open_amount: string;
+}
+
+export interface PosPaymentMethodTotalRow extends RowDataPacket {
+  method: PosPaymentMethod;
+  total: number;
 }
 
 function buildWhere(filter: PosOrderListFilter): { where: string; params: unknown[] } {
@@ -667,6 +681,49 @@ export class PosRepository {
     );
   }
 
+  /**
+   * How much work is sitting on each service counter right now.
+   *
+   * Every ACTIVE counter is returned, including the idle ones — a counter with nothing on it
+   * is exactly the information someone rebalancing the floor is looking for, and leaving it
+   * out of the result would silently hide it from the load summary.
+   */
+  async counterLoad(
+    db: Db,
+    scope: { stationId?: string; counterId?: string },
+  ): Promise<PosCounterLoadRow[]> {
+    const conditions = [
+      'po.deleted_at IS NULL',
+      `po.status IN ('DRAFT','SCHEDULED','OPEN')`,
+      'po.counter_id = c.id',
+    ];
+    const params: unknown[] = [];
+
+    if (scope.stationId !== undefined) {
+      conditions.push('po.station_id = ?');
+      params.push(scope.stationId);
+    }
+    if (scope.counterId !== undefined) {
+      conditions.push('po.counter_id = ?');
+      params.push(scope.counterId);
+    }
+
+    return selectRows<PosCounterLoadRow>(
+      db,
+      `SELECT c.id   AS counter_id,
+              c.code AS code,
+              c.name AS name,
+              COUNT(po.id) AS active_count,
+              COALESCE(SUM(po.balance_amount), 0) AS open_amount
+         FROM counters c
+         LEFT JOIN pos_orders po ON ${conditions.join(' AND ')}
+        WHERE c.deleted_at IS NULL AND c.status = 'ACTIVE'
+        GROUP BY c.id, c.code, c.name
+        ORDER BY c.sort_order ASC, c.name ASC`,
+      params,
+    );
+  }
+
   /** Net cash taken today: completed sales less anything reversed. */
   async salesTotalForDate(db: Db, businessDate: string): Promise<number> {
     const row = await selectOne<CountRow>(
@@ -678,6 +735,27 @@ export class PosRepository {
       [businessDate],
     );
     return row === null ? 0 : Number(row.total);
+  }
+
+  /** Money taken today grouped by payment method. */
+  async salesByPaymentMethodForDate(
+    db: Db,
+    businessDate: string,
+  ): Promise<Partial<Record<PosPaymentMethod, number>>> {
+    const rows = await selectRows<PosPaymentMethodTotalRow>(
+      db,
+      `SELECT p.method, COALESCE(SUM(p.amount), 0) AS total
+         FROM pos_payments p
+         JOIN pos_orders po ON po.id = p.pos_order_id
+        WHERE po.business_date = ? AND po.deleted_at IS NULL
+        GROUP BY p.method`,
+      [businessDate],
+    );
+    const result: Partial<Record<PosPaymentMethod, number>> = {};
+    for (const row of rows) {
+      result[row.method] = Number(row.total);
+    }
+    return result;
   }
 
   /* -------------------------------------------------------- catalogue reads */

@@ -4,6 +4,9 @@ import {
   LIMITS,
   PosOrderStatus,
   PosOrderType,
+  PosPaymentMethod,
+  type PosCounterLoadDto,
+  type PosDashboardSummaryDto,
   type PosOrderDto,
 } from '@menuboard/shared';
 import {
@@ -12,12 +15,10 @@ import {
   ArrowUpIcon,
   BikeIcon,
   CalendarClockIcon,
-  ChevronDownIcon,
   CircleCheckBigIcon,
   ContactRoundIcon,
   FilePenIcon,
   GripVerticalIcon,
-  HandCoinsIcon,
   KeyboardIcon,
   SettingsIcon,
   ShoppingBagIcon,
@@ -43,18 +44,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { BackButton } from '@/components/BackButton';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { CardGridSkeleton, StatGridSkeleton } from '@/components/ui/Skeletons';
 import { Spinner } from '@/components/ui/spinner';
-import { StatTile } from '@/components/ui/StatTile';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select,
   SelectContent,
@@ -63,12 +56,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { TextField } from '@/components/form/fields';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 import { useDeviceProfile } from '@/hooks/useDeviceProfile';
 import { usePosDashboard, usePosOrders, useSetPosOrderStatus, useVoidPosOrder } from '@/hooks/usePos';
 import { useAuth } from '@/services/AuthContext';
@@ -85,6 +72,7 @@ import { DataTable, type DataTableColumn } from '@/components/DataTable/DataTabl
 import { cn } from '@/lib/utils';
 import { PosOrderCard } from './PosOrderCard';
 import { formatMoney } from './posFormat';
+import { PosTooltip, usePosTooltipPref } from './posPrefs';
 
 type SectionKey = 'drafts' | 'scheduled' | 'takeaway' | 'named' | 'open';
 /** A movable block on the dashboard. Today's sales is one, so it can be ordered with the rest. */
@@ -167,7 +155,7 @@ const NEW_SALE = {
 export function PosDashboardPage(): JSX.Element {
   const navigate = useNavigate();
   const { hasCapability } = useAuth();
-  const { isMobile, prefersReducedMotion } = useDeviceProfile();
+  const { prefersReducedMotion } = useDeviceProfile();
   const { data, isLoading, isFetching } = usePosDashboard();
   const setStatus = useSetPosOrderStatus();
   const voidSale = useVoidPosOrder();
@@ -180,6 +168,7 @@ export function PosDashboardPage(): JSX.Element {
   /* Display preferences. All persisted: a counter terminal is set up once and then used, so a
      layout that resets on reload is a layout the operator has to fix every shift. */
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [showTooltips, setShowTooltips] = usePosTooltipPref();
   const [cardSize, setCardSize] = useState(() =>
     readStored('pos-dash-card-size', 5, (raw) =>
       Math.min(10, Math.max(MIN_CARD_SIZE, Number(raw))),
@@ -345,60 +334,28 @@ export function PosDashboardPage(): JSX.Element {
         {NEW_SALE.takeaway.icon}
         {NEW_SALE.takeaway.label}
       </Button>
-      {/* Dine-in, delivery and the keyboard-entry screen are the rarer starts, and five
-          buttons across a phone leaves none of them tappable, so on a narrow screen they
-          fold into one menu. */}
-      {isMobile ? (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline">
-              More
-              <ChevronDownIcon data-icon="inline-end" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onSelect={() => startSale(NEW_SALE.dineIn.type)}>
-              {NEW_SALE.dineIn.icon}
-              {NEW_SALE.dineIn.label}
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => startSale(NEW_SALE.delivery.type)}>
-              {NEW_SALE.delivery.icon}
-              {NEW_SALE.delivery.label}
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => startMargSale(NEW_SALE.takeaway.type)}>
-              <KeyboardIcon />
-              MARG entry
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      ) : (
-        <>
-          <Button variant="outline" onClick={() => startSale(NEW_SALE.dineIn.type)}>
-            {NEW_SALE.dineIn.icon}
-            {NEW_SALE.dineIn.label}
-          </Button>
-          <Button variant="outline" onClick={() => startSale(NEW_SALE.delivery.type)}>
-            {NEW_SALE.delivery.icon}
-            {NEW_SALE.delivery.label}
-          </Button>
-        </>
-      )}
+      <Button variant="outline" onClick={() => startSale(NEW_SALE.dineIn.type)}>
+        {NEW_SALE.dineIn.icon}
+        {NEW_SALE.dineIn.label}
+      </Button>
+      <Button variant="outline" onClick={() => startSale(NEW_SALE.delivery.type)}>
+        {NEW_SALE.delivery.icon}
+        {NEW_SALE.delivery.label}
+      </Button>
       <Button variant="outline" onClick={() => startSale(NEW_SALE.quickSale.type)}>
         {NEW_SALE.quickSale.icon}
         {NEW_SALE.quickSale.label}
       </Button>
       {/* Same weight and shape as its neighbours — it used to be the one solid `secondary`
           button in the row, which read as the primary action rather than an alternative. */}
-      {!isMobile && (
-        <Button
-          variant="outline"
-          onClick={() => startMargSale(NEW_SALE.takeaway.type)}
-          aria-label="New takeaway in MARG keyboard entry"
-        >
-          <KeyboardIcon />
-          MARG entry
-        </Button>
-      )}
+      <Button
+        variant="outline"
+        onClick={() => startMargSale(NEW_SALE.takeaway.type)}
+        aria-label="New takeaway in MARG keyboard entry"
+      >
+        <KeyboardIcon />
+        MARG entry
+      </Button>
       <Button
         variant="ghost"
         size="icon-sm"
@@ -414,7 +371,7 @@ export function PosDashboardPage(): JSX.Element {
     return (
       <>
         <PageHeader
-          leading={<BackButton to="/" label="Back to Dashboard" />}
+          leading={<BackButton to="/" label="Back" />}
           title="Point of Sale"
           actions={newSaleActions}
         />
@@ -496,7 +453,7 @@ export function PosDashboardPage(): JSX.Element {
     <>
       <PageHeader
         eyebrow="Counter"
-        leading={<BackButton to="/" label="Back to Dashboard" />}
+        leading={<BackButton to="/" label="Back" />}
         title="Point of Sale"
         meta={
           isFetching ? (
@@ -523,169 +480,21 @@ export function PosDashboardPage(): JSX.Element {
       />
 
       <div className="flex flex-col gap-6">
-        <TooltipProvider>
-          {/* Fits the viewport at every width — no sideways scroll. Eight tiles wrap down to
-              four, then two, then one as the window narrows. */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-8">
-            <div className="contents">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div>
-                  <StatTile
-                    label="Drafts"
-                    value={summary.draftCount}
-                    hint="Parked mid-entry"
-                    tone="muted"
-                    icon={<FilePenIcon />}
-                    onClick={() => focusSection('drafts')}
-                  />
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>Tickets saved but not yet opened for service.</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div>
-                  <StatTile
-                    label="Scheduled"
-                    value={summary.scheduledCount}
-                    hint="Dated forward"
-                    tone="progress"
-                    icon={<CalendarClockIcon />}
-                    onClick={() => focusSection('scheduled')}
-                  />
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>Forward-dated orders waiting for their service time.</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div>
-                  <StatTile
-                    label="Open"
-                    value={summary.openCount}
-                    hint="On the floor now"
-                    tone="success"
-                    icon={<UtensilsIcon />}
-                    onClick={() => focusSection('open')}
-                  />
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>Tickets being served and still unsettled.</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div>
-                  <StatTile
-                    label="Named"
-                    value={summary.namedCount}
-                    hint="Billed to an entity"
-                    tone="neutral"
-                    icon={<ContactRoundIcon />}
-                    onClick={() => focusSection('named')}
-                  />
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>Sales billed to a customer, employee or vendor.</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div>
-                  <StatTile
-                    label="Takeaway"
-                    value={summary.takeawayCount}
-                    hint={`${summary.dineInCount} dine-in · ${summary.deliveryCount} delivery · ${summary.quickSaleCount} quick`}
-                    tone="info"
-                    icon={<ShoppingBagIcon />}
-                    onClick={() => focusSection('takeaway')}
-                  />
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>All packed orders: takeaway, dine-in, delivery and quick sales.</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div>
-                  <StatTile
-                    label="Sales today"
-                    value={formatMoney(summary.salesToday)}
-                    hint="Settled, net of reversals"
-                    tone="success"
-                    icon={<HandCoinsIcon />}
-                  />
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>Completed and settled today, most recent first.</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div>
-                  <StatTile
-                    label="Outstanding"
-                    value={formatMoney(summary.outstandingAmount)}
-                    hint={
-                      summary.outstandingAmount > 0
-                        ? 'Still owed on active tickets'
-                        : 'Everything is settled'
-                    }
-                    tone={summary.outstandingAmount > 0 ? 'danger' : 'success'}
-                    emphasis={summary.outstandingAmount > 0}
-                    icon={<WalletIcon />}
-                  />
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>
-                {summary.outstandingAmount > 0
-                  ? 'Money still owed on active tickets.'
-                  : 'All tickets today are fully settled.'}
-              </TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div>
-                  <StatTile
-                    label="Completed today"
-                    value={summary.completedToday}
-                    hint={`${summary.cancelledToday} cancelled`}
-                    tone="success"
-                    icon={<CircleCheckBigIcon />}
-                  />
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>Tickets finished today, including voids and cancellations.</TooltipContent>
-            </Tooltip>
-            </div>
-          </div>
-        </TooltipProvider>
+        <PosOverviewPanel
+          summary={summary}
+          counterLoad={data.counterLoad}
+          onFocusSection={focusSection}
+        />
       </div>
 
-      {isMobile ? (
+      {blockOrder[0] === 'sales' ? (
         <>
-          <Tabs
-            value={activeSection}
-            onValueChange={(next) => setActiveSection(next as SectionKey)}
-          >
-            <TabsList className="w-full">
-              {sections.map((section) => (
-                <TabsTrigger key={section.key} value={section.key} className="min-w-0 text-xs">
-                  <span className="truncate">{section.title}</span>
-                  {section.orders.length > 0 && (
-                    <span className="tabular-nums">{section.orders.length}</span>
-                  )}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-            {sections.map((section) => (
-              <TabsContent key={section.key} value={section.key}>
-                <OrderWindow section={section} actions={actions} cardSize={cardSize} />
-              </TabsContent>
-            ))}
-          </Tabs>
-          <TodaysSalesSection businessDate={summary.businessDate} />
-        </>
-      ) : blockOrder[0] === 'sales' ? (
-        <>
-          <TodaysSalesSection businessDate={summary.businessDate} />
+          <TodaysSalesSection
+            businessDate={summary.businessDate}
+            salesToday={summary.salesToday}
+            outstandingAmount={summary.outstandingAmount}
+            salesTodayByMethod={summary.salesTodayByMethod}
+          />
           <Card className="gap-3">
             <CardHeader className="gap-1">
               <div className="flex flex-wrap items-center gap-2">
@@ -694,14 +503,9 @@ export function PosDashboardPage(): JSX.Element {
                   {flowOrders.length}
                 </Badge>
               </div>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <CardDescription className="cursor-help">All tickets in one flow.</CardDescription>
-                </TooltipTrigger>
-                <TooltipContent>
-                  Drafts, scheduled, takeaway, named and open in one flow. Each ticket appears once.
-                </TooltipContent>
-              </Tooltip>
+              <PosTooltip content="Drafts, scheduled, takeaway, named and open in one flow. Each ticket appears once.">
+                <CardDescription className="cursor-help">All tickets in one flow.</CardDescription>
+              </PosTooltip>
             </CardHeader>
             <CardContent>
               {flowOrders.length === 0 ? (
@@ -726,7 +530,15 @@ export function PosDashboardPage(): JSX.Element {
       ) : grouped ? (
         blockOrder.map((key) => {
           if (key === 'sales') {
-            return <TodaysSalesSection key={key} businessDate={summary.businessDate} />;
+            return (
+              <TodaysSalesSection
+                key={key}
+                businessDate={summary.businessDate}
+                salesToday={summary.salesToday}
+                outstandingAmount={summary.outstandingAmount}
+                salesTodayByMethod={summary.salesTodayByMethod}
+              />
+            );
           }
           const section = sectionByKey.get(key as SectionKey);
           if (section === undefined) return null;
@@ -746,7 +558,8 @@ export function PosDashboardPage(): JSX.Element {
             </section>
           );
         })
-      ) : null}
+      ) : null
+      }
 
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
         <DialogContent className="sm:max-w-md">
@@ -781,6 +594,33 @@ export function PosDashboardPage(): JSX.Element {
             </div>
 
             <div className="grid gap-2">
+              <span className="text-sm font-medium">Tooltips</span>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={showTooltips ? 'default' : 'outline'}
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => setShowTooltips(true)}
+                >
+                  Show
+                </Button>
+                <Button
+                  type="button"
+                  variant={showTooltips ? 'outline' : 'default'}
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => setShowTooltips(false)}
+                >
+                  Hide
+                </Button>
+              </div>
+              <p className="text-muted-foreground text-xs">
+                Applies to every explanatory tooltip across the POS.
+              </p>
+            </div>
+
+            <div className="grid gap-2">
               <span className="text-sm font-medium">Layout</span>
               <div className="flex gap-2">
                 <Button
@@ -802,33 +642,31 @@ export function PosDashboardPage(): JSX.Element {
                   One flow
                 </Button>
               </div>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <p className="text-muted-foreground cursor-help text-xs">
-                    {grouped
-                      ? 'One window per bucket.'
-                      : 'Drafts, scheduled, takeaway, named and open in one flow. Each ticket appears once.'}
-                  </p>
-                </TooltipTrigger>
-                <TooltipContent>
-                  {grouped
+              <PosTooltip
+                content={
+                  grouped
                     ? 'Each bucket stays separate, in the order below.'
-                    : 'All tickets merge into one grid. Duplicates are removed so each bill shows once.'}
-                </TooltipContent>
-              </Tooltip>
+                    : 'All tickets merge into one grid. Duplicates are removed so each bill shows once.'
+                }
+              >
+                <p className="text-muted-foreground cursor-help text-xs">
+                  {grouped
+                    ? 'One window per bucket.'
+                    : 'Drafts, scheduled, takeaway, named and open in one flow. Each ticket appears once.'}
+                </p>
+              </PosTooltip>
             </div>
 
             <div className="grid gap-2">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="w-fit cursor-help text-sm font-medium">Order</span>
-                </TooltipTrigger>
-                <TooltipContent>
-                  {grouped
+              <PosTooltip
+                content={
+                  grouped
                     ? 'The order the buckets and today’s sales stack down the page.'
-                    : 'One flow shows only the merged ticket grid and today’s sales — drag to choose which comes first.'}
-                </TooltipContent>
-              </Tooltip>
+                    : 'One flow shows only the merged ticket grid and today’s sales — drag to choose which comes first.'
+                }
+              >
+                <span className="w-fit cursor-help text-sm font-medium">Order</span>
+              </PosTooltip>
               <p className="text-muted-foreground -mt-1 text-xs">
                 Drag a row to reorder, or use the arrows.
               </p>
@@ -973,6 +811,206 @@ export function PosDashboardPage(): JSX.Element {
   );
 }
 
+/* --------------------------------------------------------------------- overview panel */
+
+interface OverviewStat {
+  key: SectionKey | 'completed';
+  label: string;
+  value: number;
+  icon: ReactNode;
+  tone: StatusToneName;
+  tip: string;
+}
+
+function PosOverviewPanel({
+  summary,
+  counterLoad,
+  onFocusSection,
+}: {
+  summary: PosDashboardSummaryDto;
+  counterLoad: PosCounterLoadDto[];
+  onFocusSection: (key: SectionKey) => void;
+}): JSX.Element {
+  const stats: OverviewStat[] = [
+    {
+      key: 'drafts',
+      label: 'Drafts',
+      value: summary.draftCount,
+      icon: <FilePenIcon />,
+      tone: 'muted',
+      tip: 'Tickets saved but not yet opened for service.',
+    },
+    {
+      key: 'scheduled',
+      label: 'Scheduled',
+      value: summary.scheduledCount,
+      icon: <CalendarClockIcon />,
+      tone: 'progress',
+      tip: 'Forward-dated orders waiting for their service time.',
+    },
+    {
+      key: 'named',
+      label: 'Named',
+      value: summary.namedCount,
+      icon: <ContactRoundIcon />,
+      tone: 'neutral',
+      tip: 'Sales billed to a customer, employee or vendor.',
+    },
+    {
+      key: 'open',
+      label: 'Open',
+      value: summary.openCount,
+      icon: <UtensilsIcon />,
+      tone: 'success',
+      tip: 'Tickets being served and still unsettled.',
+    },
+    {
+      key: 'takeaway',
+      label: 'Takeaway',
+      value: summary.takeawayCount,
+      icon: <ShoppingBagIcon />,
+      tone: 'info',
+      tip: `${summary.dineInCount} dine-in · ${summary.deliveryCount} delivery · ${summary.quickSaleCount} quick sale.`,
+    },
+    {
+      key: 'completed',
+      label: 'Completed',
+      value: summary.completedToday,
+      icon: <CircleCheckBigIcon />,
+      tone: 'success',
+      tip: `Finished today. ${summary.cancelledToday} cancelled.`,
+    },
+  ];
+
+  return (
+    <Card className="gap-4">
+      <CardContent className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-center gap-2">
+          {stats.map((stat) => {
+            const clickable = stat.key !== 'completed';
+            const body = (
+              <div
+                className={cn(
+                  'from-card to-muted inline-flex items-center gap-2 rounded-full border bg-gradient-to-b px-3 py-1',
+                  'shadow-[inset_0_1px_0_rgb(255_255_255/0.10),0_1px_2px_rgb(0_0_0/0.30)]',
+                  clickable &&
+                  'hover:to-accent cursor-pointer active:translate-y-px active:shadow-[inset_0_1px_2px_rgb(0_0_0/0.30)]',
+                )}
+                {...(clickable
+                  ? {
+                    role: 'button',
+                    tabIndex: 0,
+                    onClick: () => onFocusSection(stat.key as SectionKey),
+                    onKeyDown: (event: React.KeyboardEvent) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        onFocusSection(stat.key as SectionKey);
+                      }
+                    },
+                  }
+                  : {})}
+              >
+                <span
+                  aria-hidden
+                  className={cn('shrink-0 [&_svg]:size-4', TONE_TEXT_CLASS[stat.tone])}
+                >
+                  {stat.icon}
+                </span>
+                <span className="text-muted-foreground truncate text-xs font-semibold tracking-wide uppercase">
+                  {stat.label}
+                </span>
+                {/* 1.5x the label, so the number is what the eye lands on. */}
+                <span className="text-foreground text-lg leading-none font-bold tabular-nums">
+                  {stat.value}
+                </span>
+              </div>
+            );
+            return (
+              <PosTooltip key={stat.key} content={stat.tip}>
+                {body}
+              </PosTooltip>
+            );
+          })}
+        </div>
+
+        <CounterLoadSummary counters={counterLoad} />
+      </CardContent>
+    </Card>
+  );
+}
+
+function CounterLoadSummary({ counters }: { counters: PosCounterLoadDto[] }): JSX.Element | null {
+  if (counters.length === 0) return null;
+
+  const busiest = Math.max(...counters.map((counter) => counter.activeCount));
+  const total = counters.reduce((sum, counter) => sum + counter.activeCount, 0);
+  const average = total / counters.length;
+  // One counter at more than double the average is a queue forming, not a busy shift.
+  const skewed = busiest > 0 && busiest > average * 2 && counters.length > 1;
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between gap-2">
+        <PosTooltip content="Active tickets on each service counter, as a share of the busiest one.">
+          <span className="text-muted-foreground w-fit cursor-help text-xs font-semibold tracking-wide uppercase">
+            Counter load summary
+          </span>
+        </PosTooltip>
+        <Badge
+          variant="outline"
+          className={cn(
+            'text-[0.6875rem] uppercase',
+            skewed ? TONE_CHIP_CLASS.progress : TONE_CHIP_CLASS.success,
+          )}
+        >
+          {total === 0 ? 'Idle' : skewed ? 'Uneven' : 'Optimal'}
+        </Badge>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        {counters.map((counter) => {
+          const share = busiest === 0 ? 0 : Math.round((counter.activeCount / busiest) * 100);
+          const hot = share >= 50;
+          return (
+            <PosTooltip
+              key={counter.counterId}
+              content={`${counter.name} · ${counter.activeCount} active ${counter.activeCount === 1 ? 'ticket' : 'tickets'}, ${formatMoney(counter.openAmount)} open.`}
+            >
+              <div
+                className={cn(
+                  'from-card to-muted inline-flex items-center gap-2 rounded-full border bg-gradient-to-b px-3 py-1.5',
+                  'shadow-[inset_0_1px_0_rgb(255_255_255/0.10),0_1px_2px_rgb(0_0_0/0.30)]',
+                )}
+              >
+                <span className="max-w-[8rem] truncate text-xs font-medium">
+                  {counter.code ?? counter.name}
+                </span>
+                <div className="bg-muted h-1.5 w-16 overflow-hidden rounded-full">
+                  <div
+                    className={cn(
+                      'h-full rounded-full transition-[width]',
+                      hot ? 'bg-tone-progress-solid' : 'bg-tone-success-solid',
+                    )}
+                    style={{ width: `${share}%` }}
+                  />
+                </div>
+                <span
+                  className={cn(
+                    'shrink-0 text-xs font-semibold tabular-nums',
+                    hot ? TONE_TEXT_CLASS.progress : TONE_TEXT_CLASS.success,
+                  )}
+                >
+                  {share}%
+                </span>
+              </div>
+            </PosTooltip>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 const SALES_LIMIT_OPTIONS = [10, 25, 50, 100];
 
 const MIN_CARD_SIZE = 3;
@@ -1028,7 +1066,27 @@ const SALES_COLUMNS: DataTableColumn<PosOrderDto>[] = [
   },
 ];
 
-function TodaysSalesSection({ businessDate }: { businessDate: string }): JSX.Element {
+const PAYMENT_METHOD_LABELS: Record<PosPaymentMethod, string> = {
+  [PosPaymentMethod.CASH]: 'Cash',
+  [PosPaymentMethod.CARD]: 'Card',
+  [PosPaymentMethod.UPI]: 'UPI',
+  [PosPaymentMethod.WALLET]: 'Wallet',
+  [PosPaymentMethod.ACCOUNT]: 'Account',
+  [PosPaymentMethod.COMPLIMENTARY]: 'Complimentary',
+};
+
+function TodaysSalesSection({
+  businessDate,
+  salesToday,
+  outstandingAmount,
+  salesTodayByMethod,
+}: {
+  businessDate: string;
+  salesToday?: number;
+  outstandingAmount?: number;
+  salesTodayByMethod?: Record<PosPaymentMethod, number>;
+}): JSX.Element {
+  const navigate = useNavigate();
   const [limit, setLimit] = useState(10);
   const { data, isLoading } = usePosOrders({
     status: [PosOrderStatus.COMPLETED],
@@ -1039,21 +1097,85 @@ function TodaysSalesSection({ businessDate }: { businessDate: string }): JSX.Ele
   });
   const orders = data?.items ?? [];
 
+  // Averaged over the page that is actually loaded, not the whole day — the figures move with
+  // the "last N" selector, and claiming a day-wide average from ten rows would be a lie.
+  const units = orders.reduce((sum, order) => sum + (order.itemCount ?? 0), 0);
+  const takings = orders.reduce((sum, order) => sum + order.totalAmount, 0);
+  const aot = orders.length === 0 ? 0 : takings / orders.length;
+  const upt = orders.length === 0 ? 0 : units / orders.length;
+
+  const paymentBreakdown = salesTodayByMethod
+    ? (Object.entries(salesTodayByMethod) as [PosPaymentMethod, number][])
+      .filter(([, amount]) => amount !== 0)
+      .map(
+        ([method, amount]) =>
+          `${PAYMENT_METHOD_LABELS[method]}: ${formatMoney(amount)}`,
+      )
+      .join(' · ')
+    : '';
+
   return (
     <Card className="gap-3">
       <CardHeader className="gap-1">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span
               aria-hidden
               className="grid size-7 shrink-0 place-items-center rounded-md [&_svg]:size-4 bg-tone-success-bg text-tone-success"
             >
               <CircleCheckBigIcon />
             </span>
-            <CardTitle>Today&apos;s sales</CardTitle>
+            <PosTooltip content="Completed and settled today, most recent first.">
+              <CardTitle className="cursor-help">Today&apos;s sales</CardTitle>
+            </PosTooltip>
             <Badge variant="outline" className="tabular-nums border-tone-success-border bg-tone-success-bg text-tone-success">
               {orders.length}
             </Badge>
+            {salesToday !== undefined && (
+              <span className="text-foreground text-xl font-bold tabular-nums">
+                {formatMoney(salesToday)}
+              </span>
+            )}
+            {paymentBreakdown !== '' && (
+              <span className="text-muted-foreground max-w-md truncate text-xs font-medium tabular-nums">
+                ({paymentBreakdown})
+              </span>
+            )}
+            {orders.length > 0 && (
+              <div className="flex items-center gap-3 text-xs font-semibold tabular-nums">
+                <PosTooltip content="Average order ticket — takings divided by bills, over the sales listed below.">
+                  <span className={cn('cursor-help', TONE_TEXT_CLASS.success)}>
+                    AOT: {aot.toFixed(1)}
+                  </span>
+                </PosTooltip>
+                <PosTooltip content="Units per transaction — items divided by bills, over the sales listed below.">
+                  <span className={cn('cursor-help', TONE_TEXT_CLASS.success)}>
+                    UPT: {upt.toFixed(1)}
+                  </span>
+                </PosTooltip>
+              </div>
+            )}
+            {outstandingAmount !== undefined && (
+              <PosTooltip
+                content={
+                  outstandingAmount > 0
+                    ? 'Money still owed on active tickets.'
+                    : 'Everything is settled.'
+                }
+              >
+                <div className="flex items-center gap-1.5">
+                  <WalletIcon aria-hidden className="size-3.5" />
+                  <span
+                    className={cn(
+                      'text-sm font-semibold tabular-nums',
+                      outstandingAmount > 0 ? TONE_TEXT_CLASS.danger : TONE_TEXT_CLASS.success,
+                    )}
+                  >
+                    Outstanding {formatMoney(outstandingAmount)}
+                  </span>
+                </div>
+              </PosTooltip>
+            )}
           </div>
           {/* The portal's select, not a hand-styled native one — the native control ignores the
               popover tokens and renders an OS-themed list in dark mode. */}
@@ -1070,12 +1192,6 @@ function TodaysSalesSection({ businessDate }: { businessDate: string }): JSX.Ele
             </SelectContent>
           </Select>
         </div>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <CardDescription className="cursor-help">Completed and settled today.</CardDescription>
-          </TooltipTrigger>
-          <TooltipContent>Completed and settled today, most recent first.</TooltipContent>
-        </Tooltip>
       </CardHeader>
       <CardContent>
         {/* The same grid every other list in the portal uses, so it sorts, resizes, reorders,
@@ -1086,6 +1202,7 @@ function TodaysSalesSection({ businessDate }: { businessDate: string }): JSX.Ele
           rows={orders}
           getRowId={(order) => order.id}
           loading={isLoading}
+          onRowDoubleClick={(order) => navigate(`/pos/entry?orderId=${order.id}`)}
           emptyTitle="No sales completed today"
           emptyMessage="Settled tickets appear here as they are checked out."
         />

@@ -4,8 +4,6 @@ import type {
   CounterRouteDto,
   CounterRouteWriteRequest,
   CounterWriteRequest,
-  ItemGroupAssignmentDto,
-  ItemGroupAssignmentWriteRequest,
   ItemGroupDto,
   ItemGroupWriteRequest,
   MasterStatus,
@@ -22,6 +20,10 @@ import type {
   MenuItemVariantWriteRequest,
   MenuWriteRequest,
   MenuTreeDto,
+  MenuBoardScreenDto,
+  MenuBoardSnapshotDto,
+  CreateMenuBoardScreenRequest,
+  UpdateMenuBoardScreenRequest,
   ModifierDto,
   ModifierGroupDto,
   ModifierGroupWriteRequest,
@@ -110,20 +112,12 @@ export const counterRoutesApi = {
 };
 
 export const itemGroupsApi = {
-  list: (query: MasterListQuery) =>
+  list: (query: MasterListQuery & { catalogueId?: string }) =>
     unwrapPaged<ItemGroupDto>(http.get('/item-groups', { params: query })),
   create: (body: ItemGroupWriteRequest) => unwrap<ItemGroupDto>(http.post('/item-groups', body)),
   update: (id: string, body: Partial<ItemGroupWriteRequest>) =>
     unwrap<ItemGroupDto>(http.patch(`/item-groups/${id}`, body)),
   remove: (id: string) => unwrap<null>(http.delete(`/item-groups/${id}`)),
-};
-
-export const itemGroupAssignmentsApi = {
-  listForFoodItem: (foodItemId: string) =>
-    unwrap<ItemGroupAssignmentDto[]>(http.get(`/item-groups/for-item/${foodItemId}`)),
-  assign: (body: ItemGroupAssignmentWriteRequest) =>
-    unwrap<ItemGroupAssignmentDto>(http.post('/item-groups/assign', body)),
-  remove: (id: string) => unwrap<null>(http.delete(`/item-group-assignments/${id}`)),
 };
 
 export const menuItemScheduleApi = {
@@ -175,4 +169,28 @@ export const modifiersApi = {
   update: (id: string, body: Partial<ModifierWriteRequest>) =>
     unwrap<ModifierDto>(http.patch(`/modifiers/${id}`, body)),
   remove: (id: string) => unwrap<null>(http.delete(`/modifiers/${id}`)),
+};
+
+/**
+ * The Digital Menu Board screens: the wall displays above the counter, and which menu each one
+ * advertises. Under the same MASTER_* gate as the rest of Menu Master, because choosing what a
+ * hall reads off the wall is a menu decision.
+ */
+export const menuBoardScreensApi = {
+  list: () => unwrap<MenuBoardScreenDto[]>(http.get('/menu-board/screens')),
+  get: (id: string) => unwrap<MenuBoardScreenDto>(http.get(`/menu-board/screens/${id}`)),
+  create: (body: CreateMenuBoardScreenRequest) =>
+    unwrap<MenuBoardScreenDto>(http.post('/menu-board/screens', body)),
+  update: (id: string, body: UpdateMenuBoardScreenRequest) =>
+    unwrap<MenuBoardScreenDto>(http.patch(`/menu-board/screens/${id}`, body)),
+  remove: (id: string) => unwrap<null>(http.delete(`/menu-board/screens/${id}`)),
+  /**
+   * What the wall screen itself reads. Public and unauthenticated — it is the same URL the
+   * board opens — but reached through the ordinary client so it inherits the API base and the
+   * error unwrapping like every other call here.
+   */
+  snapshot: (code: string) =>
+    unwrap<MenuBoardSnapshotDto>(
+      http.get('/menu-board/snapshot', { params: { screen: code, preview: '1' } }),
+    ),
 };

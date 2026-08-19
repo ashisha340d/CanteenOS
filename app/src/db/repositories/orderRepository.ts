@@ -7,12 +7,12 @@ import type {
   OrderStatus,
   UpdateOrderRequest,
 } from '@menuboard/shared';
-import { SyncOp } from '@menuboard/shared';
+import { SyncOp, canDeleteOwnOrder } from '@menuboard/shared';
 import type * as SQLite from 'expo-sqlite';
 import { getDb } from '../client';
 import type { OrderItemRow, OrderRow } from '../models';
 import { newId } from '../../utils/uuid';
-import { nowIso } from '../../utils/date';
+import { nowIso, todayIsoDate } from '../../utils/date';
 import { parseJsonArray, toJsonArray } from '../../utils/jsonArray';
 import { syncQueueRepository } from './syncQueueRepository';
 // One-way: threadRepository knows nothing about orders, so this cannot cycle.
@@ -238,6 +238,18 @@ export const orderRepository = {
     return rows.map(toOrderDto);
   },
 
+  /** Venues this board has used before, most recent first — feeds the venue autocomplete. */
+  async listDistinctVenues(boardId: string): Promise<string[]> {
+    const db = await getDb();
+    const rows = await db.getAllAsync<{ venue: string }>(
+      `SELECT venue, MAX(created_at) AS last_used FROM orders
+       WHERE board_id = ? AND deleted_at IS NULL AND venue <> ''
+       GROUP BY venue ORDER BY last_used DESC LIMIT 20`,
+      [boardId],
+    );
+    return rows.map((row) => row.venue);
+  },
+
   /** Items for many orders at once, grouped by order id — one query for a whole feed. */
   async listItemsForOrders(orderIds: readonly string[]): Promise<Map<string, OrderItemDto[]>> {
     const map = new Map<string, OrderItemDto[]>();
@@ -296,8 +308,9 @@ export const orderRepository = {
     const rows = await db.getAllAsync<OrderRow>(
       `SELECT * FROM orders WHERE board_id IN (${placeholders}) AND deleted_at IS NULL
        AND status NOT IN ('DELIVERED', 'DONE', 'CANCELLED')
+       AND required_date >= ?
        ORDER BY required_date ASC, required_time ASC`,
-      [...boardIds],
+      [...boardIds, todayIsoDate()],
     );
     return rows.map(toOrderDto);
   },
@@ -349,6 +362,113 @@ export const orderRepository = {
       [...boardIds, isoDate],
     );
     return rows.map(toOrderDto);
+  },
+
+  /**
+   * How much live work each board is carrying, keyed by board id — one query for the whole
+   * board list rather than one per row.
+   *
+   * "Live" matches the board feed exactly: not finished, and not already past. A board whose
+   * only orders were last week reads as quiet, which is the truth.
+   */
+  async openCountsByBoard(boardIds: readonly string[]): Promise<Map<string, number>> {
+    const counts = new Map<string, number>();
+    if (boardIds.length === 0) return counts;
+    const db = await getDb();
+    const placeholders = boardIds.map(() => '?').join(',');
+    const rows = await db.getAllAsync<{ board_id: string; total: number }>(
+      `SELECT board_id, COUNT(*) AS total FROM orders
+        WHERE board_id IN (${placeholders}) AND deleted_at IS NULL
+          AND status NOT IN ('DELIVERED', 'DONE', 'CANCELLED')
+          AND required_date >= ?
+        GROUP BY board_id`,
+      [...boardIds, todayIsoDate()],
+    );
+    for (const row of rows) counts.set(row.board_id, row.total);
+    return counts;
+  },
+
+  /**
+   * The soonest live order on each board, as `YYYY-MM-DDTHH:mm` — what the board list sorts on
+   * so the board that needs attention first sits at the top.
+   */
+  async nextDueByBoard(boardIds: readonly string[]): Promise<Map<string, string>> {
+    const due = new Map<string, string>();
+    if (boardIds.length === 0) return due;
+    const db = await getDb();
+    const placeholders = boardIds.map(() => '?').join(',');
+    const rows = await db.getAllAsync<{ board_id: string; due: string }>(
+      `SELECT board_id, MIN(required_date || 'T' || required_time) AS due FROM orders
+        WHERE board_id IN (${placeholders}) AND deleted_at IS NULL
+          AND status NOT IN ('DELIVERED', 'DONE', 'CANCELLED')
+          AND required_date >= ?
+        GROUP BY board_id`,
+      [...boardIds, todayIsoDate()],
+    );
+    for (const row of rows) due.set(row.board_id, row.due);
+    return due;
+  },
+
+  /**
+   * Everything already past, inside a date window — the archive's list mode.
+   *
+   * Archiving is by *date*, not by status: an order whose day has gone is history whether or
+   * not anyone marked it delivered, which is the rule the board feed now filters on too.
+   */
+  async listArchivedInRange(
+    boardIds: readonly string[],
+    fromIsoDate: string,
+    toIsoDate: string,
+  ): Promise<OrderDto[]> {
+    if (boardIds.length === 0) return [];
+    const db = await getDb();
+    const placeholders = boardIds.map(() => '?').join(',');
+    const rows = await db.getAllAsync<OrderRow>(
+      `SELECT * FROM orders WHERE board_id IN (${placeholders}) AND deleted_at IS NULL
+         AND required_date BETWEEN ? AND ?
+       ORDER BY required_date DESC, required_time DESC`,
+      [...boardIds, fromIsoDate, toIsoDate],
+    );
+    return rows.map(toOrderDto);
+  },
+
+  /**
+   * "How often was each dish asked for in this window" — the archive's summary mode.
+   *
+   * `times` counts *order lines*, not quantity: the question the summary answers is how many
+   * separate times a dish came up, so one order for 200 samosas is one occurrence. Cancelled
+   * lines are excluded because they were never produced. Grouping happens in SQL so a wide
+   * window doesn't pull every line into memory to be tallied in JS.
+   */
+  async summariseItemsInRange(
+    boardIds: readonly string[],
+    fromIsoDate: string,
+    toIsoDate: string,
+  ): Promise<{ menuItemId: string | null; customItemName: string | null; times: number; quantity: number; unit: string }[]> {
+    if (boardIds.length === 0) return [];
+    const db = await getDb();
+    const placeholders = boardIds.map(() => '?').join(',');
+    return db.getAllAsync<{
+      menuItemId: string | null;
+      customItemName: string | null;
+      times: number;
+      quantity: number;
+      unit: string;
+    }>(
+      `SELECT oi.menu_item_id AS menuItemId,
+              oi.custom_item_name AS customItemName,
+              COUNT(*) AS times,
+              SUM(oi.quantity) AS quantity,
+              MIN(oi.unit) AS unit
+         FROM order_items oi
+         JOIN orders o ON o.id = oi.order_id
+        WHERE o.board_id IN (${placeholders}) AND o.deleted_at IS NULL
+          AND o.required_date BETWEEN ? AND ?
+          AND oi.deleted_at IS NULL AND oi.cancelled_at IS NULL
+        GROUP BY COALESCE(oi.menu_item_id, oi.custom_item_name)
+        ORDER BY times DESC, quantity DESC`,
+      [...boardIds, fromIsoDate, toIsoDate],
+    );
   },
 
   /**
@@ -499,32 +619,44 @@ export const orderRepository = {
 
     let items = await this.listItemsForOrder(orderId);
     if (patch.items) {
-      const newItems: OrderItemDto[] = patch.items.map((item, index) => ({
-        id: item.id ?? newId(),
-        orderId,
-        menuItemId: item.menuItemId ?? null,
-        customItemName: item.customItemName ?? null,
-        quantity: item.quantity,
-        unit: item.unit ?? 'NOS',
-        notes: item.notes ?? null,
-        mentionedUserIds: item.mentionedUserIds ?? [],
-        sortOrder: item.sortOrder ?? index,
-        cancelledAt: null,
-        cancelledBy: null,
-        replacedByItemId: null,
-        menuId: item.menuId ?? null,
-        variantId: item.variantId ?? null,
-        variantName: null,
-        unitPrice: null,
-        taxAmount: 0,
-        discountAmount: item.discountAmount ?? 0,
-        lineTotal: null,
-        createdAt: now,
-        updatedAt: now,
-        deletedAt: null,
-        syncSeq: 0,
-        revision: 1,
-      }));
+      // `replaceItemsForOrder` deletes and reinserts, so anything not carried across here is
+      // destroyed. `UpdateOrderRequest` has no cancellation fields — a caller resubmitting a
+      // line has no way to say "and it is still cancelled" — so the surviving line's own
+      // history is read back off the existing row rather than reset to null. Without this,
+      // editing the quantity of *any* line silently resurrected every cancelled line on the
+      // order, un-striking it in the feed and putting it back into shopping lists.
+      const previousById = new Map(items.map((item) => [item.id, item]));
+      const newItems: OrderItemDto[] = patch.items.map((item, index) => {
+        const previous = item.id === undefined ? undefined : previousById.get(item.id);
+        return {
+          id: item.id ?? newId(),
+          orderId,
+          menuItemId: item.menuItemId ?? null,
+          customItemName: item.customItemName ?? null,
+          quantity: item.quantity,
+          unit: item.unit ?? 'NOS',
+          notes: item.notes ?? null,
+          mentionedUserIds: item.mentionedUserIds ?? [],
+          sortOrder: item.sortOrder ?? index,
+          cancelledAt: previous?.cancelledAt ?? null,
+          cancelledBy: previous?.cancelledBy ?? null,
+          replacedByItemId: previous?.replacedByItemId ?? null,
+          menuId: item.menuId ?? previous?.menuId ?? null,
+          variantId: item.variantId ?? previous?.variantId ?? null,
+          // Server-owned pricing snapshot: keep what the server last resolved rather than
+          // blanking it, so an edit does not unprice a line until the next sync answers.
+          variantName: previous?.variantName ?? null,
+          unitPrice: previous?.unitPrice ?? null,
+          taxAmount: previous?.taxAmount ?? 0,
+          discountAmount: item.discountAmount ?? previous?.discountAmount ?? 0,
+          lineTotal: previous?.lineTotal ?? null,
+          createdAt: previous?.createdAt ?? now,
+          updatedAt: now,
+          deletedAt: null,
+          syncSeq: previous?.syncSeq ?? 0,
+          revision: previous === undefined ? 1 : previous.revision + 1,
+        };
+      });
       await this.replaceItemsForOrder(orderId, newItems);
       items = newItems;
     }
@@ -588,6 +720,61 @@ export const orderRepository = {
       userId,
     );
 
+    return updated;
+  },
+
+  /**
+   * Withdraws an order the user raised.
+   *
+   * "Delete" here means CANCELLED, never a removed row — the same rule the server applies when
+   * it receives a `DELETE` for an order. A board is a record of what was asked for, so the
+   * card stays in the feed struck through and the cancellation replicates to everyone else.
+   *
+   * The outbox carries `DELETE`; the server re-checks `ORDER_CANCEL` on push, so a tampered
+   * client cannot withdraw somebody else's order.
+   */
+  async deleteLocal(orderId: string, userId: string): Promise<OrderDto> {
+    const existing = await this.findById(orderId);
+    if (!existing) throw new Error(`Order ${orderId} not found locally`);
+    if (!canDeleteOwnOrder(existing, userId)) {
+      throw new Error('This order can no longer be deleted — work has already started on it.');
+    }
+
+    // The comments about the order go with it. Done before the order row is touched so a
+    // failure here leaves the order intact rather than half-withdrawn.
+    await threadRepository.deleteForOrderLocal(orderId);
+
+    const now = nowIso();
+    const db = await getDb();
+    await db.runAsync(
+      `UPDATE orders
+          SET status = 'CANCELLED', completed_at = NULL, completed_by = NULL,
+              done_at = NULL, done_by = NULL,
+              updated_at = ?, revision = revision + 1, sync_state = 'PENDING'
+        WHERE id = ?`,
+      [now, orderId],
+    );
+
+    await syncQueueRepository.enqueue({
+      entity: 'orders',
+      entityId: orderId,
+      op: SyncOp.DELETE,
+      payload: null,
+      baseRevision: existing.revision,
+    });
+
+    // The feed is built from thread messages, so without this the card would keep its old
+    // status until the server's copy came back.
+    await threadRepository.recordSystemEventLocal(
+      existing.boardId,
+      orderId,
+      'ORDER_STATUS_CHANGED',
+      { orderNumber: existing.orderNumber, from: existing.status, to: 'CANCELLED' },
+      userId,
+    );
+
+    const updated = await this.findById(orderId);
+    if (!updated) throw new Error('Order disappeared after cancellation');
     return updated;
   },
 

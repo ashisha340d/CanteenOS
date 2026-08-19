@@ -1,17 +1,28 @@
 import type { Server as HttpServer } from 'node:http';
 import { Server as SocketServer, type Socket } from 'socket.io';
-import { SOCKET_EVENTS, SOCKET_ROOMS, UserStatus } from '@menuboard/shared';
+import {
+  Capability,
+  KDS_SOCKET_EVENTS,
+  PosPaymentMethod,
+  SOCKET_EVENTS,
+  SOCKET_ROOMS,
+  UserStatus,
+  type CdsLiveDto,
+  type CdsLiveLineDto,
+} from '@menuboard/shared';
 import { getPool } from '../db/pool';
 import { boardRepository } from '../repositories/BoardRepository';
 import { userRepository } from '../repositories/UserRepository';
 import { tokenService } from '../services/TokenService';
 import { logger } from '../utils/logger';
 import { isAllowedCorsOrigin } from '../utils/originAllowlist';
-import { realtime } from './RealtimeGateway';
+import { menuBoardRealtime } from './menuBoardSocket';
+import { KDS_REALTIME_ROOMS, realtime } from './RealtimeGateway';
 
 interface SocketAuth {
   userId: string;
   deviceId: string;
+  capabilities: Capability[];
 }
 
 /**
@@ -63,7 +74,11 @@ export function createSocketServer(httpServer: HttpServer): SocketServer {
         return;
       }
 
-      (socket.data as SocketAuth) = { userId: user.id, deviceId: claims.did };
+      (socket.data as SocketAuth) = {
+        userId: user.id,
+        deviceId: claims.did,
+        capabilities: tokenService.capabilitiesFor(user.role, claims.ct),
+      };
       next();
     } catch (error) {
       logger.debug('Socket authentication rejected', {
@@ -83,6 +98,12 @@ export function createSocketServer(httpServer: HttpServer): SocketServer {
   });
 
   realtime.attach(io);
+
+  // A namespace of the same server, not a second one — `io.of(...)` shares the underlying
+  // HTTP upgrade handling and CORS config, but its own middleware stack, which is what lets
+  // this stay unauthenticated while the default namespace above requires a bearer token.
+  menuBoardRealtime.attach(io);
+
   logger.debug('Socket.IO server attached');
   return io;
 }
@@ -148,6 +169,28 @@ async function onConnection(socket: Socket): Promise<void> {
     });
   });
 
+  // Kitchen and customer displays. Unlike board rooms these are gated by capability, not
+  // membership: a display scope is a counter, and any till operator may stand at any counter.
+  socket.on(KDS_SOCKET_EVENTS.KDS_SUBSCRIBE, (payload: unknown) => {
+    joinKdsScope(socket, auth, payload).catch((error: unknown) => {
+      logger.warn('Socket KDS room join failed', { userId: auth.userId }, error);
+    });
+  });
+
+  socket.on(KDS_SOCKET_EVENTS.CDS_SUBSCRIBE, (payload: unknown) => {
+    joinCdsScope(socket, auth, payload).catch((error: unknown) => {
+      logger.warn('Socket CDS room join failed', { userId: auth.userId }, error);
+    });
+  });
+
+  socket.on(KDS_SOCKET_EVENTS.CDS_LIVE, (payload: unknown) => {
+    try {
+      relayCdsLive(auth, payload);
+    } catch (error) {
+      logger.warn('Socket CDS live relay failed', { userId: auth.userId }, error);
+    }
+  });
+
   socket.on('disconnect', (reason) => {
     logger.debug('Socket disconnected', { socketId: socket.id, userId: auth.userId, reason });
   });
@@ -178,6 +221,121 @@ function readBoardId(payload: unknown): string | null {
     return (payload as { boardId: string }).boardId;
   }
   return null;
+}
+
+/**
+ * A display names its scope — `{counterId}` for a counter screen, `{printingGroupId}` for a
+ * kitchen screen. Re-verified against the socket's capabilities on every join, mirroring the
+ * membership re-check in `joinBoard`: holding a socket must not grant a scope on its own.
+ */
+async function joinKdsScope(socket: Socket, auth: SocketAuth, payload: unknown): Promise<void> {
+  if (!auth.capabilities.includes(Capability.POS_READ)) {
+    logger.warn('Socket denied KDS room join', { userId: auth.userId });
+    return;
+  }
+
+  const counterId = readScopeId(payload, 'counterId');
+  if (counterId !== null) {
+    await socket.join(KDS_REALTIME_ROOMS.kdsCounter(counterId));
+    return;
+  }
+  const printingGroupId = readScopeId(payload, 'printingGroupId');
+  if (printingGroupId !== null) {
+    await socket.join(KDS_REALTIME_ROOMS.kdsKitchen(printingGroupId));
+  }
+}
+
+async function joinCdsScope(socket: Socket, auth: SocketAuth, payload: unknown): Promise<void> {
+  if (!auth.capabilities.includes(Capability.POS_READ)) {
+    logger.warn('Socket denied CDS room join', { userId: auth.userId });
+    return;
+  }
+
+  const counterId = readScopeId(payload, 'counterId');
+  if (counterId !== null) {
+    await socket.join(KDS_REALTIME_ROOMS.cdsCounter(counterId));
+  }
+}
+
+/**
+ * Stand-in VPA until payments configuration exists — the QR demonstrates the customer-facing
+ * flow and is not a real collectable address.
+ */
+const CDS_DEMO_UPI_ID = 'demo@upi';
+
+/**
+ * Relays a till's live cart to its counter's customer display. Gated by POS_OPERATE like any
+ * till action; the payload is rebuilt field by field so a malformed client cannot push
+ * arbitrary shapes onto a customer-facing screen, and the QR link is built here because a
+ * till must never be the source of a payment address.
+ */
+function relayCdsLive(auth: SocketAuth, payload: unknown): void {
+  if (!auth.capabilities.includes(Capability.POS_OPERATE)) {
+    logger.warn('Socket denied CDS live publish', { userId: auth.userId });
+    return;
+  }
+  if (typeof payload !== 'object' || payload === null) return;
+  const body = payload as Record<string, unknown>;
+  const counterId =
+    typeof body.counterId === 'string' && body.counterId !== '' ? body.counterId : null;
+  if (counterId === null) return;
+
+  if (body.clear === true) {
+    realtime.emitCdsLive(counterId, null);
+    return;
+  }
+
+  const lines: CdsLiveLineDto[] = [];
+  if (Array.isArray(body.lines)) {
+    for (const raw of body.lines.slice(0, 200)) {
+      if (typeof raw !== 'object' || raw === null) continue;
+      const line = raw as Record<string, unknown>;
+      if (typeof line.itemName !== 'string' || line.itemName === '') continue;
+      lines.push({
+        itemName: line.itemName,
+        variantName: typeof line.variantName === 'string' ? line.variantName : null,
+        quantity: toFiniteNumber(line.quantity),
+        unitPrice: toFiniteNumber(line.unitPrice),
+        lineTotal: toFiniteNumber(line.lineTotal),
+      });
+    }
+  }
+
+  const paymentMethods = (Array.isArray(body.paymentMethods) ? body.paymentMethods : []).filter(
+    (method): method is PosPaymentMethod =>
+      typeof method === 'string' &&
+      (Object.values(PosPaymentMethod) as string[]).includes(method),
+  );
+
+  const orderNumber = typeof body.orderNumber === 'string' ? body.orderNumber : null;
+  const totalAmount = toFiniteNumber(body.totalAmount);
+  const upiLink = paymentMethods.includes(PosPaymentMethod.UPI)
+    ? `upi://pay?pa=${CDS_DEMO_UPI_ID}&am=${totalAmount.toFixed(2)}&cu=INR` +
+    `&tn=${encodeURIComponent(orderNumber ?? 'POS')}`
+    : null;
+
+  const live: CdsLiveDto = {
+    counterId,
+    orderNumber,
+    lines,
+    subtotalAmount: toFiniteNumber(body.subtotalAmount),
+    discountAmount: toFiniteNumber(body.discountAmount),
+    totalAmount,
+    paymentMethods,
+    upiLink,
+  };
+  realtime.emitCdsLive(counterId, live);
+}
+
+function toFiniteNumber(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function readScopeId(payload: unknown, key: 'counterId' | 'printingGroupId'): string | null {
+  if (typeof payload !== 'object' || payload === null) return null;
+  const value = (payload as Record<string, unknown>)[key];
+  return typeof value === 'string' && value !== '' ? value : null;
 }
 
 function extractBearer(header: string | undefined): string | undefined {

@@ -21,6 +21,12 @@ export interface MasterListFilter {
   search?: string;
   status?: MasterStatus;
   includeDeleted?: boolean;
+  /**
+   * Only meaningful for tables that carry `catalogue_id` (menu_categories). A string narrows to
+   * one Menu Catalogue; `null` asks for the rows filed under no catalogue at all, which is a
+   * genuine question the Admin Portal asks and not the same as "no filter".
+   */
+  catalogueId?: string | null;
   limit: number;
   offset: number;
 }
@@ -74,6 +80,14 @@ function buildMasterWhere(
   if (filter.search) {
     conditions.push('name LIKE ?');
     params.push(`%${filter.search}%`);
+  }
+  if (filter.catalogueId !== undefined) {
+    if (filter.catalogueId === null) {
+      conditions.push('catalogue_id IS NULL');
+    } else {
+      conditions.push('catalogue_id = ?');
+      params.push(filter.catalogueId);
+    }
   }
 
   return {
@@ -328,8 +342,12 @@ export class ActivityTypeRepository {
 
 /* --------------------------------------------------------------- menu categories */
 
+// The catalogue name comes from a correlated subquery rather than a JOIN: buildMasterWhere
+// emits unqualified column names, and joining `menus` would make `name`, `status` and
+// `deleted_at` ambiguous in every condition it produces.
 const CATEGORY_COLUMNS = `
-  id, name, name_hi, description, image_path, status, sort_order, created_by,
+  id, catalogue_id, name, name_hi, description, image_path, status, sort_order, created_by,
+  (SELECT m.name FROM menus m WHERE m.id = menu_categories.catalogue_id) AS catalogue_name,
   created_at, updated_at, deleted_at, revision, sync_seq`;
 
 export class MenuCategoryRepository {
@@ -364,6 +382,7 @@ export class MenuCategoryRepository {
     db: Db,
     input: {
       id: string;
+      catalogueId: string | null;
       name: string;
       nameHi: string | null;
       description: string | null;
@@ -378,11 +397,12 @@ export class MenuCategoryRepository {
     await mutate(
       db,
       `INSERT INTO menu_categories
-        (id, name, name_hi, description, image_path, status, sort_order, created_by,
+        (id, catalogue_id, name, name_hi, description, image_path, status, sort_order, created_by,
          created_at, updated_at, revision, sync_seq)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
       [
         input.id,
+        input.catalogueId,
         input.name,
         input.nameHi ?? null,
         input.description,
@@ -404,6 +424,7 @@ export class MenuCategoryRepository {
     db: Db,
     id: string,
     input: {
+      catalogueId?: string | null;
       name?: string;
       nameHi?: string | null;
       description?: string | null;
@@ -414,6 +435,10 @@ export class MenuCategoryRepository {
   ): Promise<MenuCategoryRow | null> {
     const assignments: string[] = [];
     const params: unknown[] = [];
+    if (input.catalogueId !== undefined) {
+      assignments.push('catalogue_id = ?');
+      params.push(input.catalogueId);
+    }
     if (input.name !== undefined) {
       assignments.push('name = ?');
       params.push(input.name);
@@ -468,14 +493,16 @@ export class MenuCategoryRepository {
 /* -------------------------------------------------------------------- menu items */
 
 const ITEM_COLUMNS = `
-  id, category_id, name, name_hi, unit, unit_hi, image_path, base_price, tax_profile_id,
-  always_available,
+  id, category_id, group_id, name, name_hi, unit, unit_hi, image_path, base_price, tax_profile_id,
+  always_available, prep_seconds,
   status, sort_order, created_by, created_at, updated_at, deleted_at, revision, sync_seq,
   (SELECT ma.media_id FROM media_assignments ma
      WHERE ma.entity_type = 'MENU_ITEM' AND ma.entity_id = menu_items.id
        AND ma.deleted_at IS NULL AND ma.status = 'ACTIVE'
      ORDER BY ma.is_primary DESC, ma.sort_order ASC, ma.created_at ASC
-     LIMIT 1) AS primary_media_id`;
+     LIMIT 1) AS primary_media_id,
+  (SELECT c.name FROM menu_categories c WHERE c.id = menu_items.category_id AND c.deleted_at IS NULL) AS category_name,
+  (SELECT g.name FROM item_groups g WHERE g.id = menu_items.group_id AND g.deleted_at IS NULL) AS group_name`;
 
 export class MenuItemRepository {
   async findById(db: Db, id: string) {
@@ -498,12 +525,16 @@ export class MenuItemRepository {
 
   async list(
     db: Db,
-    filter: MasterListFilter & { categoryId?: string },
+    filter: MasterListFilter & { categoryId?: string; groupId?: string },
   ): Promise<{ rows: MenuItemRow[]; total: number }> {
     const extra: { conditions: string[]; params: unknown[] } = { conditions: [], params: [] };
     if (filter.categoryId !== undefined) {
       extra.conditions.push('category_id = ?');
       extra.params.push(filter.categoryId);
+    }
+    if (filter.groupId !== undefined) {
+      extra.conditions.push('group_id = ?');
+      extra.params.push(filter.groupId);
     }
     const { where, params } = buildMasterWhere(filter, extra);
     const rows = await selectRows<MenuItemRow>(
@@ -525,6 +556,7 @@ export class MenuItemRepository {
     input: {
       id: string;
       categoryId: string;
+      groupId?: string | null;
       name: string;
       nameHi: string | null;
       unit: string;
@@ -533,6 +565,7 @@ export class MenuItemRepository {
       basePrice: number | null;
       taxProfileId?: string | null;
       alwaysAvailable?: boolean;
+      prepSeconds?: number | null;
       status: MasterStatus;
       sortOrder: number;
       createdBy: string | null;
@@ -543,13 +576,14 @@ export class MenuItemRepository {
     await mutate(
       db,
       `INSERT INTO menu_items
-        (id, category_id, name, name_hi, unit, unit_hi, image_path, base_price, tax_profile_id,
-         always_available,
+        (id, category_id, group_id, name, name_hi, unit, unit_hi, image_path, base_price, tax_profile_id,
+         always_available, prep_seconds,
          status, sort_order, created_by, created_at, updated_at, revision, sync_seq)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
       [
         input.id,
         input.categoryId,
+        input.groupId ?? null,
         input.name,
         input.nameHi ?? null,
         input.unit,
@@ -558,6 +592,7 @@ export class MenuItemRepository {
         input.basePrice ?? null,
         input.taxProfileId ?? null,
         input.alwaysAvailable === false ? 0 : 1,
+        input.prepSeconds ?? null,
         input.status,
         input.sortOrder,
         input.createdBy,
@@ -576,6 +611,7 @@ export class MenuItemRepository {
     id: string,
     input: {
       categoryId?: string;
+      groupId?: string | null;
       name?: string;
       nameHi?: string | null;
       unit?: string;
@@ -584,6 +620,7 @@ export class MenuItemRepository {
       basePrice?: number | null;
       taxProfileId?: string | null;
       alwaysAvailable?: boolean;
+      prepSeconds?: number | null;
       status?: MasterStatus;
       sortOrder?: number;
     },
@@ -593,6 +630,10 @@ export class MenuItemRepository {
     if (input.categoryId !== undefined) {
       assignments.push('category_id = ?');
       params.push(input.categoryId);
+    }
+    if (input.groupId !== undefined) {
+      assignments.push('group_id = ?');
+      params.push(input.groupId);
     }
     if (input.name !== undefined) {
       assignments.push('name = ?');
@@ -625,6 +666,10 @@ export class MenuItemRepository {
     if (input.alwaysAvailable !== undefined) {
       assignments.push('always_available = ?');
       params.push(input.alwaysAvailable ? 1 : 0);
+    }
+    if (input.prepSeconds !== undefined) {
+      assignments.push('prep_seconds = ?');
+      params.push(input.prepSeconds);
     }
     if (input.status !== undefined) {
       assignments.push('status = ?');

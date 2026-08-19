@@ -3,7 +3,12 @@ import { Tabs } from 'expo-router';
 import { TabBar } from '../../src/components/TabBar';
 
 /**
- * The four destinations from the Stitch mockups: Boards, Orders, Users, Archive.
+ * Four destinations: Tasks, Boards, Orders, Users.
+ *
+ * Archive is no longer one of them. It is a *view of orders over a date window*, not a place
+ * of its own, so it lives as a segment inside the Orders screen — reaching last week's orders
+ * should not mean leaving the screen that shows this week's. A fifth tab also crowded the bar
+ * enough that the labels truncated on a narrow phone.
  *
  * Home, Notifications and Settings are deliberately not tabs. Every mockup puts a gear and a
  * profile in the top app bar instead, and "Home" duplicated Boards — the board list *is* the
@@ -23,7 +28,6 @@ export default function TabsLayout(): React.JSX.Element {
       <Tabs.Screen name="boards" options={{ title: 'Boards' }} />
       <Tabs.Screen name="orders" options={{ title: 'Orders' }} />
       <Tabs.Screen name="users" options={{ title: 'Users' }} />
-      <Tabs.Screen name="archive" options={{ title: 'Archive' }} />
     </Tabs>
   );
 }

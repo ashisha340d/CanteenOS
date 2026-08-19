@@ -218,6 +218,21 @@ async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
         await db.runAsync('DELETE FROM settings WHERE setting_key = ?', ['sync_cursor']);
       }
 
+      // v15 files a menu category under the Menu Catalogue it belongs to. Nullable add — a
+      // category that has not been filed yet keeps a null — so rows are kept and the cursor
+      // rewound to let the next pull fill it in.
+      if (currentVersion > 0 && currentVersion < 15) {
+        await addColumnIfMissing(db, 'menu_categories', 'catalogue_id', 'TEXT');
+        await db.runAsync('DELETE FROM settings WHERE setting_key = ?', ['sync_cursor']);
+      }
+
+      // v16 files a food item under a single Item Group. Nullable add — a dish may not have
+      // a group yet — so rows are kept and the cursor rewound to let the next pull fill it in.
+      if (currentVersion > 0 && currentVersion < 16) {
+        await addColumnIfMissing(db, 'menu_items', 'group_id', 'TEXT');
+        await db.runAsync('DELETE FROM settings WHERE setting_key = ?', ['sync_cursor']);
+      }
+
       for (const statement of CREATE_SCHEMA_STATEMENTS) {
         await db.execAsync(statement);
       }

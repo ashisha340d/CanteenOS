@@ -29,6 +29,8 @@ import { PosEntityPickerModal } from './PosEntityPickerModal';
 interface PosCheckoutModalProps {
   open: boolean;
   order: PosOrderDetailDto;
+  /** Reports the tender methods currently chosen, so the customer display can raise its UPI QR. */
+  onPaymentMethodsChange: (methods: PosPaymentMethod[]) => void;
   onClose: () => void;
   onSettled: (order: PosOrderDetailDto) => void;
 }
@@ -75,6 +77,7 @@ function toAmount(value: string): number {
 export function PosCheckoutModal({
   open,
   order,
+  onPaymentMethodsChange,
   onClose,
   onSettled,
 }: PosCheckoutModalProps): JSX.Element {
@@ -130,6 +133,12 @@ export function PosCheckoutModal({
     resetLegs(order.totalAmount);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, order.id]);
+
+  /* The customer display listens through the parent: whatever mix of methods the operator has
+     on screen right now is what the display shows, and closing the dialog clears it. */
+  useEffect(() => {
+    onPaymentMethodsChange(open && settled === null ? legs.map((leg) => leg.method) : []);
+  }, [open, legs, settled, onPaymentMethodsChange]);
 
   const paid = money(legs.reduce((sum, leg) => sum + toAmount(leg.amount), 0));
   const remaining = money(total - paid);

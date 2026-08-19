@@ -95,6 +95,22 @@ export const config = {
   },
 
   /**
+   * The Digital Menu Board page, served at `/menu-board` so a wall screen needs a URL and
+   * nothing else.
+   *
+   * It is a single hand-written HTML file with no build step, which is why this points at a
+   * source path rather than at a `dist/` — there is nothing to compile. The default reaches out
+   * of the backend package to its sibling in the workspace; `MENU_BOARD_PAGE` overrides it for
+   * a deployment that lays the two out differently.
+   */
+  menuBoard: {
+    pagePath: path.resolve(
+      packageRoot,
+      optional('MENU_BOARD_PAGE', '../digitalmenu/index.html'),
+    ),
+  },
+
+  /**
    * The offline speech model served to devices after login. Not bundled in the APK — the
    * multilingual Whisper Base weights are ~148 MB.
    *
@@ -123,6 +139,13 @@ export const config = {
   logLevel: optional('LOG_LEVEL', 'info') as LogLevel,
 
   /**
+   * The zone dates are rendered in for humans — on a printed bill, in a WhatsApp message.
+   * Storage stays UTC; this is presentation only, and a canteen's receipt must read in the
+   * time the hall keeps rather than the time its server happens to be booted in.
+   */
+  displayTimeZone: optional('DISPLAY_TIME_ZONE', 'Asia/Kolkata'),
+
+  /**
    * AI-assisted recipe authoring (free-text/photo/voice -> structured recipe draft) and the
    * ingredient/menu-item "Auto Translate" buttons. Both degrade gracefully when unset: the
    * regex-based `recipe-parser.service` import still works without a key, only the
@@ -148,6 +171,29 @@ export const config = {
     maxAudioBytes: integer('YOUTUBE_MAX_AUDIO_MB', 18) * 1024 * 1024,
     /** Hard ceiling for one import job before it is failed as timed out. */
     jobTimeoutMinutes: integer('YOUTUBE_JOB_TIMEOUT_MINUTES', 20),
+  },
+
+  /**
+   * Sending a settled GST bill to the guest's own WhatsApp, over Meta's WhatsApp Cloud API.
+   *
+   * Credentials live here rather than in the settings table because they are secrets, and the
+   * settings table is rendered field-by-field in the Admin Portal. Leaving them unset is a
+   * supported state, not a broken one: `WhatsAppService` reports itself unconfigured, the
+   * kiosk profile says so, and the kiosk simply never offers the guest a bill by phone.
+   *
+   * `templateName` is an approved message template in the same WhatsApp Business account.
+   * Meta refuses free-form text for a business-initiated conversation, so a bill cannot be
+   * sent as a plain message however convenient that would be.
+   */
+  whatsapp: {
+    apiVersion: optional('WHATSAPP_API_VERSION', 'v21.0'),
+    phoneNumberId: optional('WHATSAPP_PHONE_NUMBER_ID', ''),
+    accessToken: optional('WHATSAPP_ACCESS_TOKEN', ''),
+    templateName: optional('WHATSAPP_TEMPLATE_NAME', 'gst_bill'),
+    templateLanguage: optional('WHATSAPP_TEMPLATE_LANGUAGE', 'en'),
+    /** Prefixed to a number the guest typed without one. India unless told otherwise. */
+    defaultCountryCode: optional('WHATSAPP_DEFAULT_COUNTRY_CODE', '91'),
+    requestTimeoutMs: integer('WHATSAPP_TIMEOUT_MS', 10_000),
   },
 } as const;
 

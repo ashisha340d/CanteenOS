@@ -45,6 +45,14 @@ const CountersPage = lazy(() => import('./pages/Counters/CountersPage').then((m)
 const PrintingGroupsPage = lazy(() =>
   import('./pages/PrintingGroups/PrintingGroupsPage').then((m) => ({ default: m.PrintingGroupsPage })),
 );
+const MenuBoardsPage = lazy(() =>
+  import('./pages/MenuBoards/MenuBoardsPage').then((m) => ({ default: m.MenuBoardsPage })),
+);
+const MenuBoardScreenDetailPage = lazy(() =>
+  import('./pages/MenuBoards/MenuBoardScreenDetailPage').then((m) => ({
+    default: m.MenuBoardScreenDetailPage,
+  })),
+);
 const ModifierGroupsPage = lazy(() =>
   import('./pages/Modifiers/ModifierGroupsPage').then((m) => ({ default: m.ModifierGroupsPage })),
 );
@@ -64,6 +72,35 @@ const YoutubeImportsPage = lazy(() =>
   import('./pages/YoutubeImports/YoutubeImportsPage').then((m) => ({ default: m.YoutubeImportsPage })),
 );
 const TasksPage = lazy(() => import('./pages/Tasks/TasksPage').then((m) => ({ default: m.TasksPage })));
+const EquipmentDashboardPage = lazy(() =>
+  import('./pages/Equipment/EquipmentDashboardPage').then((m) => ({ default: m.EquipmentDashboardPage })),
+);
+const EquipmentListPage = lazy(() =>
+  import('./pages/Equipment/EquipmentListPage').then((m) => ({ default: m.EquipmentListPage })),
+);
+const EquipmentDetailPage = lazy(() =>
+  import('./pages/Equipment/EquipmentDetailPage').then((m) => ({ default: m.EquipmentDetailPage })),
+);
+const EquipmentLocationsPage = lazy(() =>
+  import('./pages/Equipment/EquipmentLocationsPage').then((m) => ({ default: m.EquipmentLocationsPage })),
+);
+const FloorPlanPage = lazy(() =>
+  import('./pages/Equipment/FloorPlanPage').then((m) => ({ default: m.FloorPlanPage })),
+);
+const MaintenanceTicketsPage = lazy(() =>
+  import('./pages/Maintenance/MaintenanceTicketsPage').then((m) => ({ default: m.MaintenanceTicketsPage })),
+);
+const MaintenanceTicketPage = lazy(() =>
+  import('./pages/Maintenance/MaintenanceTicketPage').then((m) => ({ default: m.MaintenanceTicketPage })),
+);
+const MaintenanceSchedulesPage = lazy(() =>
+  import('./pages/Maintenance/MaintenanceSchedulesPage').then((m) => ({
+    default: m.MaintenanceSchedulesPage,
+  })),
+);
+const SuppliersPage = lazy(() =>
+  import('./pages/Suppliers/SuppliersPage').then((m) => ({ default: m.SuppliersPage })),
+);
 const HsnSacMasterPage = lazy(() =>
   import('./pages/Tax/HsnSacMasterPage').then((m) => ({ default: m.HsnSacMasterPage })),
 );
@@ -86,10 +123,39 @@ const PermissionsPage = lazy(() =>
 const ReportsPage = lazy(() => import('./pages/Reports/ReportsPage').then((m) => ({ default: m.ReportsPage })));
 const BillingPage = lazy(() => import('./pages/Billing/BillingPage').then((m) => ({ default: m.BillingPage })));
 const AuditPage = lazy(() => import('./pages/Audit/AuditPage').then((m) => ({ default: m.AuditPage })));
-const SettingsPage = lazy(() => import('./pages/Settings/SettingsPage').then((m) => ({ default: m.SettingsPage })));
+const KiosksPage = lazy(() => import('./pages/Kiosks/KiosksPage').then((m) => ({ default: m.KiosksPage })));
 const AlertsPage = lazy(() => import('./pages/Alerts/AlertsPage').then((m) => ({ default: m.AlertsPage })));
 const SecuritySettingsPage = lazy(() =>
   import('./pages/Account/SecuritySettingsPage').then((m) => ({ default: m.SecuritySettingsPage })),
+);
+const MenuMasterPage = lazy(() =>
+  import('./pages/MenuMaster/MenuMasterPage').then((m) => ({ default: m.MenuMasterPage })),
+);
+const BoardsHubPage = lazy(() =>
+  import('./pages/BoardsHub/BoardsHubPage').then((m) => ({ default: m.BoardsHubPage })),
+);
+const SopFormulationPage = lazy(() =>
+  import('./pages/SopFormulation/SopFormulationPage').then((m) => ({ default: m.SopFormulationPage })),
+);
+const OrganizationPage = lazy(() =>
+  import('./pages/Organization/OrganizationPage').then((m) => ({ default: m.OrganizationPage })),
+);
+const EquipmentMaintenancePage = lazy(() =>
+  import('./pages/EquipmentMaintenance/EquipmentMaintenancePage').then((m) => ({
+    default: m.EquipmentMaintenancePage,
+  })),
+);
+const PeoplePage = lazy(() =>
+  import('./pages/People/PeoplePage').then((m) => ({ default: m.PeoplePage })),
+);
+const KDSPage = lazy(() =>
+  import('./pages/KDS/KDSPage').then((m) => ({ default: m.KDSPage })),
+);
+const CDSPage = lazy(() =>
+  import('./pages/CDS/CDSPage').then((m) => ({ default: m.CDSPage })),
+);
+const CleaningPage = lazy(() =>
+  import('./pages/Cleaning/CleaningPage').then((m) => ({ default: m.CleaningPage })),
 );
 
 /** Blocking full-window state, used only while the session itself is being resolved. */
@@ -178,6 +244,65 @@ export function AppRoutes(): JSX.Element {
         />
         <Route element={<AppShell />}>
           <Route path="/" element={<DashboardPage />} />
+          <Route
+            path="/menu-master"
+            element={
+              <RequireCapability capability={Capability.MASTER_READ}>
+                <MenuMasterPage />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/organization"
+            element={
+              <RequireCapability capability={Capability.SETTINGS_READ}>
+                <OrganizationPage />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <RequireCapability capability={Capability.SETTINGS_READ}>
+                <OrganizationPage />
+              </RequireCapability>
+            }
+          />
+          <Route path="/kds" element={<KDSPage />} />
+          <Route path="/cds" element={<CDSPage />} />
+          <Route path="/cleaning" element={<CleaningPage />} />
+          <Route
+            path="/equipment-maintenance"
+            element={
+              <RequireCapability capability={Capability.EQUIPMENT_VIEW}>
+                <EquipmentMaintenancePage />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/people"
+            element={
+              <RequireCapability capability={Capability.USER_READ}>
+                <PeoplePage />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/boards-hub"
+            element={
+              <RequireCapability capability={Capability.MASTER_READ}>
+                <BoardsHubPage />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/sop-formulation"
+            element={
+              <RequireCapability capability={Capability.RECIPE_READ}>
+                <SopFormulationPage />
+              </RequireCapability>
+            }
+          />
           <Route
             path="/users"
             element={
@@ -292,6 +417,22 @@ export function AppRoutes(): JSX.Element {
             }
           />
           <Route
+            path="/menu-boards"
+            element={
+              <RequireCapability capability={Capability.MASTER_READ}>
+                <MenuBoardsPage />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/menu-boards/:id"
+            element={
+              <RequireCapability capability={Capability.MASTER_WRITE}>
+                <MenuBoardScreenDetailPage />
+              </RequireCapability>
+            }
+          />
+          <Route
             path="/modifiers"
             element={
               <RequireCapability capability={Capability.MASTER_READ}>
@@ -355,6 +496,80 @@ export function AppRoutes(): JSX.Element {
               </RequireCapability>
             }
           />
+          {/* Equipment & Maintenance. One module: the register and its floor plans, the
+              tickets and schedules raised against it, and the suppliers it calls. */}
+          <Route
+            path="/equipment"
+            element={
+              <RequireCapability capability={Capability.EQUIPMENT_VIEW}>
+                <EquipmentDashboardPage />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/equipment/assets"
+            element={
+              <RequireCapability capability={Capability.EQUIPMENT_VIEW}>
+                <EquipmentListPage />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/equipment/assets/:id"
+            element={
+              <RequireCapability capability={Capability.EQUIPMENT_VIEW}>
+                <EquipmentDetailPage />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/equipment/locations"
+            element={
+              <RequireCapability capability={Capability.EQUIPMENT_VIEW}>
+                <EquipmentLocationsPage />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/equipment/floor-plan"
+            element={
+              <RequireCapability capability={Capability.EQUIPMENT_VIEW}>
+                <FloorPlanPage />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/maintenance"
+            element={
+              <RequireCapability capability={Capability.MAINTENANCE_VIEW}>
+                <MaintenanceTicketsPage />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/maintenance/schedules"
+            element={
+              <RequireCapability capability={Capability.MAINTENANCE_VIEW}>
+                <MaintenanceSchedulesPage />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/maintenance/tickets/:id"
+            element={
+              <RequireCapability capability={Capability.MAINTENANCE_VIEW}>
+                <MaintenanceTicketPage />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/equipment-suppliers"
+            element={
+              <RequireCapability capability={Capability.SUPPLIER_VIEW}>
+                <SuppliersPage />
+              </RequireCapability>
+            }
+          />
           <Route
             path="/hsn-sac"
             element={
@@ -411,11 +626,15 @@ export function AppRoutes(): JSX.Element {
               </RequireCapability>
             }
           />
+          {/* Portal-wide settings moved onto the Kiosks page — most of what was here is
+              kiosk or organisation configuration, so a bookmark to the old page still lands
+              somewhere useful rather than 404ing. */}
+          <Route path="/settings" element={<Navigate to="/kiosks" replace />} />
           <Route
-            path="/settings"
+            path="/kiosks"
             element={
               <RequireCapability capability={Capability.SETTINGS_READ}>
-                <SettingsPage />
+                <KiosksPage />
               </RequireCapability>
             }
           />

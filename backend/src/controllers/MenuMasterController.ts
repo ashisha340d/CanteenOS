@@ -3,7 +3,6 @@ import type {
   AvailabilityStatus,
   CounterRouteWriteRequest,
   CounterWriteRequest,
-  ItemGroupAssignmentWriteRequest,
   ItemGroupWriteRequest,
   MenuCategoryAssignmentWriteRequest,
   MenuItemAssignmentWriteRequest,
@@ -20,7 +19,8 @@ import type {
   RoutableEntityType,
 } from '@menuboard/shared';
 import { menuMasterService, type MenuMasterQuery } from '../services/MenuMasterService';
-import { created, noContent, ok, paginated } from '../utils/http';
+import { menuShiftSchedulerService } from '../services/MenuShiftSchedulerService';
+import { catalogueFilterFrom, created, noContent, ok, paginated } from '../utils/http';
 import { actorFrom } from './context';
 
 /**
@@ -243,7 +243,14 @@ export const MenuMasterController = {
   /* ------------------------------------------------------------------- item groups */
 
   async listItemGroups(req: Request, res: Response): Promise<void> {
-    paginated(res, await menuMasterService.listItemGroups(req.query as unknown as MenuMasterQuery));
+    const query = req.query as unknown as MenuMasterQuery & { catalogueId?: string };
+    paginated(
+      res,
+      await menuMasterService.listItemGroups({
+        ...query,
+        ...catalogueFilterFrom(req.query.catalogueId as string | undefined),
+      }),
+    );
   },
 
   async createItemGroup(req: Request, res: Response): Promise<void> {
@@ -266,25 +273,6 @@ export const MenuMasterController = {
 
   async deleteItemGroup(req: Request, res: Response): Promise<void> {
     await menuMasterService.deleteItemGroup(req.params.id as string, actorFrom(req));
-    noContent(res);
-  },
-
-  async listItemGroupsForFoodItem(req: Request, res: Response): Promise<void> {
-    ok(res, await menuMasterService.listItemGroupsForFoodItem(req.params.foodItemId as string));
-  },
-
-  async assignItemGroup(req: Request, res: Response): Promise<void> {
-    created(
-      res,
-      await menuMasterService.assignItemGroup(
-        req.body as ItemGroupAssignmentWriteRequest,
-        actorFrom(req),
-      ),
-    );
-  },
-
-  async removeItemGroupAssignment(req: Request, res: Response): Promise<void> {
-    await menuMasterService.removeItemGroupAssignment(req.params.id as string, actorFrom(req));
     noContent(res);
   },
 
@@ -481,5 +469,14 @@ export const MenuMasterController = {
   async removeSchedule(req: Request, res: Response): Promise<void> {
     await menuMasterService.removeSchedule(req.params.id as string, actorFrom(req));
     noContent(res);
+  },
+
+  /**
+   * Forces the shift reset that would otherwise wait for the next 5-minute check or the next
+   * natural boundary — for a manager who just fixed a stock problem and wants the menu to
+   * catch up now, or for verifying the automatic sweep works at all.
+   */
+  async applyMenuShiftReset(req: Request, res: Response): Promise<void> {
+    ok(res, await menuShiftSchedulerService.applyShiftReset(req.query.shift as 'MORNING' | 'EVENING'));
   },
 };

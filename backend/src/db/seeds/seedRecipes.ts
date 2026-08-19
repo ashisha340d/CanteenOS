@@ -135,6 +135,9 @@ export async function seedImportedRecipes(connection: Db, createdBy: string): Pr
     if (id === null) {
       const row = await menuCategoryRepository.insert(connection, {
         id: newId(),
+        // Imported recipe categories are not part of any Menu Catalogue: they exist to file
+        // recipes, and nothing in this import knows which menu, if any, should sell them.
+        catalogueId: null,
         name: category.name,
         nameHi: category.nameHi,
         description: null,

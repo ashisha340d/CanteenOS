@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { NumberField, SelectField, TextField } from '@/components/form/fields';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { ingredientsApi } from '../../api/ingredients';
 import {
   useCreateVariant,
   useDeleteVariant,
@@ -72,6 +73,7 @@ export function VariantsSection({ foodItemId }: { foodItemId: string }): JSX.Ele
 
   const [drafts, setDrafts] = useState<Record<string, DraftVariant>>({});
   const [deleting, setDeleting] = useState<MenuItemVariantDto | null>(null);
+  const [translatingId, setTranslatingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!variants) return;
@@ -114,6 +116,20 @@ export function VariantsSection({ foodItemId }: { foodItemId: string }): JSX.Ele
       notify.success('Variant saved.');
     } catch (err) {
       notify.fromError(err);
+    }
+  }
+
+  async function translateRow(id: string): Promise<void> {
+    const draft = drafts[id];
+    if (!draft || !draft.name.trim()) return;
+    setTranslatingId(id);
+    try {
+      const { translated } = await ingredientsApi.translate(draft.name);
+      setField(id, { nameHi: translated });
+    } catch (err) {
+      notify.fromError(err);
+    } finally {
+      setTranslatingId(null);
     }
   }
 
@@ -212,12 +228,22 @@ export function VariantsSection({ foodItemId }: { foodItemId: string }): JSX.Ele
                 </div>
               </div>
 
-              <div className="grid grid-cols-[1.2fr_1fr_0.7fr_0.9fr_auto] items-end gap-2">
+              <div className="grid grid-cols-[1.2fr_auto_1fr_0.7fr_0.9fr_auto] items-end gap-2">
                 <TextField
                   label="Name (Hindi)"
                   value={draft.nameHi}
                   onChange={(e) => setField(variant.id, { nameHi: e.target.value })}
                 />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="mb-[3px]"
+                  disabled={translatingId === variant.id || !draft.name.trim()}
+                  onClick={() => translateRow(variant.id)}
+                >
+                  {translatingId === variant.id ? 'Translating…' : 'हिंदी →'}
+                </Button>
                 <TextField
                   label="Portion (Hindi)"
                   value={draft.portionNameHi}

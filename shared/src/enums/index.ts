@@ -4,6 +4,7 @@
  */
 
 export * from './equipment';
+export * from './cleaning';
 
 export const UserRole = {
   SUPER_ADMIN: 'SUPER_ADMIN',
@@ -81,6 +82,8 @@ export type AvailabilityStatus = (typeof AvailabilityStatus)[keyof typeof Availa
 export const MediaType = {
   IMAGE: 'IMAGE',
   VIDEO: 'VIDEO',
+  /** Voice notes, which the Equipment module stores in the shared library (029). */
+  AUDIO: 'AUDIO',
   DOCUMENT: 'DOCUMENT',
 } as const;
 export type MediaType = (typeof MediaType)[keyof typeof MediaType];
@@ -266,6 +269,32 @@ export function isOrderLocked(order: OrderStatusFacts): boolean {
   return Boolean(order.billedAt);
 }
 
+/**
+ * The only statuses from which the person who raised an order may still withdraw it.
+ *
+ * The line is drawn at "Got it": up to and including acknowledgement nobody has acted on the
+ * order yet, so retracting it costs nothing. The moment it reaches PREPARATION someone has
+ * started buying or cooking against it, and deleting it would erase the reason work is
+ * happening. From there it is a manager's call (`ORDER_CANCEL`), not the author's.
+ */
+export const OWN_ORDER_DELETABLE_STATUSES: readonly OrderStatus[] = [
+  OrderStatus.PENDING,
+  OrderStatus.ACKNOWLEDGED,
+];
+
+/**
+ * Whether `userId` may delete this order themselves. Shared so the app's menu and the
+ * server's push handler cannot drift on what "too late to delete" means.
+ */
+export function canDeleteOwnOrder(
+  order: OrderStatusFacts & { createdBy: string },
+  userId: string,
+): boolean {
+  if (order.createdBy !== userId) return false;
+  if (isOrderLocked(order)) return false;
+  return OWN_ORDER_DELETABLE_STATUSES.includes(order.status);
+}
+
 export const OrderPriority = {
   LOW: 'LOW',
   NORMAL: 'NORMAL',
@@ -404,13 +433,56 @@ export const AlertType = {
 } as const;
 export type AlertType = (typeof AlertType)[keyof typeof AlertType];
 
-/** The three uploadable buzzer slots. */
+/**
+ * The Android notification channel order alerts are delivered on.
+ *
+ * Shared because both ends must name the same string: the app creates the channel (MAX
+ * importance, sound, vibration) and the server stamps `channelId` onto every push. Android 8+
+ * reads importance and sound from the channel and ignores the message, so a mismatch here is
+ * silent delivery — the alert arrives with no heads-up banner and no sound.
+ */
+export const ORDER_CHANNEL_ID = 'orders';
+
+/**
+ * Chat messages get their own channel so they are distinguishable from an order without
+ * looking at the screen, and so a user can mute chatter in Android settings while leaving
+ * order alarms at full volume.
+ */
+export const MESSAGE_CHANNEL_ID = 'messages';
+
+/**
+ * The uploadable buzzer slots.
+ *
+ * The first three belong to the phone/tablet alert system. The KDS_* three are the wall
+ * screens' own voices, kept separate on purpose: a front desk changing the phone's new-order
+ * buzzer must not change what the kitchen counter hears, and vice versa.
+ */
 export const AlertSoundSlot = {
   NORMAL: 'NORMAL',
   WARNING: 'WARNING',
   CRITICAL: 'CRITICAL',
+  /** KDS: a new order landed on the board. */
+  KDS_NEW: 'KDS_NEW',
+  /** KDS: a line is approaching its due time — the attention call. */
+  KDS_ATTENTION: 'KDS_ATTENTION',
+  /** KDS: a line is past its due time, and the repeat while it stays late. */
+  KDS_CRITICAL: 'KDS_CRITICAL',
 } as const;
 export type AlertSoundSlot = (typeof AlertSoundSlot)[keyof typeof AlertSoundSlot];
+
+/** Slots the phone/tablet alert system uses — what the Alerts page configures. */
+export const MOBILE_ALERT_SOUND_SLOTS: readonly AlertSoundSlot[] = [
+  AlertSoundSlot.NORMAL,
+  AlertSoundSlot.WARNING,
+  AlertSoundSlot.CRITICAL,
+];
+
+/** Slots the KDS wall screens use — configured on the KDS & CDS tab, never on a board. */
+export const KDS_ALERT_SOUND_SLOTS: readonly AlertSoundSlot[] = [
+  AlertSoundSlot.KDS_NEW,
+  AlertSoundSlot.KDS_ATTENTION,
+  AlertSoundSlot.KDS_CRITICAL,
+];
 
 /** Defaults applied when an admin has never configured a given alert. */
 export const ALERT_DEFAULTS: Readonly<
@@ -707,3 +779,75 @@ export const PosDiscountType = {
   AMOUNT: 'AMOUNT',
 } as const;
 export type PosDiscountType = (typeof PosDiscountType)[keyof typeof PosDiscountType];
+
+/* ------------------------------------------------------------------ kiosk presentation */
+
+/**
+ * The visual skin the self-service kiosk wears.
+ *
+ * Chosen in the Admin Portal, not on the tablet: a hall runs several kiosks and they must
+ * look like one another, and the person who decides how the organisation presents itself is
+ * not the person walking past the stand. All four are quiet by intent — a spiritual
+ * organisation's canteen is not a promotion, so none of them carries a second accent.
+ */
+export const KioskSkin = {
+  /** Warm ivory and sandalwood with a single saffron accent. The default. */
+  SANDALWOOD: 'SANDALWOOD',
+  /** Cool ivory and tulsi green. Reads calmer under daylight-white hall lighting. */
+  TULSI: 'TULSI',
+  /** Low-light indigo and moonlight, for an evening hall or an outdoor stand after dark. */
+  KASHI: 'KASHI',
+  /** Near-monochrome paper and graphite; the most austere of the four. */
+  SATTVA: 'SATTVA',
+} as const;
+export type KioskSkin = (typeof KioskSkin)[keyof typeof KioskSkin];
+
+/**
+ * Which language the guest-facing surfaces are written in.
+ *
+ * `BOTH` is not a fallback — it is a deliberate third setting for a hall whose queue is mixed,
+ * and it renders each label twice rather than picking one. The GST bill is unaffected: it is a
+ * tax document and stays in English whatever this says.
+ */
+export const KioskLanguageMode = {
+  EN: 'EN',
+  HI: 'HI',
+  BOTH: 'BOTH',
+} as const;
+export type KioskLanguageMode = (typeof KioskLanguageMode)[keyof typeof KioskLanguageMode];
+
+/**
+ * How a settled bill reaches paper. Both routes are ESC/POS; there is no third.
+ *
+ * The browser's own print dialog used to sit behind these as a last resort and has been
+ * removed. It printed an HTML approximation of the bill on whatever paper the tablet's default
+ * printer held, raised a modal a guest could not dismiss, and took seconds — on a device with
+ * nobody standing behind it, all three are failures. A stand either has a printer it can drive
+ * as a printer, or it prints at the counter.
+ */
+export const ReceiptTransport = {
+  /** ESC/POS straight to a printer attached to the tablet over WebUSB. */
+  USB: 'USB',
+  /** ESC/POS from the backend to a networked counter printer over RAW/9100. */
+  NETWORK: 'NETWORK',
+} as const;
+export type ReceiptTransport = (typeof ReceiptTransport)[keyof typeof ReceiptTransport];
+
+/**
+ * Whether the kiosk may suggest anything before payment, and what.
+ *
+ * A suggestion is one extra tap between a guest and their food, so who is allowed to place it
+ * there is an operator's decision rather than a developer's. A hall that serves free prasad
+ * turns it off; one running a paid canteen with a drinks counter leaves it on. The two kinds
+ * are separable because a hall may want to offer a drink and consider pushing sweets unseemly.
+ */
+export const KioskRecommendationMode = {
+  /** Never interrupt. A guest goes from cart to payment with nothing in between. */
+  OFF: 'OFF',
+  DRINKS: 'DRINKS',
+  SWEETS: 'SWEETS',
+  /** Both, but still only ever one prompt per order — whichever is relevant first. */
+  BOTH: 'BOTH',
+} as const;
+export type KioskRecommendationMode =
+  (typeof KioskRecommendationMode)[keyof typeof KioskRecommendationMode];

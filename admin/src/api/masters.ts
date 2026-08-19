@@ -17,6 +17,17 @@ export interface MasterListQuery extends PageQuery {
   status?: MasterStatus;
 }
 
+/**
+ * `NONE` narrows to the rows filed under no Menu Catalogue. A query string cannot carry a
+ * null, and leaving the parameter off already means "any catalogue", so the backend reads this
+ * literal as the third state.
+ */
+export const CATALOGUE_NONE = 'NONE';
+
+export interface CatalogueScopedListQuery extends MasterListQuery {
+  catalogueId?: string;
+}
+
 export const stationsApi = {
   list: (query: MasterListQuery) =>
     unwrapPaged<StationDto>(http.get('/stations', { params: query })),
@@ -38,7 +49,7 @@ export const activityTypesApi = {
 };
 
 export const menuCategoriesApi = {
-  list: (query: MasterListQuery) =>
+  list: (query: CatalogueScopedListQuery) =>
     unwrapPaged<MenuCategoryDto>(http.get('/menu-categories', { params: query })),
   create: (body: MenuCategoryWriteRequest) =>
     unwrap<MenuCategoryDto>(http.post('/menu-categories', body)),

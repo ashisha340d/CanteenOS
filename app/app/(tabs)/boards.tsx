@@ -4,6 +4,7 @@ import Animated, { FadeInUp } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import type { BoardDto, BoardStatus, StationDto, ThreadMessageDto } from '@menuboard/shared';
+import { Capability } from '@menuboard/shared';
 import {
   boardRepository,
   masterRepository,
@@ -11,6 +12,8 @@ import {
   threadRepository,
 } from '../../src/db/repositories';
 import { useAuthStore } from '../../src/state/authStore';
+import { useSyncStatusStore } from '../../src/state/syncStatusStore';
+import { useCapabilities } from '../../src/permissions/useCapabilities';
 import { useSyncedFocusLoad } from '../../src/hooks/useSyncedFocusLoad';
 import { EmptyState } from '../../src/components/EmptyState';
 import { PressableScale } from '../../src/components/PressableScale';
@@ -18,6 +21,7 @@ import { SearchInput } from '../../src/components/SearchInput';
 import { TopAppBar } from '../../src/components/TopAppBar';
 import { BoardStatusChip } from '../../src/components/StatusChip';
 import { colors, radii, spacing, typography, fonts } from '../../src/theme/tokens';
+import { todayIsoDate } from '../../src/utils/date';
 
 /**
  * My Boards — the home of the app.
@@ -30,7 +34,34 @@ import { colors, radii, spacing, typography, fonts } from '../../src/theme/token
 interface BoardRow {
   board: BoardDto;
   openCount: number;
+  /** `YYYY-MM-DDTHH:mm` of the soonest live order, or undefined when the board has none. */
+  nextDue: string | undefined;
   lastMessage: ThreadMessageDto | undefined;
+}
+
+/**
+ * Board order: what needs attention soonest, first.
+ *
+ * 1. Status — a paused or archived board never outranks one people are working on.
+ * 2. Live work — a board carrying today's or tomorrow's orders beats a quiet one, and among
+ *    those the earliest deadline wins. This is the ordering the product is actually about.
+ * 3. Recency — with no live work left, the board that was last talked on comes first.
+ * 4. Name, so the list is stable rather than arbitrary when everything else ties.
+ */
+function compareBoardRows(a: BoardRow, b: BoardRow): number {
+  const byStatus = STATUS_ORDER[a.board.status] - STATUS_ORDER[b.board.status];
+  if (byStatus !== 0) return byStatus;
+
+  if ((a.nextDue === undefined) !== (b.nextDue === undefined)) return a.nextDue === undefined ? 1 : -1;
+  if (a.nextDue !== undefined && b.nextDue !== undefined && a.nextDue !== b.nextDue) {
+    return a.nextDue.localeCompare(b.nextDue);
+  }
+
+  const aAt = a.lastMessage?.createdAt ?? '';
+  const bAt = b.lastMessage?.createdAt ?? '';
+  if (aAt !== bAt) return bAt.localeCompare(aAt);
+
+  return a.board.name.localeCompare(b.board.name);
 }
 
 /**
@@ -76,8 +107,12 @@ function isRenderablePhoto(photoPath: string | null): boolean {
 
 export default function BoardsScreen(): React.JSX.Element {
   const router = useRouter();
+  const { has } = useCapabilities();
   const user = useAuthStore((s) => s.user);
-  const isSyncing = useAuthStore((s) => s.isSyncing);
+  // `syncStatusStore` is what the sync engine actually writes to; `authStore.isSyncing` only
+  // ever moves during a manual `refreshLocalData`, so the spinner sat still through every
+  // background pull. Every other list screen already reads it from here.
+  const isSyncing = useSyncStatusStore((s) => s.isSyncing);
   const refreshLocalData = useAuthStore((s) => s.refreshLocalData);
   const [rows, setRows] = useState<BoardRow[]>([]);
   const [stationsById, setStationsById] = useState<Map<string, StationDto>>(new Map());
@@ -86,32 +121,28 @@ export default function BoardsScreen(): React.JSX.Element {
   const load = useCallback(async () => {
     if (!user) return;
     const boards = await boardRepository.listForUser(user.id);
+    const boardIds = boards.map((board) => board.id);
     const stations = await masterRepository.listActiveStations();
     setStationsById(new Map(stations.map((station) => [station.id, station])));
 
-    const lastActivity = await threadRepository.lastActivityForBoards(
-      boards.map((board) => board.id),
-    );
-    const withCounts = await Promise.all(
-      boards.map(async (board) => ({
-        board,
-        openCount: (await orderRepository.listAllOpenAcrossBoards([board.id])).length,
-        lastMessage: lastActivity.get(board.id),
-      })),
-    );
+    // Three grouped queries rather than one per board: the counts used to be an N+1 that
+    // re-queried the orders table once for every row on screen.
+    const [lastActivity, openCounts, nextDue] = await Promise.all([
+      threadRepository.lastActivityForBoards(boardIds),
+      orderRepository.openCountsByBoard(boardIds),
+      orderRepository.nextDueByBoard(boardIds),
+    ]);
 
-    // Active boards first, then on-hold, then archived; most recently active first inside each
-    // group. A paused board should never sit above one people are working on today.
-    withCounts.sort((a, b) => {
-      const byStatus = STATUS_ORDER[a.board.status] - STATUS_ORDER[b.board.status];
-      if (byStatus !== 0) return byStatus;
-      const aAt = a.lastMessage?.createdAt ?? '';
-      const bAt = b.lastMessage?.createdAt ?? '';
-      if (aAt !== bAt) return bAt.localeCompare(aAt);
-      return a.board.name.localeCompare(b.board.name);
-    });
-
-    setRows(withCounts);
+    setRows(
+      boards
+        .map((board) => ({
+          board,
+          openCount: openCounts.get(board.id) ?? 0,
+          nextDue: nextDue.get(board.id),
+          lastMessage: lastActivity.get(board.id),
+        }))
+        .sort(compareBoardRows),
+    );
   }, [user]);
 
   useSyncedFocusLoad(load);
@@ -129,8 +160,12 @@ export default function BoardsScreen(): React.JSX.Element {
 
   // Station -> Board is the real-world hierarchy (see docs/DATABASE.md); a station groups
   // its boards here but is never itself a board and never gets its own card or navigation.
-  // Boards keep the status/activity ordering computed above *within* their station; the
-  // stations themselves sort by name so the grouping is stable across refreshes.
+  //
+  // Stations follow their boards rather than sorting by name. Alphabetical station headings
+  // silently threw away the whole ordering computed above: a station called "Annexe" holding
+  // one archived board sat above the station holding everything due this morning, so the list
+  // looked unsorted. A station now takes the rank of its best board — first station heading
+  // is wherever the most urgent work is — and boards keep their order inside it.
   const listItems = useMemo<ListItem[]>(() => {
     const byStation = new Map<string, BoardRow[]>();
     for (const row of filteredRows) {
@@ -139,10 +174,14 @@ export default function BoardsScreen(): React.JSX.Element {
       byStation.set(row.board.stationId, list);
     }
 
+    // `filteredRows` is already sorted, so the first row seen for a station is its best one.
     const stationIds = [...byStation.keys()].sort((a, b) => {
-      const nameA = stationsById.get(a)?.name ?? 'Other';
-      const nameB = stationsById.get(b)?.name ?? 'Other';
-      return nameA.localeCompare(nameB);
+      const bestA = byStation.get(a)?.[0];
+      const bestB = byStation.get(b)?.[0];
+      if (bestA === undefined || bestB === undefined) return 0;
+      const byRank = compareBoardRows(bestA, bestB);
+      if (byRank !== 0) return byRank;
+      return (stationsById.get(a)?.name ?? 'Other').localeCompare(stationsById.get(b)?.name ?? 'Other');
     });
 
     const items: ListItem[] = [];
@@ -162,6 +201,22 @@ export default function BoardsScreen(): React.JSX.Element {
         title="VSK Order"
         leadingIcon="dashboard"
         actions={[
+          // Equipment is a stack route rather than a sixth tab: the bottom bar is the four
+          // Stitch destinations, and monitoring is reached the same way Settings and
+          // Notifications are — from the bar at the top of the landing screen.
+          //
+          // Shown for a reporter as well as a monitor, because they land on different screens:
+          // a Manager gets the monitoring hub, a User gets scan-and-report. Withholding the
+          // door from the person who has to report the fault would defeat the module.
+          ...(has(Capability.EQUIPMENT_VIEW) || has(Capability.EQUIPMENT_REPORT_PROBLEM)
+            ? [
+              {
+                icon: 'build' as const,
+                onPress: () => router.push('/equipment'),
+                accessibilityLabel: 'Equipment',
+              },
+            ]
+            : []),
           {
             icon: 'notifications-none',
             onPress: () => router.push('/notifications'),
@@ -294,8 +349,20 @@ export default function BoardsScreen(): React.JSX.Element {
   );
 }
 
-/** What the board was last doing — an order, a message, or nothing yet. */
+/**
+ * What the board was last doing — an order, a message, or nothing yet.
+ *
+ * A board with live work leads with when that work is due instead of with the last thing
+ * anyone typed: "what do I have to get out today" is the question this screen exists to
+ * answer, and it was previously buried under whatever chat happened to be most recent.
+ */
 function previewOf(row: BoardRow): string {
+  if (row.nextDue !== undefined) {
+    const [due, clock = ''] = row.nextDue.split('T');
+    const when = due === todayIsoDate() ? 'Today' : formatDueDay(due ?? '');
+    return `Next: ${when} ${clock}`.trim();
+  }
+
   const message = row.lastMessage;
   if (message === undefined) return row.board.description ?? 'No activity yet';
 
@@ -318,6 +385,17 @@ function previewOf(row: BoardRow): string {
 
   const author = message.authorName ? `${message.authorName}: ` : '';
   return `${author}${message.body ?? 'Voice message'}`;
+}
+
+/** "Tomorrow" or a weekday — how a due day reads on the board card. */
+function formatDueDay(isoDate: string): string {
+  const parsed = new Date(`${isoDate}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return isoDate;
+  const start = new Date(`${todayIsoDate()}T00:00:00`);
+  const delta = Math.round((parsed.getTime() - start.getTime()) / 86_400_000);
+  if (delta === 1) return 'Tomorrow';
+  if (delta < 7) return parsed.toLocaleDateString(undefined, { weekday: 'long' });
+  return parsed.toLocaleDateString(undefined, { day: '2-digit', month: 'short' });
 }
 
 /** WhatsApp-style: clock today, "Yesterday", weekday this week, else a date. */

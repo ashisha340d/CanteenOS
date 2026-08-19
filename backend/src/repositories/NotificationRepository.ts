@@ -109,6 +109,28 @@ export class NotificationRepository {
     );
   }
 
+  /**
+   * Whether a notification of this kind mentioning `subjectId` already exists since `since`.
+   *
+   * The maintenance sweep is idempotent by design and may run several times a day; without
+   * this check a warranty that expires next month would be announced on every pass. Matching
+   * on the JSON text is enough because the needle is a UUID.
+   */
+  async existsForSubjectSince(
+    db: Db,
+    type: NotificationType,
+    subjectId: string,
+    since: string,
+  ): Promise<boolean> {
+    const row = await selectOne<CountRow>(
+      db,
+      `SELECT COUNT(*) AS total FROM notifications
+        WHERE type = ? AND created_at >= ? AND data LIKE CONCAT('%', ?, '%')`,
+      [type, since, subjectId],
+    );
+    return row !== null && Number(row.total) > 0;
+  }
+
   async markRead(db: Db, userId: string, ids: readonly string[]): Promise<number> {
     if (ids.length === 0) return 0;
     const firstSeq = await allocateSyncSeqBlock(db, ids.length);

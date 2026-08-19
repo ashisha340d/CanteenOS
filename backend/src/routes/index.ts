@@ -7,9 +7,13 @@ import { boardRoutes } from './board.routes';
 import { masterRoutes } from './master.routes';
 import { menuMasterRoutes } from './menuMaster.routes';
 import { mediaRoutes, publicMediaRoutes } from './media.routes';
+import { menuBoardRoutes, publicMenuBoardRoutes } from './menuBoard.routes';
 import { orderRoutes } from './order.routes';
 import { entityRoutes } from './entity.routes';
+import { equipmentRoutes } from './equipment.routes';
+import { maintenanceRoutes } from './maintenance.routes';
 import { posRoutes } from './pos.routes';
+import { kdsRoutes } from './kds.routes';
 import { attachmentRoutes, publicAttachmentRoutes } from './attachment.routes';
 import { notificationRoutes } from './notification.routes';
 import { syncRoutes } from './sync.routes';
@@ -39,6 +43,10 @@ export function buildApiRouter(): Router {
   router.use('/attachments', publicAttachmentRoutes());
   router.use('/media', publicMediaRoutes());
 
+  // The Digital Menu Board: a screen on a wall, opened by URL with nobody signed in. Read-only
+  // and deliberately narrow — see `publicMenuBoardRoutes()` for what it does and does not carry.
+  router.use('/menu-board', publicMenuBoardRoutes());
+
   // Same reasoning as the media bytes: a long background download of the speech model cannot
   // carry a bearer token that may expire mid-transfer, so it authorises by signed URL.
   router.use('/voice-model', publicVoiceModelRoutes());
@@ -55,6 +63,10 @@ export function buildApiRouter(): Router {
   // catalogue, and a counter operator needs one without the other.
   router.use('/entities', entityRoutes());
   router.use('/pos', posRoutes());
+
+  // The kitchen and customer displays: a read/serve projection over the till, sharing its
+  // POS_READ/POS_OPERATE capabilities rather than minting its own.
+  router.use('/kds', kdsRoutes());
 
   router.use('/attachments', attachmentRoutes());
   router.use('/notifications', notificationRoutes());
@@ -75,6 +87,10 @@ export function buildApiRouter(): Router {
   router.use('/', menuMasterRoutes());
   router.use('/media', mediaRoutes());
 
+  // Which menu each wall screen advertises, and how it presents it. Same MASTER_* gate: it is
+  // a menu decision, made by whoever is trusted to edit the menu.
+  router.use('/', menuBoardRoutes());
+
   // Tax & Compliance masters: the synchronized HSN/SAC classification data and the Tax
   // Profile master. Its own TAX_* capabilities, not MASTER_WRITE — syncing the official GST
   // dataset is a narrower, admin-only power than editing menu master data.
@@ -82,6 +98,13 @@ export function buildApiRouter(): Router {
 
   // Volunteer tasks: the mobile "My Tasks" screen and the portal's assignment page.
   router.use('/', taskRoutes());
+
+  // Equipment Monitoring & Maintenance Management. One module served to both clients: the
+  // asset register and floor plans here, the tickets, schedules and supplier master next to
+  // them. Their own EQUIPMENT_*/MAINTENANCE_*/SUPPLIER_* capabilities, which reach further
+  // down the roster than any other module — reporting a fault is an Employee's job.
+  router.use('/', equipmentRoutes());
+  router.use('/', maintenanceRoutes());
 
   // Dashboard, permissions, reports, billing, audit, settings — Admin Portal only.
   router.use('/admin', adminRoutes());

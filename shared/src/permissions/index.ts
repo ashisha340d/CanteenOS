@@ -96,7 +96,11 @@ export const Capability = {
 
   /* ------------------------------- equipment monitoring & maintenance ------- */
 
-  /** See equipment, floor plans and their maintenance state. Everyone. */
+  /**
+   * The monitoring surface: the register, the dashboard, floor plans, timelines and history.
+   * **Manager and above.** A reporter does not hold this and cannot browse the estate; they
+   * reach one machine at a time by scanning its label (see EQUIPMENT_REPORT_PROBLEM).
+   */
   EQUIPMENT_VIEW: 'equipment.view',
   /** Register a new asset (photo -> AI -> confirm). Manager and above. */
   EQUIPMENT_CREATE: 'equipment.create',
@@ -104,19 +108,22 @@ export const Capability = {
   /** Retire is the normal end of life; deletion erases the asset. Admin only. */
   EQUIPMENT_DELETE: 'equipment.delete',
   /**
-   * Raise a problem/fault against an asset. Held by *every* role including Employee: the
-   * person standing in front of the broken oven is the one who must be able to report it,
-   * and withholding this is the single fastest way to make the module useless.
+   * Raise a problem/fault against an asset, and — because you cannot report what you cannot
+   * identify — resolve one machine by its QR code or asset id and read that machine's identity
+   * and open problems. **User and above.** It deliberately grants *nothing* wider: a holder of
+   * this and not EQUIPMENT_VIEW sees the machine in front of them and no other.
    */
   EQUIPMENT_REPORT_PROBLEM: 'equipment.report_problem',
+  /** Attach a warranty card, invoice or service report to an asset. Manager and above. */
   EQUIPMENT_UPLOAD_DOCUMENT: 'equipment.upload_document',
   /** Create/edit floors, areas and locations, and move an asset between them. */
   EQUIPMENT_MANAGE_LOCATION: 'equipment.manage_location',
   /** Upload a floor plan and pin equipment onto it. Admin and Manager. */
   EQUIPMENT_MANAGE_FLOORPLAN: 'equipment.manage_floorplan',
 
+  /** Read a ticket and its status. User and above — a reporter must be able to follow it up. */
   MAINTENANCE_VIEW: 'maintenance.view',
-  /** Open a maintenance/inspection request. Everyone. */
+  /** Open a maintenance/inspection request. User and above. */
   MAINTENANCE_CREATE: 'maintenance.create',
   /** Hand a ticket to a person or a supplier. Manager and above. */
   MAINTENANCE_ASSIGN: 'maintenance.assign',
@@ -135,6 +142,45 @@ export const Capability = {
    * supplier is a floor action, while editing the master is an office one.
    */
   SUPPLIER_CONTACT: 'supplier.contact',
+
+  /* ------------------------------------------ cleaning & hygiene management (§3e) */
+
+  /** See the cleaning schedule, your own tasks and an asset's cleaning history. Everyone. */
+  CLEANING_VIEW: 'cleaning.view',
+  /** Start, perform and complete a cleaning task assigned to you. Everyone. */
+  CLEANING_WORK: 'cleaning.work',
+  /**
+   * Report a spill or a contamination, which raises an immediate cleaning task. Reaches
+   * Employee for the same reason EQUIPMENT_REPORT_PROBLEM does: whoever is standing in the
+   * mess is the person who must be able to say so.
+   */
+  CLEANING_REPORT_INCIDENT: 'cleaning.report_incident',
+  /** Pass or fail a completed clean. Manager and above — never the person who cleaned it. */
+  CLEANING_VERIFY: 'cleaning.verify',
+  /** Reassign a cleaning task, or give an unassigned one an owner. Manager and above. */
+  CLEANING_ASSIGN: 'cleaning.assign',
+  /** Maintain the cleanable asset register and its types. Manager and above. */
+  CLEANING_ASSET_MANAGE: 'cleaning.asset_manage',
+  /** Create and edit cleaning rules, frequencies and triggers. Manager and above. */
+  CLEANING_RULE_MANAGE: 'cleaning.rule_manage',
+  /** Author and publish cleaning procedures, steps and standards. Manager and above. */
+  CLEANING_PROCEDURE_MANAGE: 'cleaning.procedure_manage',
+  /** Maintain the chemical and cleaning tool masters. Manager and above. */
+  CLEANING_CHEMICAL_MANAGE: 'cleaning.chemical_manage',
+  /** Own and close a corrective action raised by a failed check. Manager and above. */
+  CLEANING_CORRECTIVE_ACTION_MANAGE: 'cleaning.corrective_action_manage',
+  /** Maintain skills, shifts and who is responsible for which area. Manager and above. */
+  CLEANING_WORKFORCE_MANAGE: 'cleaning.workforce_manage',
+  /**
+   * Publish an operational event (batch completed, equipment used, shift ended) into the
+   * cleaning engine. Manager and above because it manufactures work for other people; this is
+   * also the capability an external POS/KDS/production integration authenticates as.
+   */
+  CLEANING_EVENT_PUBLISH: 'cleaning.event_publish',
+  /** Read hygiene compliance dashboards and reports. Manager and above. */
+  CLEANING_COMPLIANCE_VIEW: 'cleaning.compliance_view',
+  /** Destroy a cleaning record, which destroys its compliance history. Admin only. */
+  CLEANING_DELETE: 'cleaning.delete',
 
   SYNC_USE: 'sync.use',
 
@@ -174,12 +220,14 @@ const EMPLOYEE_CAPABILITIES: readonly Capability[] = [
   Capability.TAX_READ,
   Capability.TASK_READ,
   Capability.TASK_WORK,
-  // Equipment monitoring starts at the bottom of the roster, not the top: whoever is standing
-  // in front of the equipment must be able to see it and report what is wrong with it.
-  Capability.EQUIPMENT_VIEW,
-  Capability.EQUIPMENT_REPORT_PROBLEM,
-  Capability.MAINTENANCE_VIEW,
-  Capability.MAINTENANCE_CREATE,
+  // No part of the Equipment module: an Employee carries out work that is handed to them, and
+  // reporting a fault opens a ticket somebody then has to be accountable for. Reporting starts
+  // at User.
+  // Cleaning reaches the bottom of the roster too: the person who cleans the mixer is the
+  // person who does this work, and the person standing in a spill must be able to report it.
+  Capability.CLEANING_VIEW,
+  Capability.CLEANING_WORK,
+  Capability.CLEANING_REPORT_INCIDENT,
   Capability.SYNC_USE,
 ];
 
@@ -195,11 +243,13 @@ const USER_CAPABILITIES: readonly Capability[] = [
   // A User raises their own to-dos and may hand work to an Employee, same as a Manager.
   Capability.TASK_SELF,
   Capability.TASK_ASSIGN,
-  // A User attaches the warranty card they were just handed, and rings the supplier — but
-  // does not maintain the supplier master or register assets.
-  Capability.EQUIPMENT_UPLOAD_DOCUMENT,
-  Capability.SUPPLIER_VIEW,
-  Capability.SUPPLIER_CONTACT,
+  // Equipment starts here, and starts narrow: a User scans the machine in front of them,
+  // reports what is wrong with it (with photos and video), and can then follow that ticket's
+  // status. They cannot browse the estate, register or edit an asset, or ring a supplier —
+  // EQUIPMENT_VIEW and the supplier capabilities are Manager's.
+  Capability.EQUIPMENT_REPORT_PROBLEM,
+  Capability.MAINTENANCE_VIEW,
+  Capability.MAINTENANCE_CREATE,
 ];
 
 const MANAGER_CAPABILITIES: readonly Capability[] = [
@@ -213,17 +263,37 @@ const MANAGER_CAPABILITIES: readonly Capability[] = [
   Capability.SHOPPING_LIST_GENERATE,
   Capability.ENTITY_WRITE,
   Capability.POS_VOID,
-  // The Manager runs the floor: registers what arrives, positions it, routes the ticket and
-  // signs the fix off. Everything except erasing an asset or a ticket outright.
+  // The Manager runs the floor: monitors the estate, registers what arrives, positions it,
+  // routes the ticket and signs the fix off. Everything except erasing an asset or a ticket
+  // outright. Monitoring — the register, the dashboard, floor plans and timelines — starts
+  // here rather than lower down: below this a person reports the one machine they are standing
+  // in front of and nothing more.
+  Capability.EQUIPMENT_VIEW,
   Capability.EQUIPMENT_CREATE,
   Capability.EQUIPMENT_EDIT,
+  Capability.EQUIPMENT_UPLOAD_DOCUMENT,
   Capability.EQUIPMENT_MANAGE_LOCATION,
   Capability.EQUIPMENT_MANAGE_FLOORPLAN,
   Capability.MAINTENANCE_ASSIGN,
   Capability.MAINTENANCE_APPROVE,
   Capability.MAINTENANCE_CLOSE,
   Capability.MAINTENANCE_SCHEDULE,
+  Capability.SUPPLIER_VIEW,
+  Capability.SUPPLIER_CONTACT,
   Capability.SUPPLIER_MANAGE,
+  // The Manager owns the hygiene system: what gets cleaned, how, by whom, and whether it
+  // passed. Verification is deliberately above CLEANING_WORK so the person who cleaned it is
+  // never the person who signs it off.
+  Capability.CLEANING_VERIFY,
+  Capability.CLEANING_ASSIGN,
+  Capability.CLEANING_ASSET_MANAGE,
+  Capability.CLEANING_RULE_MANAGE,
+  Capability.CLEANING_PROCEDURE_MANAGE,
+  Capability.CLEANING_CHEMICAL_MANAGE,
+  Capability.CLEANING_CORRECTIVE_ACTION_MANAGE,
+  Capability.CLEANING_WORKFORCE_MANAGE,
+  Capability.CLEANING_EVENT_PUBLISH,
+  Capability.CLEANING_COMPLIANCE_VIEW,
 ];
 
 const ADMIN_CAPABILITIES: readonly Capability[] = [
@@ -264,6 +334,9 @@ const ADMIN_CAPABILITIES: readonly Capability[] = [
   // stop at Admin. Retiring an asset and cancelling a ticket are the Manager-level equivalents.
   Capability.EQUIPMENT_DELETE,
   Capability.MAINTENANCE_DELETE,
+  // Deleting a cleaning record erases the evidence that the clean happened, so it stops at
+  // Admin. Cancelling a task and deactivating a rule are the Manager-level equivalents.
+  Capability.CLEANING_DELETE,
 ];
 
 /**
@@ -355,6 +428,25 @@ export const BOARD_ROLE_CAPABILITIES: Readonly<Record<BoardRole, readonly Capabi
  * its middleware check are kept so a capability can be walled off again by adding it here.
  */
 export const ANDROID_FORBIDDEN_CAPABILITIES: readonly Capability[] = [];
+
+/**
+ * Everything a kiosk session may do — an allowlist, not a denylist.
+ *
+ * The polarity is deliberate and is the opposite of the Android rule above. A phone is held
+ * by an identified member of staff; a kiosk is an unattended tablet in a public hall, and the
+ * token on it must be assumed readable by anyone who picks the device up. So the session is
+ * default-deny: reading the published menu, and raising and settling its own counter sale.
+ * Nothing else — no boards, no orders, no masters, no entities, no voids, no refunds.
+ *
+ * Adding a capability here widens what a stolen kiosk token can do. Nothing may be added
+ * because a screen would be convenient.
+ */
+export const KIOSK_ALLOWED_CAPABILITIES: readonly Capability[] = [
+  Capability.MASTER_READ,
+  Capability.POS_READ,
+  Capability.POS_OPERATE,
+  Capability.POS_CHECKOUT,
+];
 
 export function roleHasCapability(role: UserRole, capability: Capability): boolean {
   return ROLE_CAPABILITIES[role].includes(capability);

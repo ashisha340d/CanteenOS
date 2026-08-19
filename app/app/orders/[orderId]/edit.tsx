@@ -22,7 +22,7 @@ import { PickerSheet } from '../../../src/components/PickerSheet';
 import { Card } from '../../../src/components/Card';
 import { EmptyState } from '../../../src/components/EmptyState';
 import { OrderItemsEditor, type DraftLine } from '../../../src/components/order/OrderItemsEditor';
-import { DateTimeFields } from '../../../src/components/order/DateTimeFields';
+import { DateTimeFields, isValidRequiredDateTime } from '../../../src/components/order/DateTimeFields';
 import { menuItemName, menuItemUnit } from '../../../src/i18n';
 import { colors, spacing, typography, fonts } from '../../../src/theme/tokens';
 
@@ -53,6 +53,8 @@ export default function EditOrderScreen(): React.JSX.Element {
   const [requiredTime, setRequiredTime] = useState('');
   const [priority, setPriority] = useState<OrderPriority>('NORMAL');
   const [lines, setLines] = useState<DraftLine[]>([]);
+  /** Cancelled lines, kept out of the editor but carried back into the save. */
+  const [cancelledItems, setCancelledItems] = useState<OrderItemDto[]>([]);
   const [showPrioritySheet, setShowPrioritySheet] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,27 +77,35 @@ export default function EditOrderScreen(): React.JSX.Element {
     setMenuItems(allMenuItems);
     setCategories(allCategories);
 
+    // A cancelled line is history, not something to re-edit: it belongs struck through on the
+    // feed card, not as a live row in the editor. It is held aside rather than dropped —
+    // `updateLocal` replaces the item set wholesale, so a line missing from the save is a line
+    // deleted, and the order would lose the record of what was cancelled.
+    setCancelledItems(items.filter((item) => item.cancelledAt !== null));
+
     // Keyed by the existing line id so a resave keeps each row's identity — the server
     // updates a surviving line in place rather than tombstoning and recreating it.
     const byId = new Map(allMenuItems.map((mi) => [mi.id, mi]));
     setLines(
-      items.map((item: OrderItemDto): DraftLine => {
-        const master = item.menuItemId === null ? undefined : byId.get(item.menuItemId);
-        return {
-          key: item.id,
-          menuItemId: item.menuItemId,
-          customItemName: item.customItemName,
-          name:
-            item.customItemName ??
-            menuItemName(master, language) ??
-            item.menuItemName ??
-            'Item',
-          unit: item.unit || menuItemUnit(master, language) || 'NOS',
-          quantity: item.quantity,
-          notes: item.notes ?? '',
-          mentionedUserIds: item.mentionedUserIds,
-        };
-      }),
+      items
+        .filter((item: OrderItemDto) => item.cancelledAt === null)
+        .map((item: OrderItemDto): DraftLine => {
+          const master = item.menuItemId === null ? undefined : byId.get(item.menuItemId);
+          return {
+            key: item.id,
+            menuItemId: item.menuItemId,
+            customItemName: item.customItemName,
+            name:
+              item.customItemName ??
+              menuItemName(master, language) ??
+              item.menuItemName ??
+              'Item',
+            unit: item.unit || menuItemUnit(master, language) || 'NOS',
+            quantity: item.quantity,
+            notes: item.notes ?? '',
+            mentionedUserIds: item.mentionedUserIds,
+          };
+        }),
     );
   }, [orderId, language]);
 
@@ -117,8 +127,23 @@ export default function EditOrderScreen(): React.JSX.Element {
       setError('Venue is required.');
       return;
     }
+    // Same rules the composer enforces — an edit must not be able to produce an order the
+    // create flow would have refused.
+    const paxCount = Number(pax);
+    if (pax.trim() === '' || !Number.isFinite(paxCount) || paxCount <= 0 || !Number.isInteger(paxCount)) {
+      setError('Pax must be a whole number above zero.');
+      return;
+    }
+    if (!isValidRequiredDateTime(requiredDate, requiredTime)) {
+      setError('Pick a date and time in the future.');
+      return;
+    }
     if (lines.length === 0) {
       setError('At least one item is required.');
+      return;
+    }
+    if (lines.some((line) => !(line.quantity > 0))) {
+      setError('Every item needs a quantity above zero.');
       return;
     }
     setSubmitting(true);
@@ -131,18 +156,35 @@ export default function EditOrderScreen(): React.JSX.Element {
         requiredTime,
         priority,
         expectedRevision: order.revision,
-        items: lines.map((line, index) => ({
-          id: line.key,
-          menuItemId: line.menuItemId,
-          customItemName: line.customItemName,
-          quantity: line.quantity,
-          unit: line.unit,
-          notes: line.notes.trim() || null,
-          mentionedUserIds: line.mentionedUserIds,
-          sortOrder: index,
-        })),
+        items: [
+          ...lines.map((line, index) => ({
+            id: line.key,
+            menuItemId: line.menuItemId,
+            customItemName: line.customItemName,
+            quantity: line.quantity,
+            unit: line.unit,
+            notes: line.notes.trim() || null,
+            mentionedUserIds: line.mentionedUserIds,
+            sortOrder: index,
+          })),
+          // Re-appended untouched; `updateLocal` reads their cancellation back off the
+          // existing rows, so they land struck through exactly as they were.
+          ...cancelledItems.map((item, index) => ({
+            id: item.id,
+            menuItemId: item.menuItemId,
+            customItemName: item.customItemName,
+            quantity: item.quantity,
+            unit: item.unit,
+            notes: item.notes,
+            mentionedUserIds: item.mentionedUserIds,
+            sortOrder: lines.length + index,
+          })),
+        ],
       });
-      router.replace({ pathname: '/orders/[orderId]', params: { orderId: order.id } });
+      // Back to the conversation the order lives in, not to its detail sheet. The board feed
+      // is where the edit is actually visible — the card redraws with the new figures and the
+      // system line recording the change appears in its history.
+      router.replace({ pathname: '/boards/[boardId]', params: { boardId: order.boardId } });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save changes.');
     } finally {

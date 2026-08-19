@@ -1,3 +1,4 @@
+import type { RowDataPacket } from 'mysql2';
 import type {
   AvailabilityStatus,
   MasterStatus,
@@ -12,7 +13,6 @@ import type {
   CounterRouteRow,
   CounterRow,
   CountRow,
-  ItemGroupAssignmentRow,
   ItemGroupRow,
   MediaAssetRow,
   MediaAssignmentRow,
@@ -44,6 +44,11 @@ export interface ListFilter {
   search?: string;
   status?: MasterStatus;
   includeDeleted?: boolean;
+  /**
+   * Only meaningful for tables that carry `catalogue_id` (item_groups). A string narrows to one
+   * Menu Catalogue; `null` asks for the rows filed under no catalogue at all.
+   */
+  catalogueId?: string | null;
   limit: number;
   offset: number;
 }
@@ -97,6 +102,14 @@ function buildWhere(
   if (filter.search) {
     conditions.push(`${searchColumn} LIKE ?`);
     params.push(`%${filter.search}%`);
+  }
+  if (filter.catalogueId !== undefined) {
+    if (filter.catalogueId === null) {
+      conditions.push('catalogue_id IS NULL');
+    } else {
+      conditions.push('catalogue_id = ?');
+      params.push(filter.catalogueId);
+    }
   }
 
   return {
@@ -322,6 +335,20 @@ export class MenuCategoryAssignmentRepository {
     );
   }
 
+  /**
+   * Every live assignment for one category, across menus. Used when a category's `catalogue_id`
+   * changes: the rows naming any other menu are now stale and have to be pruned.
+   */
+  async listForCategory(db: Db, categoryId: string) {
+    return selectRows<MenuCategoryAssignmentRow>(
+      db,
+      `SELECT ${MCA_COLUMNS} FROM menu_category_assignments mca
+         JOIN menu_categories mc ON mc.id = mca.category_id
+        WHERE mca.category_id = ? AND mca.deleted_at IS NULL`,
+      [categoryId],
+    );
+  }
+
   async findByMenuAndCategory(db: Db, menuId: string, categoryId: string) {
     return selectOne<MenuCategoryAssignmentRow>(
       db,
@@ -477,6 +504,20 @@ export class MenuItemAssignmentRepository {
          JOIN menu_items mi ON mi.id = mia.food_item_id
         WHERE mia.id = ? AND mia.deleted_at IS NULL`,
       [id],
+    );
+  }
+
+  /**
+   * Every menu that offers this dish. A counter running out is a fact about the food, so the
+   * caller that hides it has to reach each menu's own assignment row, not just one.
+   */
+  async listForFoodItem(db: Db, foodItemId: string) {
+    return selectRows<MenuItemAssignmentRow>(
+      db,
+      `SELECT ${MIA_COLUMNS} FROM menu_item_assignments mia
+         JOIN menu_items mi ON mi.id = mia.food_item_id
+        WHERE mia.food_item_id = ? AND mia.status = 'ACTIVE' AND mia.deleted_at IS NULL`,
+      [foodItemId],
     );
   }
 
@@ -701,6 +742,29 @@ export class MenuItemAssignmentRepository {
     );
     return row === null ? 0 : Number(row.total);
   }
+
+  /**
+   * Un-86's a batch of assignments: `UNAVAILABLE` and `SOLD_OUT` both fold back to `AVAILABLE`,
+   * everything else is left alone. Used by `MenuShiftSchedulerService` at the start of each
+   * shift — a menu should not open a new shift still hiding what ran out on the last one.
+   *
+   * Not `sync_seq`-bumped: `menu_item_assignments` is outside `SYNC_ENTITIES` (Menu Master is
+   * not yet part of Android's offline delta-sync set), so there is no cursor for this write to
+   * satisfy.
+   */
+  async resetAvailability(db: Db, assignmentIds: string[]): Promise<number> {
+    if (assignmentIds.length === 0) return 0;
+    const placeholders = assignmentIds.map(() => '?').join(', ');
+    const result = await mutate(
+      db,
+      `UPDATE menu_item_assignments
+          SET availability = 'AVAILABLE', updated_at = ?, revision = revision + 1
+        WHERE id IN (${placeholders}) AND availability IN ('UNAVAILABLE', 'SOLD_OUT')
+          AND deleted_at IS NULL`,
+      [toDbDateTime(), ...assignmentIds],
+    );
+    return result.affectedRows;
+  }
 }
 
 /* ---------------------------------------------------------------- menu item variants */
@@ -881,6 +945,26 @@ export class MenuItemVariantRepository {
       [variantId],
     );
     return row === null ? 0 : Number(row.total);
+  }
+
+  /**
+   * The variant-level half of {@link MenuItemAssignmentRepository.resetAvailability}. A variant
+   * belongs to a food item, not to any one menu (013 made them global across every menu that
+   * offers the dish), so this is scoped by `food_item_id` rather than by menu — a caller passes
+   * the food items relevant to whichever menu it is resetting.
+   */
+  async resetAvailability(db: Db, foodItemIds: string[]): Promise<number> {
+    if (foodItemIds.length === 0) return 0;
+    const placeholders = foodItemIds.map(() => '?').join(', ');
+    const result = await mutate(
+      db,
+      `UPDATE menu_item_variants
+          SET availability = 'AVAILABLE', updated_at = ?, revision = revision + 1
+        WHERE food_item_id IN (${placeholders}) AND availability IN ('UNAVAILABLE', 'SOLD_OUT')
+          AND deleted_at IS NULL`,
+      [toDbDateTime(), ...foodItemIds],
+    );
+    return result.affectedRows;
   }
 }
 
@@ -1628,8 +1712,11 @@ export class MenuScheduleRepository {
 
 /* ---------------------------------------------------------------------- item groups */
 
+// Correlated subquery rather than a JOIN for the same reason as CATEGORY_COLUMNS: buildWhere
+// emits unqualified `name` / `status` / `deleted_at`, which joining `menus` would make ambiguous.
 const ITEM_GROUP_COLUMNS = `
-  id, name, code, description, status, sort_order, created_by,
+  id, catalogue_id, name, code, description, status, sort_order, created_by,
+  (SELECT m.name FROM menus m WHERE m.id = item_groups.catalogue_id) AS catalogue_name,
   created_at, updated_at, deleted_at, revision, sync_seq`;
 
 export class ItemGroupRepository {
@@ -1656,6 +1743,7 @@ export class ItemGroupRepository {
     db: Db,
     input: {
       id: string;
+      catalogueId: string | null;
       name: string;
       code: string | null;
       description: string | null;
@@ -1668,11 +1756,12 @@ export class ItemGroupRepository {
     const now = toDbDateTime();
     await mutate(
       db,
-      `INSERT INTO item_groups (id, name, code, description, status, sort_order, created_by,
-         created_at, updated_at, revision, sync_seq)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
+      `INSERT INTO item_groups (id, catalogue_id, name, code, description, status, sort_order,
+         created_by, created_at, updated_at, revision, sync_seq)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
       [
         input.id,
+        input.catalogueId,
         input.name,
         input.code,
         input.description,
@@ -1693,6 +1782,7 @@ export class ItemGroupRepository {
     db: Db,
     id: string,
     input: Partial<{
+      catalogueId: string | null;
       name: string;
       code: string | null;
       description: string | null;
@@ -1702,6 +1792,10 @@ export class ItemGroupRepository {
   ): Promise<ItemGroupRow | null> {
     const assignments: string[] = [];
     const params: unknown[] = [];
+    if (input.catalogueId !== undefined) {
+      assignments.push('catalogue_id = ?');
+      params.push(input.catalogueId);
+    }
     if (input.name !== undefined) {
       assignments.push('name = ?');
       params.push(input.name);
@@ -1730,69 +1824,13 @@ export class ItemGroupRepository {
     return softDelete(db, 'item_groups', id);
   }
 
-  async countAssignmentReferences(db: Db, groupId: string): Promise<number> {
+  async countItemReferences(db: Db, groupId: string): Promise<number> {
     const row = await selectOne<CountRow>(
       db,
-      'SELECT COUNT(*) AS total FROM item_group_assignments WHERE group_id = ? AND deleted_at IS NULL',
+      'SELECT COUNT(*) AS total FROM menu_items WHERE group_id = ? AND deleted_at IS NULL',
       [groupId],
     );
     return row === null ? 0 : Number(row.total);
-  }
-}
-
-const ITEM_GROUP_ASSIGNMENT_COLUMNS = `
-  iga.id, iga.food_item_id, iga.group_id, iga.status, iga.created_by,
-  iga.created_at, iga.updated_at, iga.deleted_at, iga.revision, iga.sync_seq,
-  ig.name AS group_name`;
-
-export class ItemGroupAssignmentRepository {
-  async findById(db: Db, id: string) {
-    return selectOne<ItemGroupAssignmentRow>(
-      db,
-      `SELECT ${ITEM_GROUP_ASSIGNMENT_COLUMNS} FROM item_group_assignments iga
-         JOIN item_groups ig ON ig.id = iga.group_id
-        WHERE iga.id = ? AND iga.deleted_at IS NULL`,
-      [id],
-    );
-  }
-
-  async listForFoodItem(db: Db, foodItemId: string) {
-    return selectRows<ItemGroupAssignmentRow>(
-      db,
-      `SELECT ${ITEM_GROUP_ASSIGNMENT_COLUMNS} FROM item_group_assignments iga
-         JOIN item_groups ig ON ig.id = iga.group_id
-        WHERE iga.food_item_id = ? AND iga.status = 'ACTIVE' AND iga.deleted_at IS NULL
-        ORDER BY ig.name ASC`,
-      [foodItemId],
-    );
-  }
-
-  async insert(
-    db: Db,
-    input: {
-      id: string;
-      foodItemId: string;
-      groupId: string;
-      status: MasterStatus;
-      createdBy: string | null;
-    },
-  ): Promise<ItemGroupAssignmentRow> {
-    const syncSeq = await allocateSyncSeq(db);
-    const now = toDbDateTime();
-    await mutate(
-      db,
-      `INSERT INTO item_group_assignments (id, food_item_id, group_id, status, created_by,
-         created_at, updated_at, revision, sync_seq)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)`,
-      [input.id, input.foodItemId, input.groupId, input.status, input.createdBy, now, now, syncSeq],
-    );
-    const row = await this.findById(db, input.id);
-    if (row === null) throw new Error('Inserted item group assignment could not be read back');
-    return row;
-  }
-
-  async softDelete(db: Db, id: string): Promise<boolean> {
-    return softDelete(db, 'item_group_assignments', id);
   }
 }
 
@@ -1811,6 +1849,77 @@ export class MenuItemScheduleRepository {
         ORDER BY day_of_week ASC, shift ASC`,
       [foodItemId],
     );
+  }
+
+  /**
+   * Which of these food items are offered in a given shift on a given weekday.
+   *
+   * One query for a whole menu rather than one per dish: the Digital Menu Board resolves this
+   * for every item on the wall on every poll, and a per-item round trip would make the morning
+   * menu the most expensive thing the board does.
+   *
+   * The schedule table alone decides this, and `menu_items.always_available` is deliberately
+   * *not* folded in. It reads as though it should be — an always-available dish is sold at
+   * every hour, breakfast included — but it defaults to 1 on every row (014), so honouring it
+   * here would put every dish in every shift and leave the caller unable to distinguish a
+   * breakfast menu from the whole menu. A flag that is true of everything cannot narrow
+   * anything; the schedule is the only thing an operator actually sets per shift.
+   *
+   * Absence therefore means "not scheduled for that shift". A caller that needs to tell "not
+   * offered then" from "nobody has configured shifts at all" must compare against the total.
+   */
+  async findFoodItemsInShift(
+    db: Db,
+    foodItemIds: string[],
+    dayOfWeek: number,
+    shift: 'MORNING' | 'EVENING',
+  ): Promise<Set<string>> {
+    if (foodItemIds.length === 0) return new Set();
+    const placeholders = foodItemIds.map(() => '?').join(', ');
+    const rows = await selectRows<{ food_item_id: string } & RowDataPacket>(
+      db,
+      `SELECT DISTINCT s.food_item_id
+         FROM menu_item_schedules s
+        WHERE s.food_item_id IN (${placeholders}) AND s.day_of_week = ? AND s.shift = ?
+          AND s.is_available = 1 AND s.deleted_at IS NULL`,
+      [...foodItemIds, dayOfWeek, shift],
+    );
+    return new Set(rows.map((row) => row.food_item_id));
+  }
+
+  /**
+   * Which of these food items belong on the morning menu for the shift-change auto-reset
+   * (`MenuShiftSchedulerService`) — a different question from {@link findFoodItemsInShift}, and
+   * deliberately a separate query rather than a shared one.
+   *
+   * The board's display filter excludes `always_available` on purpose: it defaults to 1 on
+   * every row, so folding it in there would make "morning menu" mean "the whole menu" and
+   * defeat the filter entirely. A reset has the opposite problem — an always-available dish
+   * that got 86'd yesterday evening must not stay hidden until the *evening* reset just because
+   * nobody wrote it a MORNING schedule row; it is available every hour by definition, morning
+   * included. So here `always_available` counts, and this method exists to keep that asymmetry
+   * from leaking into the board's own, already-correct, filter.
+   */
+  async findFoodItemsForMorningReset(
+    db: Db,
+    foodItemIds: string[],
+    dayOfWeek: number,
+  ): Promise<Set<string>> {
+    if (foodItemIds.length === 0) return new Set();
+    const placeholders = foodItemIds.map(() => '?').join(', ');
+    const rows = await selectRows<{ food_item_id: string } & RowDataPacket>(
+      db,
+      `SELECT DISTINCT s.food_item_id
+         FROM menu_item_schedules s
+        WHERE s.food_item_id IN (${placeholders}) AND s.day_of_week = ? AND s.shift = 'MORNING'
+          AND s.is_available = 1 AND s.deleted_at IS NULL
+        UNION
+       SELECT i.id AS food_item_id
+         FROM menu_items i
+        WHERE i.id IN (${placeholders}) AND i.always_available = 1 AND i.deleted_at IS NULL`,
+      [...foodItemIds, dayOfWeek, ...foodItemIds],
+    );
+    return new Set(rows.map((row) => row.food_item_id));
   }
 
   async replaceForFoodItem(
@@ -1936,7 +2045,6 @@ export const modifierRepository = new ModifierRepository();
 export const modifierAssignmentRepository = new ModifierAssignmentRepository();
 export const menuScheduleRepository = new MenuScheduleRepository();
 export const itemGroupRepository = new ItemGroupRepository();
-export const itemGroupAssignmentRepository = new ItemGroupAssignmentRepository();
 export const menuItemScheduleRepository = new MenuItemScheduleRepository();
 export const menuItemVariantCatalogPriceRepository = new MenuItemVariantCatalogPriceRepository();
 

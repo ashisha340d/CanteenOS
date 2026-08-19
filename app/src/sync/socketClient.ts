@@ -1,13 +1,16 @@
 import { io, type Socket } from 'socket.io-client';
 import { SOCKET_EVENTS } from '@menuboard/shared';
-import { API_BASE_URL, performRefresh } from '../api/client';
+import { getApiBaseUrl, performRefresh } from '../api/client';
 import { secureTokenStore } from '../utils/secureTokenStore';
 import { useSyncStatusStore } from '../state/syncStatusStore';
 import { useTypingStore } from '../state/typingStore';
 
-// Derived from the same platform-resolved API_BASE_URL the REST client uses, so the socket
-// host follows apiBaseUrlWeb on web instead of always falling back to the Android emulator alias.
-const SOCKET_URL: string = API_BASE_URL.replace('/api/v1', '');
+// Read at connect time, not at module load: `discoverApiBaseUrl` may have moved the REST
+// client onto a different host by then, and a socket left on the old one would silently
+// never deliver a hint.
+function socketUrl(): string {
+  return getApiBaseUrl().replace('/api/v1', '');
+}
 
 let socket: Socket | null = null;
 let onPullRequest: (() => void) | null = null;
@@ -22,7 +25,7 @@ export function connectSocket(): void {
   const token = secureTokenStore.getAccessToken();
   if (!token) return;
 
-  socket = io(SOCKET_URL, {
+  socket = io(socketUrl(), {
     auth: { token },
     transports: ['websocket'],
     reconnection: true,

@@ -1,8 +1,20 @@
-// Kills any process currently listening on the dev ports (backend 4000, admin 5173)
-// so `npm run dev` can be re-run without manually stopping the previous instance.
+// Kills any process currently listening on a dev port so `npm run dev` can be re-run without
+// manually stopping the previous instance.
+//
+// Every port `npm run dev` binds must be listed here. The kiosk's 5180 was missing for a while
+// and the symptom was not obvious: Vite is configured `strictPort`, so instead of quietly
+// moving to 5181 it dies with EADDRINUSE, and the only way out was finding the stale pid by
+// hand. A port this script does not know about is a port that strands the next `npm run dev`.
+//
+// Ports may be named as arguments (`node scripts/free-ports.js 5180`) so that starting one
+// server on its own does not kill the other two — running the kiosk alone while the backend is
+// mid-request should not take the backend down with it.
 const { execSync } = require('node:child_process');
 
-const PORTS = [4000, 5173];
+const ALL_PORTS = [4000, 5173, 5180, 5185];
+
+const requested = process.argv.slice(2).map(Number).filter((port) => Number.isInteger(port) && port > 0);
+const PORTS = requested.length > 0 ? requested : ALL_PORTS;
 // Windows holds a listening socket for a moment after the owner dies, so a kill that "worked"
 // can still be followed by EADDRINUSE. Poll until the port is genuinely unowned.
 const RELEASE_TIMEOUT_MS = 5000;

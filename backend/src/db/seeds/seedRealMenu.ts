@@ -204,6 +204,7 @@ export async function seedRealMenu(db: Db, superAdminId: string): Promise<void> 
     if (categoryId === null) {
       const category = await menuCategoryRepository.insert(db, {
         id: newId(),
+        catalogueId: menu.id,
         name: group.category,
         nameHi: group.categoryHi,
         description: null,

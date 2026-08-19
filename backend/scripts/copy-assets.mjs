@@ -1,4 +1,4 @@
-import { cp, mkdir } from 'node:fs/promises';
+import { cp, mkdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -21,6 +21,9 @@ const ASSET_DIRECTORIES = [
 for (const [from, to] of ASSET_DIRECTORIES) {
   const source = path.join(packageRoot, from);
   const destination = path.join(packageRoot, to);
+  // Remove stale files first: `cp` merges rather than mirrors, so a renamed/deleted source
+  // file (e.g. a renumbered migration) would otherwise linger in dist forever.
+  await rm(destination, { recursive: true, force: true });
   await mkdir(destination, { recursive: true });
   await cp(source, destination, { recursive: true });
   process.stdout.write(`copied ${from} -> ${to}\n`);

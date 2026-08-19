@@ -18,6 +18,7 @@ import { userRepository } from '../repositories/UserRepository';
 import {
   AccountInactiveError,
   AdminRoleRequiredError,
+  ClientNotPermittedError,
   InvalidCredentialsError,
   NotFoundError,
   UnauthenticatedError,
@@ -83,6 +84,17 @@ export class AuthService {
     // User or Employee. Checked before a session is ever issued for this client type.
     if (clientType === ClientType.ADMIN && user.role !== UserRole.ADMIN) {
       throw new AdminRoleRequiredError();
+    }
+
+    // The mirror image for the kiosk: an unattended tablet in a public hall may never hold a
+    // privileged identity. KIOSK_ALLOWED_CAPABILITIES would strip the extra capabilities off
+    // the token anyway, but the account itself is refused so a stolen kiosk refresh token
+    // cannot be replayed from a browser as an administrator.
+    if (
+      clientType === ClientType.KIOSK &&
+      (user.role === UserRole.ADMIN || user.role === UserRole.SUPER_ADMIN)
+    ) {
+      throw new ClientNotPermittedError('An administrative account cannot be used on a kiosk');
     }
   }
 
@@ -199,6 +211,15 @@ export class AuthService {
       if (row.client_type === ClientType.ADMIN && user.role !== UserRole.ADMIN) {
         await refreshTokenRepository.revokeDeviceChain(connection, user.id, row.device_id);
         throw new AdminRoleRequiredError();
+      }
+      // Same reasoning for the kiosk: promoting the kiosk's account to Admin must sever the
+      // session on the tablet at the next refresh rather than leave a privileged token in a hall.
+      if (
+        row.client_type === ClientType.KIOSK &&
+        (user.role === UserRole.ADMIN || user.role === UserRole.SUPER_ADMIN)
+      ) {
+        await refreshTokenRepository.revokeDeviceChain(connection, user.id, row.device_id);
+        throw new ClientNotPermittedError('An administrative account cannot be used on a kiosk');
       }
 
       const nextTokenId = newId();

@@ -18,7 +18,6 @@ import {
   Settings2Icon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -31,7 +30,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { EmptyState } from '../ui/EmptyState';
 import { TableSkeleton } from '../ui/Skeletons';
-import { useDeviceProfile } from '@/hooks/useDeviceProfile';
 import { cn } from '@/lib/utils';
 import { useGridState } from './gridState';
 // AG Grid ships its layout and theme as plain CSS, not CSS-in-JS — without these the grid has
@@ -75,8 +73,6 @@ export interface DataTableProps<T> {
   emptyAction?: { label: string; onClick: () => void };
   /** True when a search or filter is responsible for the empty result. */
   filtered?: boolean;
-  /** Overrides the generated mobile card. */
-  renderMobileCard?: (row: T) => ReactNode;
 }
 
 const DEFAULT_WIDTH = 160;
@@ -136,9 +132,7 @@ export function DataTable<T>({
   emptyMessage,
   emptyAction,
   filtered = false,
-  renderMobileCard,
 }: DataTableProps<T>): JSX.Element {
-  const { isMobile } = useDeviceProfile();
   const fields = useMemo(() => columns.map((column) => column.field), [columns]);
   const { state: persisted, update, reset } = useGridState(gridId, fields);
   const gridApiRef = useRef<GridReadyEvent['api'] | null>(null);
@@ -339,26 +333,6 @@ export function DataTable<T>({
     );
   }
 
-  /* ------------------------------------------------------------------ mobile cards */
-
-  if (isMobile) {
-    return (
-      <MobileRows
-        columns={columns}
-        rows={rows}
-        getRowId={getRowId}
-        onRowActivate={onRowDoubleClick}
-        selectable={selectable}
-        selectedIds={selectedIds}
-        onSelectedChange={onSelectedChange}
-        bulkActions={bulkActions}
-        renderMobileCard={renderMobileCard}
-      />
-    );
-  }
-
-  /* ---------------------------------------------------------------- desktop grid */
-
   const hideableColumns = columns.filter((column) => column.alwaysVisible !== true);
 
   return (
@@ -468,125 +442,4 @@ export function DataTable<T>({
   );
 }
 
-/* ------------------------------------------------------------------------ mobile view */
 
-interface MobileRowsProps<T> {
-  columns: DataTableColumn<T>[];
-  rows: T[];
-  getRowId: (row: T) => string;
-  onRowActivate?: (row: T) => void;
-  selectable?: boolean;
-  selectedIds: string[];
-  onSelectedChange?: (ids: string[]) => void;
-  bulkActions?: (selectedIds: string[]) => ReactNode;
-  renderMobileCard?: (row: T) => ReactNode;
-}
-
-/**
- * The same rows as list cards. The first column becomes the card's title and the rest become
- * label/value pairs, so a page gets a usable mobile view without having to hand-write one —
- * but `renderMobileCard` is there for the pages that deserve better than the generic shape.
- */
-function MobileRows<T>({
-  columns,
-  rows,
-  getRowId,
-  onRowActivate,
-  selectable,
-  selectedIds,
-  onSelectedChange,
-  bulkActions,
-  renderMobileCard,
-}: MobileRowsProps<T>): JSX.Element {
-  const [primary, ...rest] = columns;
-  const detailColumns = rest.filter((column) => column.field !== 'actions');
-  const actionsColumn = columns.find((column) => column.field === 'actions');
-
-  return (
-    <div className="flex flex-col gap-2">
-      {selectable && selectedIds.length > 0 && (
-        <div className="bg-card sticky top-0 z-10 flex items-center gap-2 rounded-lg border p-2">
-          <span className="text-sm tabular-nums">{selectedIds.length} selected</span>
-          <div className="ml-auto flex items-center gap-1.5">
-            {bulkActions?.(selectedIds)}
-            <Button variant="ghost" size="sm" onClick={() => onSelectedChange?.([])}>
-              Clear
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {rows.map((row) => {
-        const id = getRowId(row);
-        const isSelected = selectedIds.includes(id);
-
-        if (renderMobileCard) {
-          return (
-            <div
-              key={id}
-              onClick={() => onRowActivate?.(row)}
-              className={cn(
-                'bg-card rounded-xl border p-3',
-                onRowActivate && 'active:bg-accent cursor-pointer',
-              )}
-            >
-              {renderMobileCard(row)}
-            </div>
-          );
-        }
-
-        return (
-          <div
-            key={id}
-            className={cn(
-              'bg-card rounded-xl border p-3',
-              isSelected && 'border-primary bg-sidebar-accent',
-            )}
-          >
-            <div className="flex items-start gap-3">
-              {selectable && (
-                <Checkbox
-                  checked={isSelected}
-                  onCheckedChange={(checked) =>
-                    onSelectedChange?.(
-                      checked === true
-                        ? [...selectedIds, id]
-                        : selectedIds.filter((entry) => entry !== id),
-                    )
-                  }
-                  aria-label="Select row"
-                  className="mt-1"
-                />
-              )}
-              <button
-                type="button"
-                onClick={() => onRowActivate?.(row)}
-                disabled={!onRowActivate}
-                className="focus-ring min-w-0 flex-1 rounded-md text-left disabled:cursor-default"
-              >
-                {primary && (
-                  <p className="truncate font-semibold">{cellContent(primary, row)}</p>
-                )}
-                <dl className="mt-2 grid grid-cols-[minmax(5rem,auto)_1fr] gap-x-3 gap-y-1">
-                  {detailColumns.map((column) => (
-                    <div key={column.field} className="contents">
-                      <dt className="text-muted-foreground truncate text-xs">
-                        {column.headerName}
-                      </dt>
-                      <dd className="min-w-0 truncate text-sm">{cellContent(column, row)}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </button>
-            </div>
-            {actionsColumn && (
-              <div className="mt-2 flex justify-end gap-1 border-t pt-2">
-                {cellContent(actionsColumn, row)}
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}

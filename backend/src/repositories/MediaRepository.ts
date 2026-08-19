@@ -216,6 +216,28 @@ export class MediaAssignmentRepository {
     return new Map(rows.map((row) => [row.entity_id, row.asset_id]));
   }
 
+  /**
+   * Whether this asset is menu photography — i.e. currently assigned to something in the menu
+   * hierarchy rather than to a recipe, a counter or a piece of equipment.
+   *
+   * This is what makes the Digital Menu Board's unsigned image route safe to leave open. That
+   * route has no session to authorise against, so the only question it can ask is whether the
+   * requested asset is the kind of thing a menu board is entitled to show. An id alone is not
+   * enough: media asset ids are shared across the whole library, and without this check a
+   * public route would serve any file in it to anyone who could guess a UUID.
+   */
+  async isAssignedToMenuEntity(db: Db, mediaId: string): Promise<boolean> {
+    const row = await selectOne<CountRow>(
+      db,
+      `SELECT COUNT(*) AS total FROM media_assignments
+        WHERE media_id = ? AND deleted_at IS NULL AND status = 'ACTIVE'
+          AND entity_type IN ('MENU', 'MENU_CATEGORY_ASSIGNMENT', 'MENU_ITEM_ASSIGNMENT',
+                              'MENU_ITEM_VARIANT', 'MENU_ITEM')`,
+      [mediaId],
+    );
+    return row !== null && Number(row.total) > 0;
+  }
+
   async insert(
     db: Db,
     input: {

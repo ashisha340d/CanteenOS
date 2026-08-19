@@ -1,6 +1,6 @@
 # Database Design
 
-- **MariaDB is the master.** Schema: [`backend/src/db/migrations/001_core_schema.sql`](../backend/src/db/migrations/001_core_schema.sql).
+- **MariaDB is the master.** Schema: [`backend/src/db/migrations/001_schema.sql`](../backend/src/db/migrations/001_schema.sql).
 - **SQLite is the Android render source.** Schema: [`sqlite-schema.sql`](./sqlite-schema.sql).
 
 Both files carry the per-table rationale inline. This page records only the cross-cutting
@@ -115,6 +115,20 @@ Forward-only `.sql` files in `backend/src/db/migrations`, applied in filename or
 `schema_migrations` with a SHA-256 checksum; a changed checksum aborts the run rather than
 silently diverging.
 
+The pre-deployment `001`..`039` series was squashed into a single `001_schema.sql` — the
+tables plus the reference rows those files seeded, generated from a database built by applying
+them in order. `backend/scripts/squash-migrations.ts` is what produced it and re-proves the
+result; `backend/scripts/stamp-baseline.ts` repoints an already-migrated database at the
+baseline. Nothing is squashed again once there is production data: from `002` on, every
+schema change is a new file.
+
+**When a role, status or type gains a member, widen every enum that lists it.** 003 added
+`EMPLOYEE` to `users.role` but left the copy in `audit_logs.actor_role`; under
+`STRICT_TRANS_TABLES` the out-of-range value aborted the audit INSERT, and because that row is
+written on the caller's connection it took the whole transaction with it — an EMPLOYEE could
+not start a task or even log in, since `auth.login` is audited too.
+`030_audit_actor_role_employee.sql` closes it.
+
 ## Menu Master (012_menu_master.sql)
 
 See [MENUBOARD_SPEC.md §3a](./MENUBOARD_SPEC.md#3a-menu-master-extension) for the product
@@ -173,3 +187,115 @@ Three things differ from the rest of the schema, deliberately:
 Money is `DECIMAL(14,2)` throughout and rates are `DECIMAL(6,3)`, matching `tax_profiles`.
 Every amount on `pos_order_items` is a frozen snapshot written by `PosService`; the client
 never supplies one for a catalogue line.
+
+## Equipment & Maintenance (025_equipment_maintenance.sql)
+
+See [MENUBOARD_SPEC.md §3c](./MENUBOARD_SPEC.md#3c-equipment-monitoring--maintenance-management-extension)
+for the product framing. 23 tables, one module:
+
+```
+equipment_floors ─< equipment_areas ─< equipment_locations ─< equipment
+equipment_categories ────────────────────────────────────────┘
+        equipment ─< equipment_documents · equipment_warranties ·
+                     equipment_supplier_links >─ equipment_suppliers ─< supplier_contacts
+                                                                    └─< supplier_service_categories
+                  ─< maintenance_schedules ─< maintenance_tickets
+                                                   ├─< maintenance_problems
+                                                   ├─< maintenance_attachments
+                                                   ├─< maintenance_assignments
+                                                   └─< maintenance_activities
+                  ─< equipment_status_history · equipment_location_history
+                  ─< equipment_call_logs · equipment_whatsapp_logs
+equipment_floors ─< floor_plans ─< floor_plan_equipment_positions >─ equipment
+```
+
+Decisions that differ from the rest of the schema, deliberately:
+
+- **No `revision`/`sync_seq` anywhere.** Like tasks (023) and entities/POS (022), the module is
+  REST-served to both clients and takes no part in the Android delta-sync engine.
+- **No telemetry table.** `equipment.status` is a human/workflow column;
+  `equipment.telemetry_device_id` is a nullable string nothing reads, so a sensor can be
+  associated with an asset later without a schema change. Storing readings nobody consumes
+  would be the speculative abstraction MENUBOARD_SPEC §3 forbids.
+- **No `equipment_audit_logs`.** The global `audit_logs` records every mutation.
+  `maintenance_activities` is a *different* table and both exist: it is the operator-facing
+  timeline, whose `summary` is prose composed server-side at write time so the phone and the
+  portal can never word the same event differently.
+- **Files reuse `media_assets` (012)** through `media_id` link columns —
+  `equipment_documents`, `maintenance_attachments`, `floor_plans`. `attachments` (001) is not
+  reused: it is board-scoped and sync-replicated, and equipment belongs to no board.
+- **Counters are recomputed, never incremented.** `equipment.open_ticket_count`,
+  `critical_ticket_count`, `next_maintenance_at`, `last_maintenance_at` and `warranty_expiry`
+  are refreshed from their source tables inside the transaction that changed them
+  (`EquipmentRepository.refresh*`). "Open" means `status NOT IN ('CLOSED','CANCELLED')`, so a
+  RESOLVED-but-unverified ticket still counts even though the asset is back in service.
+- **Warranty *status* is never stored** — only `warranty_expiry`, from which
+  `warrantyStatusFor()` derives the status on every read.
+- **Asset ids and ticket numbers are server-allocated.** `equipment.asset_id`
+  (`MTC-KIT-OVN-001`) comes from the area and category `asset_segment` columns plus the
+  `equipment.assetIdPrefix` / `equipment.assetIdSequenceDigits` settings, read `FOR UPDATE`;
+  `maintenance_tickets` carries `(business_date, daily_sequence)` with a unique key, exactly
+  like POS bill numbers and for the same reason.
+- **Floor-plan coordinates are `DECIMAL(6,5)` fractions** with a `CHECK` bounding them to
+  0..1, never pixels.
+- `notifications.type` was extended in place with nine maintenance kinds rather than adding a
+  parallel notification table, so there is one inbox and one delivery path.
+
+Two follow-up migrations belong to the same module:
+
+- **`028_equipment_role_scope.sql`** — data only, no DDL. It re-seeds `role_capabilities` so
+  monitoring and managing sit at MANAGER and above, reporting at USER and above, and an
+  EMPLOYEE holds no part of the module. `PermissionsCacheService` serves these rows as
+  authoritative, so they must stay in step with `shared/src/permissions/index.ts`.
+- **`029_media_audio_type.sql`** — `media_assets.media_type` gains `AUDIO`. 012 created the
+  library for images; equipment voice notes had no honest member and were being written as
+  `VIDEO`, which stopped being tolerable once fault clips made that value real. Existing rows
+  are left untouched, because a pre-029 `VIDEO` row cannot be reclassified without guessing.
+- **`031_kiosk_devices.sql`** — `kiosk_devices`, the self-service stand registry. Each row is
+  one stand: `code` (what the tablet stores and quotes, unique), `label`, `menu_code`,
+  `station_id`, the on-screen names, the UPI payee, `receipt_transport` (`USB`/`NETWORK` —
+  there is no browser route), `category_order`, `status`, and `last_seen_at`.
+  - **No `sync_seq`.** A kiosk stand is Admin Portal configuration, never an entity the
+    Android app caches, so it stays out of the sync ledger the same way `settings` does.
+  - `category_order` is **JSON, not a join table**, holding `menu_category_assignments.id`
+    values. It is an ordering preference of a presentation surface rather than a
+    relationship, and it is read as a filter over whatever the menu currently holds — ids the
+    menu no longer has are ignored, and categories the list does not mention fall to the end
+    in the menu's own order. That asymmetry is the point: adding a category in the Menu Master
+    must never make dishes invisible at a stand nobody remembered to re-sort.
+  - `last_seen_at` is written on profile reads **without bumping `revision`**. A stand being
+    switched on is not an edit to its configuration, and treating it as one would make every
+    row in the portal look freshly changed once a minute.
+
+## Digital Menu Board screens (032_menu_board_screens.sql)
+
+One table, `menu_board_screens`: the bilingual menu displays above the counter. Columns are
+`code` (unique, and what appears in the screen's URL), `name`, `menu_code`, `poll_seconds`,
+`config` (JSON), `status`, and `last_seen_at`.
+
+The board used to be a separate program with its own copy of the menu in a spreadsheet, which
+is how a price could be right at the till and wrong on the wall at the same time. Everything a
+board shows now resolves from Menu Master; what is left in this table is only what genuinely
+belongs to a *screen* rather than to a menu.
+
+- **No `sync_seq`.** Like `kiosk_devices` (031) and `settings`, a screen is Admin Portal
+  configuration, never an entity the Android app caches.
+- `menu_code` is a **code, not a foreign key** to `menus.id`, matching `kiosk_devices.menu_code`:
+  a screen names the menu it wants and keeps naming it across a re-import that gives the menu a
+  new row id. **Blank is meaningful** — it defers to the `pos.default_menu_code` setting, so a
+  single-menu operation configures its menu once instead of once per screen.
+- `config` is **JSON, not columns**. It holds the house name, the typography and spacing (the
+  keys carried over from the old workbook's `Settings` sheet), the three-column arrangement,
+  and the Today-panel/celebration/ad settings. It is read whole by one renderer and never
+  queried, filtered or joined on — the same reasoning as `kiosk_devices.category_order`. The
+  seeded row carries the values the workbook held, so the first board to load looks unchanged.
+  Times in it are `HH:mm` strings, never Excel time serials, which deserialise to a 1899
+  timestamp the board's time parser cannot read.
+- `last_seen_at` is written on snapshot reads **without bumping `revision`**, for the same
+  reason as `kiosk_devices`: a screen switching on is not an edit to its configuration, and
+  here it would also change the snapshot's own revision hash on every single request.
+
+The morning menu is **not** a column here. It resolves from `menu_item_schedules` (014) —
+MORNING shift, today's weekday. `menu_items.always_available` is deliberately excluded from
+that lookup: it defaults to `1` on every row, so folding it in would place every dish in every
+shift and leave the shift unable to narrow anything.

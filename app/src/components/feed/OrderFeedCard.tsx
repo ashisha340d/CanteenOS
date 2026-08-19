@@ -164,32 +164,27 @@ export function OrderFeedCard({
           <View>
             {/* Identity ------------------------------------------------------ */}
             <View style={styles.header}>
-              <View style={styles.headerTitle}>
-                <Ionicons
-                  name="calendar-outline"
-                  size={17}
-                  color={accentColor ?? colors.primary}
-                />
-                <Text
-                  style={[styles.headerTime, accentColor ? { color: accentColor } : null]}
-                  numberOfLines={1}
-                >
-                  {formatTime(order.requiredTime)}
-                </Text>
-                <Text style={[styles.headerDash, accentColor ? { color: accentColor } : null]}>-</Text>
-                <Text
-                  style={[styles.eventName, accentColor ? { color: accentColor } : null]}
-                  numberOfLines={1}
-                >
-                  {eventName}
-                </Text>
-              </View>
-              <View style={styles.headerRight}>
-                <StatusBadge
-                  order={order}
-                  plain
-                  overrideLabel={over ? { label: 'Over', bg: colors.dangerBg, fg: colors.danger } : undefined}
-                />
+              <View style={styles.headerTop}>
+                <View style={styles.headerTitle}>
+                  <Ionicons
+                    name="calendar-outline"
+                    size={17}
+                    color={accentColor ?? colors.primary}
+                  />
+                  <Text
+                    style={[styles.headerTime, accentColor ? { color: accentColor } : null]}
+                    numberOfLines={1}
+                  >
+                    {formatTime(order.requiredTime)}
+                  </Text>
+                  <Text style={[styles.headerDash, accentColor ? { color: accentColor } : null]}>-</Text>
+                  <Text
+                    style={[styles.eventName, accentColor ? { color: accentColor } : null]}
+                    numberOfLines={2}
+                  >
+                    {eventName}
+                  </Text>
+                </View>
                 {/* The chevron, not a long press: a hidden gesture is not a menu. */}
                 <PressableScale
                   onPress={onOpenMenu}
@@ -201,6 +196,13 @@ export function OrderFeedCard({
                     <Ionicons name="chevron-down" size={26} color={colors.primary} />
                   </View>
                 </PressableScale>
+              </View>
+              <View style={styles.headerBottom}>
+                <StatusBadge
+                  order={order}
+                  plain
+                  overrideLabel={over ? { label: 'Over', bg: colors.dangerBg, fg: colors.danger } : undefined}
+                />
               </View>
             </View>
 
@@ -283,12 +285,6 @@ export function OrderFeedCard({
                   language={language}
                   onChangeStatus={onChangeStatus}
                 />
-                <StatusReactionRow
-                  acknowledged={myAcknowledgement !== undefined}
-                  canAcknowledge={canAcknowledge}
-                  language={language}
-                  onAcknowledge={onAcknowledge}
-                />
               </View>
             ) : null}
 
@@ -332,6 +328,14 @@ export function OrderFeedCard({
                   ) : null}
                 </View>
               </PressableScale>
+              {!settled ? (
+                <StatusReactionRow
+                  acknowledged={myAcknowledgement !== undefined}
+                  canAcknowledge={canAcknowledge}
+                  language={language}
+                  onAcknowledge={onAcknowledge}
+                />
+              ) : null}
             </View>
           </View>
         </PressableScale>
@@ -414,17 +418,19 @@ const styles = StyleSheet.create({
   reactionBlock: { marginTop: spacing[3], gap: spacing[2] },
 
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing[2],
     paddingBottom: spacing[2],
     marginBottom: spacing[3],
     borderBottomWidth: 1,
     borderBottomColor: colors.outlineVariant,
   },
-  headerTitle: { flexDirection: 'row', alignItems: 'center', gap: spacing[1.5], flex: 1 },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: spacing[2],
+  },
+  headerBottom: { flexDirection: 'row', alignItems: 'center', marginTop: spacing[1.5] },
+  headerTitle: { flexDirection: 'row', alignItems: 'center', gap: spacing[1.5], flex: 1, flexWrap: 'wrap' },
   chevronButton: {
     width: 30,
     height: 30,

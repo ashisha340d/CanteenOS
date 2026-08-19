@@ -10,26 +10,27 @@ Its single responsibility is **operational communication and order collaboration
 It is not an accounting system, inventory system or ERP. It maintains a priced Menu Master
 (see MENUBOARD_SPEC.md §3a) and, as of §3b, an Admin-Portal point of sale with an Entity
 master — so it does now take payments and compute tax on a bill, while still never driving a
-printer or a cash drawer and never tracking stock. See
-[MENUBOARD_SPEC.md](./MENUBOARD_SPEC.md) for the product requirements and the enforced
-boundary list.
+printer or a cash drawer and never tracking stock. As of §3d it also serves a guest-facing
+self-service kiosk, which is a third client of that same point of sale rather than a system
+of its own. See [MENUBOARD_SPEC.md](./MENUBOARD_SPEC.md) for the product requirements and the
+enforced boundary list.
 
 ## 2. System topology
 
 ```
-┌──────────────────────────┐        ┌──────────────────────────┐
-│  Android app             │        │  Admin Portal            │
-│  React Native + Expo     │        │  React + Vite + MUI      │
-│  TypeScript              │        │  TypeScript              │
-│                          │        │                          │
-│  ┌────────────────────┐  │        │  Reads/writes the        │
-│  │ SQLite (local DB)  │  │        │  server directly.        │
-│  │ SOLE render source │  │        │  No local database.      │
-│  └────────────────────┘  │        │                          │
-└───────┬────────▲─────────┘        └───────────┬──▲────────────┘
-        │ HTTP   │ Socket.IO                    │  │ HTTP
-        │ (sync) │ (broadcast)                  │  │
-        ▼        │                              ▼  │
+┌──────────────────────────┐        ┌──────────────────────────┐    ┌─────────────────────┐
+│  Android app             │        │  Admin Portal            │    │  CustomerKiosk      │
+│  React Native + Expo     │        │  React + Vite + MUI      │    │  React + Vite       │
+│  TypeScript              │        │  TypeScript              │    │  Tablet, kiosk mode │
+│                          │        │                          │    │                     │
+│  ┌────────────────────┐  │        │  Reads/writes the        │    │  Guest-facing.      │
+│  │ SQLite (local DB)  │  │        │  server directly.        │    │  Menu read + POS    │
+│  │ SOLE render source │  │        │  No local database.      │    │  sale only.         │
+│  └────────────────────┘  │        │                          │    │  No local database. │
+└───────┬────────▲─────────┘        └───────────┬──▲────────────┘    └──────────┬──────────┘
+        │ HTTP   │ Socket.IO                    │  │ HTTP                       │ HTTP
+        │ (sync) │ (broadcast)                  │  │                            │ (KIOSK session)
+        ▼        │                              ▼  │                            ▼
 ┌──────────────────────────────────────────────────────────────┐
 │  Backend — Node.js + Express + TypeScript                    │
 │                                                              │
@@ -48,30 +49,61 @@ boundary list.
 
 ## 3. Responsibility split (hard boundaries)
 
-| Concern | Android | Admin Portal | Backend |
-| --- | --- | --- | --- |
-| Login / logout / refresh | Yes | Yes | Yes |
-| View boards | Yes | Yes | — |
-| Create / edit orders | Yes | Read-only review | API |
-| Order thread, mentions | Yes | Read-only review | API |
-| Voice notes, photos | Yes (capture) | Read-only review | Upload/serve |
-| Acknowledgements | Yes | Read-only review | API |
-| Notifications | Yes | — | Emit |
-| Offline sync | Yes | No | Sync API |
-| User management | **Never** | Yes | API |
-| Masters (stations, activities, menu) | Read-only cache | Yes (CRUD) | API |
-| Permissions | **Never** | Yes | Enforce |
-| Reports | **Never** | Yes | API |
-| Settings / configuration | Device prefs only | Yes | API |
-| **Billing generation** | **Never** | Yes (explicit action) | Snapshot + audit |
-| **Point of sale / payments** | **Never** | Yes | Price, tax, settle, audit |
-| Entity master (customers/employees/vendors) | **Never** | Yes (CRUD) | API |
-| Audit logs | **Never** | Yes | Write + expose |
+| Concern | Android | Admin Portal | CustomerKiosk | Backend |
+| --- | --- | --- | --- | --- |
+| Login / logout / refresh | Yes | Yes | Device session only | Yes |
+| View boards | Yes | Yes | **Never** | — |
+| Create / edit orders | Yes | Read-only review | **Never** | API |
+| Order thread, mentions | Yes | Read-only review | **Never** | API |
+| Voice notes, photos | Yes (capture) | Read-only review | **Never** | Upload/serve |
+| Acknowledgements | Yes | Read-only review | **Never** | API |
+| Notifications | Yes | — | **Never** | Emit |
+| Offline sync | Yes | No | No | Sync API |
+| User management | **Never** | Yes | **Never** | API |
+| Masters (stations, activities, menu) | Read-only cache | Yes (CRUD) | Read one published menu | API |
+| Permissions | **Never** | Yes | **Never** | Enforce |
+| Reports | **Never** | Yes | **Never** | API |
+| Settings / configuration | Device prefs only | Yes | **Never** — reads a served profile | API |
+| Kiosk registry (which stands exist) | **Never** | Yes (CRUD) | Reads names, to say which it is | API + audit |
+| **Billing generation** | **Never** | Yes (explicit action) | **Never** | Snapshot + audit |
+| **Point of sale / payments** | **Never** | Yes | Own sale only, UPI only | Price, tax, settle, audit |
+| **Void / refund a sale** | **Never** | Yes | **Never** | API |
+| Print a settled bill (ESC/POS) | **Never** | Reprint | Own sale, USB or via API | Encode + RAW/9100, audit |
+| Send a bill to a guest's WhatsApp | **Never** | Resend | Own sale only | Compose, dispatch, audit |
+| Entity master (customers/employees/vendors) | **Never** | Yes (CRUD) | **Never** | API |
+| Audit logs | **Never** | Yes | **Never** | Write + expose |
 
 The Android application contains **no** billing, pricing, tax, accounting, reporting,
 administration, master-maintenance, user-management, permission-management or
 system-configuration code. This is a structural rule, not a UI toggle: the Android
 codebase has no modules, screens, API clients or SQLite columns for those concerns.
+
+The kiosk is walled off the other way round — by an allowlist rather than a denylist. A
+`ClientType.KIOSK` session holds only `MASTER_READ`, `POS_READ`, `POS_OPERATE` and
+`POS_CHECKOUT` (`KIOSK_ALLOWED_CAPABILITIES` in `shared/src/permissions`), enforced in
+`TokenService.capabilitiesFor` and again in `requireCapability`, and administrative accounts
+cannot open a kiosk session at all. Anything added to the product later is unreachable from a
+public tablet until it is deliberately named kiosk-safe.
+
+The allowlist is why the kiosk's own presentation is served by `GET /pos/kiosk-profile`
+under `POS_READ` rather than by the Settings API under `SETTINGS_READ`. Reading a skin must
+not become a way to read the settings table, so the profile endpoint returns a fixed,
+guest-visible projection — presentation, the billing identity already printed on every
+receipt, and two computed capability flags — and widening it is a change to that projection
+rather than to what a public tablet may ask for.
+
+The same reasoning shapes the kiosk device registry. A stand's whole configuration — menu,
+station, payee, printer route, category order — lives in `kiosk_devices` and is written only
+under `SETTINGS_WRITE` from the Admin Portal. The tablet holds one string, the stand's code,
+and receives the resolved row inside its profile. Two projections exist deliberately:
+`KioskDeviceDto`, the full row, is `/admin`-only; `KioskDeviceSummaryDto` — id, code, label,
+outlet, station, menu name — is what `GET /pos/kiosk-devices` serves so a tablet can render a
+picker without being handed the payee details of every other stand in the organisation.
+
+This replaced a design where each tablet kept its own provisioning in `localStorage`. That was
+not merely inconvenient: settings held in six browsers cannot be compared, cannot be audited,
+and a payee VPA typed into a public tablet is a financial detail with no reviewer. Moving it
+into a table made re-pointing a hall one audited edit instead of six unlogged ones.
 
 ## 4. Repository layout
 
@@ -124,6 +156,18 @@ MenuBoard/
 │
 ├── admin/                       @menuboard/admin — Web Admin Portal (Phase 3)
 │                                React + Vite + TypeScript + MUI, npm workspace member
+│
+├── CustomerKiosk/               @menuboard/customer-kiosk — guest self-service kiosk (§3d)
+│   ├── src/
+│   │   ├── api/                 kiosk session, menu tree, POS create/checkout
+│   │   ├── components/          kiosk UI primitives (touch-first, no admin components)
+│   │   ├── screens/             menu → cart → payment → bill
+│   │   ├── state/               cart + language, client state only
+│   │   ├── i18n/                English / हिंदी strings
+│   │   └── theme/               kiosk design tokens
+│   │                            React + Vite + TypeScript + Tailwind, npm workspace member.
+│   │                            Runs full-screen in a tablet browser; no local database.
+│
 └── app/                         Android operational app (Phase 4+)
                                  Expo + React Native + TypeScript. Deliberately NOT an npm
                                  workspace member (Metro and npm workspaces interact badly);

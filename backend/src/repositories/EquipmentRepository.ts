@@ -567,6 +567,17 @@ export const EquipmentRepository = {
     );
   },
 
+  /** Supersedes every active warranty. Rows are kept — a lapsed policy is still history. */
+  async deactivateWarranties(db: Db, equipmentId: string): Promise<void> {
+    const now = toDbDateTime();
+    await mutate(
+      db,
+      `UPDATE equipment_warranties SET is_active = 0, updated_at = ?
+        WHERE equipment_id = ? AND is_active = 1 AND deleted_at IS NULL`,
+      [now, equipmentId],
+    );
+  },
+
   async listWarranties(db: Db, equipmentId: string): Promise<EquipmentWarrantyRow[]> {
     return selectRows<EquipmentWarrantyRow>(
       db,

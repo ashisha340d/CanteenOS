@@ -4,10 +4,15 @@ import type {
   PosCheckoutRequest,
   PosOrderListQuery,
   PosVoidRequest,
+  PrintPosBillRequest,
+  SendPosBillWhatsAppRequest,
   UpdatePosOrderRequest,
   UpdatePosOrderStatusRequest,
 } from '@menuboard/shared';
 import { posService, type PosScope } from '../services/PosService';
+import { kioskService } from '../services/KioskService';
+import { receiptService } from '../services/ReceiptService';
+import { whatsAppService } from '../services/WhatsAppService';
 import { created, ok, paginated } from '../utils/http';
 import { actorFrom } from './context';
 
@@ -23,6 +28,46 @@ export const PosController = {
 
   async getById(req: Request, res: Response): Promise<void> {
     ok(res, await posService.getDetail(req.params.posOrderId as string));
+  },
+
+  /**
+   * How the organisation wants its self-service kiosks to look and speak, and — when the
+   * tablet says which stand it is — that stand's own binding. One request rather than two,
+   * because both are polled on the same timer and a kiosk that has the skin but not the menu
+   * is not in a usable state.
+   */
+  async kioskProfile(req: Request, res: Response): Promise<void> {
+    const code = typeof req.query.device === 'string' ? req.query.device : null;
+    ok(res, await kioskService.profile(code));
+  },
+
+  /** The stands a tablet may identify itself as. Names only — see `mapKioskDeviceSummary`. */
+  async kioskDevices(_req: Request, res: Response): Promise<void> {
+    ok(res, await kioskService.listDeviceSummaries());
+  },
+
+  async printBill(req: Request, res: Response): Promise<void> {
+    const body = req.body as PrintPosBillRequest;
+    ok(
+      res,
+      await receiptService.printToNetwork(
+        req.params.posOrderId as string,
+        body.copies ?? 1,
+        actorFrom(req),
+      ),
+    );
+  },
+
+  async sendBillWhatsApp(req: Request, res: Response): Promise<void> {
+    const body = req.body as SendPosBillWhatsAppRequest;
+    ok(
+      res,
+      await whatsAppService.sendBill(
+        req.params.posOrderId as string,
+        body.phone ?? null,
+        actorFrom(req),
+      ),
+    );
   },
 
   async create(req: Request, res: Response): Promise<void> {

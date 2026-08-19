@@ -15,7 +15,6 @@ import type {
   EntityDto,
   IngredientCategoryDto,
   IngredientDto,
-  ItemGroupAssignmentDto,
   ItemGroupDto,
   MediaAssetDto,
   MediaAssignmentDto,
@@ -77,7 +76,6 @@ import type {
   EntityRow,
   IngredientCategoryRow,
   IngredientRow,
-  ItemGroupAssignmentRow,
   ItemGroupRow,
   MediaAssetRow,
   MediaAssignmentRow,
@@ -215,6 +213,8 @@ export function mapActivityType(row: ActivityTypeRow): ActivityTypeDto {
 export function mapMenuCategory(row: MenuCategoryRow): MenuCategoryDto {
   return {
     id: row.id,
+    catalogueId: row.catalogue_id,
+    ...(row.catalogue_name !== undefined ? { catalogueName: row.catalogue_name } : {}),
     name: row.name,
     nameHi: row.name_hi,
     description: row.description,
@@ -235,6 +235,9 @@ export function mapMenuItem(row: MenuItemRow, userId?: string): MenuItemDto {
   return {
     id: row.id,
     categoryId: row.category_id,
+    ...(row.category_name !== undefined ? { categoryName: row.category_name } : {}),
+    groupId: row.group_id,
+    ...(row.group_name !== undefined ? { groupName: row.group_name } : {}),
     name: row.name,
     nameHi: row.name_hi,
     unit: row.unit,
@@ -248,6 +251,7 @@ export function mapMenuItem(row: MenuItemRow, userId?: string): MenuItemDto {
     basePrice: row.base_price === null ? null : Number(row.base_price),
     taxProfileId: row.tax_profile_id,
     alwaysAvailable: row.always_available === 1,
+    prepSeconds: row.prep_seconds === null ? null : Number(row.prep_seconds),
     status: row.status,
     sortOrder: Number(row.sort_order),
     ...syncMeta(row),
@@ -548,24 +552,14 @@ export function mapMenuSchedule(row: MenuScheduleRow): MenuScheduleDto {
 export function mapItemGroup(row: ItemGroupRow): ItemGroupDto {
   return {
     id: row.id,
+    catalogueId: row.catalogue_id,
+    ...(row.catalogue_name !== undefined ? { catalogueName: row.catalogue_name } : {}),
     name: row.name,
     code: row.code,
     description: row.description,
     status: row.status,
     sortOrder: Number(row.sort_order),
     createdBy: row.created_by,
-    ...syncMeta(row),
-  };
-}
-
-export function mapItemGroupAssignment(row: ItemGroupAssignmentRow): ItemGroupAssignmentDto {
-  return {
-    id: row.id,
-    foodItemId: row.food_item_id,
-    groupId: row.group_id,
-    status: row.status,
-    createdBy: row.created_by,
-    ...(row.group_name !== undefined ? { groupName: row.group_name } : {}),
     ...syncMeta(row),
   };
 }
@@ -1169,6 +1163,11 @@ export function mapPosOrderItem(row: PosOrderItemRow): PosOrderItemDto {
     status: row.status,
     cancelledAt: fromDbDateTime(row.cancelled_at),
     cancelledBy: row.cancelled_by,
+    kdsStatus: row.kds_status,
+    acknowledgedAt: fromDbDateTime(row.acknowledged_at),
+    acknowledgedBy: row.acknowledged_by,
+    servedAt: fromDbDateTime(row.served_at),
+    servedBy: row.served_by,
     createdAt: fromDbDateTimeRequired(row.created_at),
     updatedAt: fromDbDateTimeRequired(row.updated_at),
   };

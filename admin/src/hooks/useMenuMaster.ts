@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   CounterRouteWriteRequest,
   CounterWriteRequest,
-  ItemGroupAssignmentWriteRequest,
   ItemGroupWriteRequest,
   MenuCategoryAssignmentWriteRequest,
   MenuItemAssignmentWriteRequest,
@@ -10,6 +9,8 @@ import type {
   MenuItemVariantCatalogPriceWriteRequest,
   MenuItemVariantWriteRequest,
   MenuWriteRequest,
+  CreateMenuBoardScreenRequest,
+  UpdateMenuBoardScreenRequest,
   ModifierGroupWriteRequest,
   ModifierWriteRequest,
   PrintingGroupWriteRequest,
@@ -19,12 +20,12 @@ import type {
 import {
   counterRoutesApi,
   countersApi,
-  itemGroupAssignmentsApi,
   itemGroupsApi,
   menuCategoryAssignmentsApi,
   menuItemAssignmentsApi,
   menuItemScheduleApi,
   menuItemVariantsApi,
+  menuBoardScreensApi,
   menusApi,
   modifierGroupsApi,
   modifiersApi,
@@ -40,6 +41,20 @@ import {
 export function useMenus(query: MasterListQuery) {
   return useQuery({ queryKey: ['menus', query], queryFn: () => menusApi.list(query), placeholderData: (p) => p });
 }
+/**
+ * Every Menu Catalogue, as `SelectField` options, for the pickers on Menu Categories and Menu
+ * Groups. There are a handful of catalogues, so one unpaginated read is cheaper than a
+ * searchable picker and lets the whole list sit open in front of the operator.
+ */
+export function useCatalogueOptions() {
+  const { data, isLoading } = useMenus({ page: 1, pageSize: 100 });
+  const options = (data?.items ?? []).map((menu) => ({
+    value: menu.id,
+    label: menu.name,
+  }));
+  return { options, isLoading };
+}
+
 export function useMenu(id: string) {
   return useQuery({ queryKey: ['menu', id], queryFn: () => menusApi.get(id), enabled: Boolean(id) });
 }
@@ -255,7 +270,7 @@ export function useRemoveCounterRoute() {
 
 /* ---------------------------------------------------------------------- item groups */
 
-export function useItemGroups(query: MasterListQuery) {
+export function useItemGroups(query: MasterListQuery & { catalogueId?: string }) {
   return useQuery({
     queryKey: ['item-groups', query],
     queryFn: () => itemGroupsApi.list(query),
@@ -282,28 +297,6 @@ export function useDeleteItemGroup() {
   return useMutation({
     mutationFn: (id: string) => itemGroupsApi.remove(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['item-groups'] }),
-  });
-}
-
-export function useItemGroupsForFoodItem(foodItemId: string) {
-  return useQuery({
-    queryKey: ['item-group-assignments', foodItemId],
-    queryFn: () => itemGroupAssignmentsApi.listForFoodItem(foodItemId),
-    enabled: Boolean(foodItemId),
-  });
-}
-export function useAssignItemGroup(foodItemId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (body: ItemGroupAssignmentWriteRequest) => itemGroupAssignmentsApi.assign(body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['item-group-assignments', foodItemId] }),
-  });
-}
-export function useRemoveItemGroupAssignment(foodItemId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) => itemGroupAssignmentsApi.remove(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['item-group-assignments', foodItemId] }),
   });
 }
 
@@ -452,5 +445,71 @@ export function useDeleteModifier() {
   return useMutation({
     mutationFn: (id: string) => modifiersApi.remove(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['modifier-groups'] }),
+  });
+}
+
+/* -------------------------------------------------------------- digital menu board screens */
+
+export function useMenuBoardScreens() {
+  // Polled, for the same reason the kiosk list is: `lastSeenAt` is the only signal the portal
+  // has that a screen on a wall two floors away is actually switched on.
+  return useQuery({
+    queryKey: ['menu-board-screens'],
+    queryFn: menuBoardScreensApi.list,
+    refetchInterval: 60_000,
+  });
+}
+
+export function useMenuBoardScreen(id: string) {
+  return useQuery({
+    queryKey: ['menu-board-screen', id],
+    queryFn: () => menuBoardScreensApi.get(id),
+    enabled: Boolean(id),
+  });
+}
+
+/**
+ * The very snapshot the wall screen renders, so an ad can be tagged to a dish by picking from
+ * exactly the list the board will look that tag up in.
+ *
+ * Deliberately the public board endpoint rather than the Menu Master tree: the ids the board
+ * matches on are the ones this endpoint emits, and a variant contributes one line per portion
+ * here but a single node there. Resolving the tree in the portal would mean re-deriving that
+ * flattening and keeping the two derivations in step forever.
+ *
+ * `preview=1` for the same reason the layout editor's iframe sends it — reading the list to
+ * build an ad must not tell the portal that a screen on a wall is switched on.
+ */
+export function useMenuBoardSnapshot(code: string) {
+  return useQuery({
+    queryKey: ['menu-board-snapshot', code],
+    queryFn: () => menuBoardScreensApi.snapshot(code),
+    enabled: Boolean(code),
+    staleTime: 60_000,
+  });
+}
+
+export function useCreateMenuBoardScreen() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateMenuBoardScreenRequest) => menuBoardScreensApi.create(body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['menu-board-screens'] }),
+  });
+}
+
+export function useUpdateMenuBoardScreen() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: UpdateMenuBoardScreenRequest }) =>
+      menuBoardScreensApi.update(id, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['menu-board-screens'] }),
+  });
+}
+
+export function useDeleteMenuBoardScreen() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => menuBoardScreensApi.remove(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['menu-board-screens'] }),
   });
 }

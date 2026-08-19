@@ -150,9 +150,23 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     });
     void useLanguageStore.getState().load(response.user.role);
     void registerPushToken();
+
+    // Password sign-in is the *first* sign-in on this device. If the account already carries a
+    // PIN on the server, arm the lock now so the next cold start goes straight to the pad and
+    // never asks for a username again. Without this the PIN only ever armed on the device that
+    // happened to set it, so a reinstall or a second phone was stuck on password forever.
+    //
+    // Deliberately not awaited: it is a nicety for the *next* launch, and a slow or offline
+    // server must not hold up the sign-in that has already succeeded.
     authApi
       .pinStatus()
-      .then((s) => set({ hasPin: s.hasPin }))
+      .then(async (s) => {
+        set({ hasPin: s.hasPin });
+        if (!s.hasPin) return;
+        await settingsRepository.set(SETTINGS_KEYS.PIN_ENABLED, true);
+        await settingsRepository.set(SETTINGS_KEYS.PIN_IDENTIFIER, response.user.username);
+        set({ pinIdentifier: response.user.username });
+      })
       .catch(() => undefined);
 
     if (!response.user.mustChangePassword) {
@@ -176,6 +190,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     await secureTokenStore.setRefreshToken(response.tokens.refreshToken);
     await settingsRepository.set(SETTINGS_KEYS.REMEMBER_LOGIN, true);
     await settingsRepository.set(SETTINGS_KEYS.CURRENT_USER_ID, response.user.id);
+    // Re-arm the lock for the next cold start. The identifier is rewritten from the server's
+    // answer rather than left as typed, so an account reached by phone or email still locks
+    // to a stable username.
+    await settingsRepository.set(SETTINGS_KEYS.PIN_ENABLED, true);
+    await settingsRepository.set(SETTINGS_KEYS.PIN_IDENTIFIER, response.user.username);
 
     set({
       status: 'signedIn',
@@ -183,6 +202,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       capabilities: response.capabilities,
       mustChangePassword: response.user.mustChangePassword,
       hasPin: true,
+      pinIdentifier: response.user.username,
     });
     void useLanguageStore.getState().load(response.user.role);
     void registerPushToken();
@@ -192,8 +212,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
+  /**
+   * Leave the pad for the password form. The stored lock has to be dropped as well as the
+   * status, or `bootstrap` re-arms it on the next launch and the pad becomes inescapable —
+   * which is also how a second person takes over the device.
+   */
   usePasswordInstead: () => {
-    set({ status: 'signedOut' });
+    void settingsRepository.remove(SETTINGS_KEYS.PIN_ENABLED);
+    void settingsRepository.remove(SETTINGS_KEYS.PIN_IDENTIFIER);
+    set({ status: 'signedOut', hasPin: false, pinIdentifier: null });
   },
 
   changePassword: async (currentPassword, newPassword) => {
@@ -224,6 +251,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ hasPin: false });
   },
 
+  /**
+   * Signing out drops the session but keeps the PIN lock armed: once a PIN is set on this
+   * device, getting back in is the pad and nothing else. Clearing it here sent the user back
+   * to a username-and-password form, which is exactly what the PIN exists to replace.
+   *
+   * "Use password instead" on the pad is the way out when a different person needs the device
+   * — that path calls `removePin` / signs in fresh rather than going through here.
+   */
   logout: async () => {
     const refreshToken = await secureTokenStore.getRefreshToken();
     try {
@@ -233,8 +268,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
     await secureTokenStore.clear();
     await settingsRepository.remove(SETTINGS_KEYS.REMEMBER_LOGIN);
+
+    const pinIdentifier = await settingsRepository.get<string>(SETTINGS_KEYS.PIN_IDENTIFIER);
+    if (pinIdentifier) {
+      set({
+        status: 'pinRequired',
+        user: null,
+        capabilities: [],
+        mustChangePassword: false,
+        hasPin: true,
+        pinIdentifier,
+      });
+      return;
+    }
+
     await settingsRepository.remove(SETTINGS_KEYS.PIN_ENABLED);
-    await settingsRepository.remove(SETTINGS_KEYS.PIN_IDENTIFIER);
     set({ status: 'signedOut', user: null, capabilities: [], mustChangePassword: false, hasPin: false, pinIdentifier: null });
   },
 

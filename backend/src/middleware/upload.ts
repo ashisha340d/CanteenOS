@@ -62,6 +62,30 @@ export const uploadSingleMedia = multer({
 }).single('file');
 
 /**
+ * The Equipment module's own uploader: images, audio, documents **and video**.
+ *
+ * A separate instance rather than widening `ACCEPTED_MIME_TYPES` above, so the attachment and
+ * Menu Master endpoints keep taking exactly what they took before. A fault is often something
+ * you can only show — a noise, a leak, a flame that will not hold — which is why this one
+ * accepts a clip; the ceiling is the video limit because multer cannot vary a limit by type,
+ * and `EquipmentService.uploadMedia` then enforces the tighter per-kind one.
+ */
+export const uploadSingleEquipmentMedia = multer({
+  storage,
+  fileFilter: (_req, file, callback) => {
+    const accepted =
+      ACCEPTED_MIME_TYPES.has(file.mimetype) ||
+      (MEDIA.VIDEO_MIME_TYPES as readonly string[]).includes(file.mimetype);
+    if (!accepted) {
+      callback(new UnsupportedMediaTypeError(`Files of type ${file.mimetype} are not accepted`));
+      return;
+    }
+    callback(null, true);
+  },
+  limits: { fileSize: MEDIA.VIDEO_MAX_BYTES, files: 1, fields: 20 },
+}).single('file');
+
+/**
  * A single audio file kept in memory rather than written to disk — used by the recipe
  * importer's "record and transcribe" step, which forwards the bytes straight to Gemini and
  * never persists them.

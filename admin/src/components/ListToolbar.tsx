@@ -40,7 +40,6 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from '@/components/ui/pagination';
-import { useDeviceProfile } from '@/hooks/useDeviceProfile';
 import { cn } from '@/lib/utils';
 
 interface ListToolbarProps {
@@ -92,7 +91,6 @@ export function ListToolbar({
   createLabel = 'New',
   extraActions,
 }: ListToolbarProps): JSX.Element {
-  const { isMobile } = useDeviceProfile();
   const [filtersOpen, setFiltersOpen] = useState(false);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const showPaging = total > pageSize;
@@ -101,7 +99,7 @@ export function ListToolbar({
     total === 0 ? 'No results' : `${total.toLocaleString()} ${total === 1 ? 'record' : 'records'}`;
 
   const searchField = !hideSearch && (
-    <InputGroup className={cn(isMobile ? 'w-full' : 'w-[268px]')}>
+    <InputGroup className="w-[268px]">
       <InputGroupAddon>
         <SearchIcon />
       </InputGroupAddon>
@@ -128,9 +126,9 @@ export function ListToolbar({
   const filtersButton = filters && (
     <Button
       variant={activeFilterCount > 0 ? 'secondary' : 'outline'}
-      size={isMobile ? 'default' : 'sm'}
+      size="sm"
       onClick={() => setFiltersOpen(true)}
-      className={cn(isMobile && 'touch-target', activeFilterCount > 0 && 'border-primary')}
+      className={cn(activeFilterCount > 0 && 'border-primary')}
     >
       <SlidersHorizontalIcon data-icon="inline-start" />
       Filters
@@ -143,7 +141,7 @@ export function ListToolbar({
   );
 
   const createButton = onCreate && (
-    <Button onClick={onCreate} size={isMobile ? 'default' : 'sm'} className={cn(isMobile && 'touch-target flex-1')}>
+    <Button onClick={onCreate} size="sm">
       <PlusIcon data-icon="inline-start" />
       {createLabel}
     </Button>
@@ -151,10 +149,7 @@ export function ListToolbar({
 
   const filterPanel = filters && (
     <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
-      <SheetContent
-        side={isMobile ? 'bottom' : 'right'}
-        className={cn(isMobile ? 'max-h-[85dvh] rounded-t-2xl' : 'w-[340px] sm:max-w-[340px]')}
-      >
+      <SheetContent side="right" className="w-[340px] sm:max-w-[340px]">
         <SheetHeader>
           <SheetTitle>Filters</SheetTitle>
           <SheetDescription>Narrow the list down to what you need.</SheetDescription>
@@ -162,68 +157,15 @@ export function ListToolbar({
         <div className="flex flex-col gap-4 overflow-y-auto px-4">{filters}</div>
         <SheetFooter>
           {onClearFilters && (
-            <Button
-              variant="outline"
-              onClick={onClearFilters}
-              disabled={activeFilterCount === 0}
-              className={cn(isMobile && 'touch-target')}
-            >
+            <Button variant="outline" onClick={onClearFilters} disabled={activeFilterCount === 0}>
               Clear all
             </Button>
           )}
-          <Button onClick={() => setFiltersOpen(false)} className={cn(isMobile && 'touch-target')}>
-            Done
-          </Button>
+          <Button onClick={() => setFiltersOpen(false)}>Done</Button>
         </SheetFooter>
       </SheetContent>
     </Sheet>
   );
-
-  /* ---------------------------------------------------------------------- mobile */
-
-  if (isMobile) {
-    return (
-      <div className="mb-4 flex flex-col gap-3">
-        {searchField}
-        <div className="flex items-center gap-2">
-          {filtersButton}
-          {extraActions}
-          {createButton}
-        </div>
-        <p className="text-muted-foreground text-xs tabular-nums">{countLabel}</p>
-
-        {showPaging && (
-          <div className="flex items-center justify-between gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="touch-target"
-              disabled={page <= 1}
-              onClick={() => onPageChange(page - 1)}
-            >
-              Previous
-            </Button>
-            <span className="text-muted-foreground text-sm tabular-nums">
-              {page} / {totalPages}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              className="touch-target"
-              disabled={page >= totalPages}
-              onClick={() => onPageChange(page + 1)}
-            >
-              Next
-            </Button>
-          </div>
-        )}
-
-        {filterPanel}
-      </div>
-    );
-  }
-
-  /* --------------------------------------------------------------------- desktop */
 
   return (
     <div className="mb-4">

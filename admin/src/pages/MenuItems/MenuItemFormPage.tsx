@@ -24,23 +24,19 @@ import { PageSkeleton } from '../../components/ui/Skeletons';
 import { SearchPickerField } from '../../components/SearchPickerField';
 import { MediaStrip } from '../Menus/MediaStrip';
 import { menuCategoriesApi } from '../../api/masters';
-import { menusApi } from '../../api/menuMaster';
+import { itemGroupsApi, menusApi } from '../../api/menuMaster';
 import {
   useAssignCounterRoute,
-  useAssignItemGroup,
   useCounterRoutesForEntity,
   useCounters,
   useCreateVariant,
   useDeleteVariant,
-  useItemGroups,
-  useItemGroupsForFoodItem,
   useMenuItemSchedule,
   useMenuItemVariants,
   usePrintingGroups,
   usePrintingRoutesForEntity,
   useAssignPrintingRoute,
   useRemoveCounterRoute,
-  useRemoveItemGroupAssignment,
   useRemovePrintingRoute,
   useSetMenuItemSchedule,
   useSetVariantCatalogPrice,
@@ -152,8 +148,11 @@ export function MenuItemFormPage(): JSX.Element {
   const [descriptionHi, setDescriptionHi] = useState('');
   const [unit, setUnit] = useState(editingItem?.unit ?? '');
   const [prepDefaultMinutes, setPrepDefaultMinutes] = useState('15');
+  const [prepKdsMinutes, setPrepKdsMinutes] = useState('');
   const [categoryId, setCategoryId] = useState(editingItem?.categoryId ?? '');
-  const [categoryLabel, setCategoryLabel] = useState('');
+  const [categoryLabel, setCategoryLabel] = useState(editingItem?.categoryName ?? '');
+  const [groupId, setGroupId] = useState<string | null>(editingItem?.groupId ?? null);
+  const [groupLabel, setGroupLabel] = useState(editingItem?.groupName ?? '');
   const [status, setStatus] = useState<MasterStatus>(editingItem?.status ?? MasterStatus.ACTIVE);
   const [taxProfileId, setTaxProfileId] = useState<string | null>(editingItem?.taxProfileId ?? null);
   const [autoTranslate, setAutoTranslate] = useState(true);
@@ -169,8 +168,16 @@ export function MenuItemFormPage(): JSX.Element {
     setNameHi(editingItem.nameHi ?? '');
     setUnit(editingItem.unit);
     setCategoryId(editingItem.categoryId);
+    setCategoryLabel(editingItem.categoryName ?? '');
+    setGroupId(editingItem.groupId);
+    setGroupLabel(editingItem.groupName ?? '');
     setStatus(editingItem.status);
     setTaxProfileId(editingItem.taxProfileId);
+    setPrepKdsMinutes(
+      editingItem.prepSeconds === null || editingItem.prepSeconds === undefined
+        ? ''
+        : String(editingItem.prepSeconds / 60),
+    );
     setHydrated(true);
   }
 
@@ -189,15 +196,12 @@ export function MenuItemFormPage(): JSX.Element {
     queryKey: ['menu-category-picker', categorySearch],
     queryFn: () => menuCategoriesApi.list({ search: categorySearch || undefined, page: 1, pageSize: 20 }),
   });
-  const { data: resolvedCategories } = useQuery({
-    queryKey: ['menu-category-resolve-all'],
-    queryFn: () => menuCategoriesApi.list({ page: 1, pageSize: 200 }),
-    enabled: Boolean(categoryId) && !categoryLabel,
+
+  const [groupSearch, setGroupSearch] = useState('');
+  const { data: groupOptions, isFetching: groupsFetching } = useQuery({
+    queryKey: ['item-group-picker', groupSearch],
+    queryFn: () => itemGroupsApi.list({ search: groupSearch || undefined, page: 1, pageSize: 20 }),
   });
-  if (resolvedCategories && categoryId && !categoryLabel) {
-    const match = resolvedCategories.items.find((c) => c.id === categoryId);
-    if (match) setCategoryLabel(match.name);
-  }
 
   async function translateField(source: string, apply: (v: string) => void): Promise<void> {
     if (!autoTranslate || !source.trim()) return;
@@ -213,14 +217,20 @@ export function MenuItemFormPage(): JSX.Element {
   }
 
   function buildBody(): MenuItemWriteRequest {
+    const prepMinutes = Number(prepKdsMinutes);
     return {
       name,
       nameHi: nameHi || null,
       categoryId,
+      groupId,
       unit,
       unitHi: null,
       status,
       taxProfileId,
+      prepSeconds:
+        prepKdsMinutes === '' || !Number.isFinite(prepMinutes) || prepMinutes <= 0
+          ? null
+          : Math.round(prepMinutes * 60),
       sortOrder: editingItem?.sortOrder ?? 0,
     };
   }
@@ -407,22 +417,46 @@ export function MenuItemFormPage(): JSX.Element {
                     setCategoryLabel(opt.label);
                   }}
                 />
-                <FieldRow className="sm:grid-cols-2">
-                  <TextField
-                    label="Unit"
-                    required
-                    placeholder="plate, kg, litre"
-                    value={unit}
-                    onChange={(e) => setUnit(e.target.value)}
-                    maxLength={LIMITS.UNIT_MAX}
-                  />
-                  <NumberField
-                    label="Time for Prep (mins)"
-                    helperText="Default for new variants"
-                    value={prepDefaultMinutes}
-                    onChange={(e) => setPrepDefaultMinutes(e.target.value)}
-                  />
-                </FieldRow>
+                <SearchPickerField
+                  id="menu-item-group"
+                  label="Item Group"
+                  value={groupId}
+                  displayValue={groupLabel}
+                  options={(groupOptions?.items ?? []).map((g) => ({ id: g.id, label: g.name }))}
+                  loading={groupsFetching}
+                  onSearchChange={setGroupSearch}
+                  onSelect={(opt) => {
+                    setGroupId(opt.id);
+                    setGroupLabel(opt.label);
+                  }}
+                  onClear={() => {
+                    setGroupId(null);
+                    setGroupLabel('');
+                  }}
+                />
+              </FieldRow>
+
+              <FieldRow className="sm:grid-cols-2">
+                <TextField
+                  label="Unit"
+                  required
+                  placeholder="plate, kg, litre"
+                  value={unit}
+                  onChange={(e) => setUnit(e.target.value)}
+                  maxLength={LIMITS.UNIT_MAX}
+                />
+                <NumberField
+                  label="Time for Prep (mins)"
+                  helperText="Default for new variants"
+                  value={prepDefaultMinutes}
+                  onChange={(e) => setPrepDefaultMinutes(e.target.value)}
+                />
+                <NumberField
+                  label="KDS prep deadline (mins)"
+                  helperText="The line's deadline on the kitchen board; blank uses the station default"
+                  value={prepKdsMinutes}
+                  onChange={(e) => setPrepKdsMinutes(e.target.value)}
+                />
               </FieldRow>
 
               {isEditing && (
@@ -511,11 +545,6 @@ function ItemImagesSection({ foodItemId }: { foodItemId: string | undefined }): 
 /* --------------------------------------------------------------- tags & assignments */
 
 function TagsAndAssignmentsSection({ foodItemId }: { foodItemId: string | undefined }): JSX.Element {
-  const { data: groupOptions } = useItemGroups({ page: 1, pageSize: 100 });
-  const { data: groupAssignments } = useItemGroupsForFoodItem(foodItemId ?? '');
-  const assignGroup = useAssignItemGroup(foodItemId ?? '');
-  const removeGroupAssignment = useRemoveItemGroupAssignment(foodItemId ?? '');
-
   const { data: counterOptions } = useCounters({ page: 1, pageSize: 100 });
   const { data: counterAssignments } = useCounterRoutesForEntity('MENU_ITEM', foodItemId ?? '');
   const assignCounter = useAssignCounterRoute();
@@ -526,10 +555,6 @@ function TagsAndAssignmentsSection({ foodItemId }: { foodItemId: string | undefi
   const assignKitchenGroup = useAssignPrintingRoute();
   const removeKitchenGroup = useRemovePrintingRoute();
 
-  const selectedGroupIds = useMemo(
-    () => new Set((groupAssignments ?? []).map((a) => a.groupId)),
-    [groupAssignments],
-  );
   const selectedCounterIds = useMemo(
     () => new Set((counterAssignments ?? []).map((a) => a.counterId)),
     [counterAssignments],
@@ -538,20 +563,6 @@ function TagsAndAssignmentsSection({ foodItemId }: { foodItemId: string | undefi
     () => new Set((kitchenGroupAssignments ?? []).map((a) => a.printingGroupId)),
     [kitchenGroupAssignments],
   );
-
-  async function toggleGroup(groupId: string): Promise<void> {
-    if (!foodItemId) return;
-    try {
-      if (selectedGroupIds.has(groupId)) {
-        const existing = (groupAssignments ?? []).find((a) => a.groupId === groupId);
-        if (existing) await removeGroupAssignment.mutateAsync(existing.id);
-      } else {
-        await assignGroup.mutateAsync({ foodItemId, groupId });
-      }
-    } catch (err) {
-      notify.fromError(err);
-    }
-  }
 
   async function toggleCounter(counterId: string): Promise<void> {
     if (!foodItemId) return;
@@ -586,24 +597,9 @@ function TagsAndAssignmentsSection({ foodItemId }: { foodItemId: string | undefi
     <section className="bg-card rounded-xl border p-4">
       <h2 className="font-heading mb-4 text-base font-semibold">Tags & Assignments</h2>
       {!foodItemId ? (
-        <p className="text-muted-foreground text-sm">Save the item first to assign groups and counters.</p>
+        <p className="text-muted-foreground text-sm">Save the item first to assign counters and kitchen groups.</p>
       ) : (
         <div className="flex flex-col gap-4">
-          <div>
-            <p className="mb-2 text-sm font-medium">Item Groups</p>
-            <div className="flex flex-wrap gap-2">
-              {(groupOptions?.items ?? []).map((g) => (
-                <ToggleBadge key={g.id} active={selectedGroupIds.has(g.id)} onClick={() => toggleGroup(g.id)}>
-                  {g.name}
-                </ToggleBadge>
-              ))}
-              {(groupOptions?.items ?? []).length === 0 && (
-                <p className="text-muted-foreground text-sm">
-                  No item groups yet — <Link to="/item-groups">add some here</Link>.
-                </p>
-              )}
-            </div>
-          </div>
           <div>
             <p className="mb-2 text-sm font-medium">Service Counters</p>
             <div className="flex flex-wrap gap-2">
@@ -916,23 +912,23 @@ function VariantRow({
   }
 
   return (
-    <div className="flex flex-wrap items-end gap-3 rounded-lg border p-3">
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border p-2">
       <div className="shrink-0">
-        <MediaStrip entityType="MENU_ITEM_VARIANT" entityId={variant.id} />
+        <MediaStrip entityType="MENU_ITEM_VARIANT" entityId={variant.id} size="sm" />
       </div>
       <TextField
         label="Portion Name"
         value={portionName}
         onChange={(e) => setPortionName(e.target.value)}
         onBlur={() => onSave({ id: variant.id, portionName, price })}
-        className="w-40"
+        className="w-32"
       />
       <NumberField
         label="Base Price"
         value={price}
         onChange={(e) => setPrice(e.target.value)}
         onBlur={() => onSave({ id: variant.id, portionName, price })}
-        className="w-28"
+        className="w-24"
       />
       <VariantTaxOverride
         variantTaxProfileId={variant.taxProfileId}
@@ -945,13 +941,16 @@ function VariantRow({
         const enabled = Boolean(override);
         const draftValue = overrideDrafts[catalog.id] ?? (override ? String(override.price) : price);
         return (
-          <div key={catalog.id} className="flex items-end gap-2 rounded-md border px-2 py-1">
+          <div key={catalog.id} className="flex items-center gap-1.5 rounded-md border px-1.5 py-1">
             <Switch
               id={`override-${variant.id}-${catalog.id}`}
               checked={enabled}
               onCheckedChange={(next) => toggleOverride(catalog.id, next)}
             />
-            <label htmlFor={`override-${variant.id}-${catalog.id}`} className="cursor-pointer text-sm whitespace-nowrap">
+            <label
+              htmlFor={`override-${variant.id}-${catalog.id}`}
+              className="cursor-pointer text-xs whitespace-nowrap"
+            >
               {catalog.name}
             </label>
             <NumberField
@@ -960,13 +959,19 @@ function VariantRow({
               value={draftValue}
               onChange={(e) => setOverrideDrafts((prev) => ({ ...prev, [catalog.id]: e.target.value }))}
               onBlur={() => commitOverridePrice(catalog.id)}
-              className="w-24"
+              className="w-16"
             />
           </div>
         );
       })}
 
-      <Button variant="ghost" size="icon-sm" onClick={onDelete} aria-label={`Remove ${portionName}`}>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="ml-auto"
+        onClick={onDelete}
+        aria-label={`Remove ${portionName}`}
+      >
         <Trash2Icon />
       </Button>
     </div>

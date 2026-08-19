@@ -2,7 +2,6 @@ import {
   ACTIVE_POS_ORDER_STATUSES,
   canTransitionPosOrderStatus,
   ENTITY_REQUIRED_PAYMENT_METHODS,
-  GstTaxability,
   LIMITS,
   POS_ORDER_NUMBER,
   PosDiscountType,
@@ -12,6 +11,7 @@ import {
   PosPaymentStatus,
   type CreatePosOrderRequest,
   type PosCheckoutRequest,
+  type PosCounterLoadDto,
   type PosDashboardDto,
   type PosDashboardSummaryDto,
   type PosOrderDetailDto,
@@ -34,7 +34,6 @@ import {
   type InsertPosPaymentInput,
   type PosOrderListFilter,
   type PosOrderTotals,
-  type SellableRow,
 } from '../repositories/PosRepository';
 import { settingsRepository } from '../repositories/SettingsRepository';
 import {
@@ -47,8 +46,11 @@ import {
 } from '../utils/errors';
 import { buildPage, resolvePaging } from '../utils/http';
 import { newId } from '../utils/ids';
+import { logger } from '../utils/logger';
 import { toDbDateTime, todayIsoDate } from '../utils/time';
 import { AuditAction, auditService, type AuditActor } from './AuditService';
+import { kdsService } from './KdsService';
+import { money, resolvePrice, taxTreatmentFrom, type TaxTreatment } from './posPricing';
 
 /**
  * The till.
@@ -65,11 +67,6 @@ import { AuditAction, auditService, type AuditActor } from './AuditService';
  *    per line would let a twenty-line ticket drift by a rupee against its own arithmetic.
  */
 
-/** DECIMAL(14,2) — every money value crosses the boundary at this scale, and only here. */
-function money(value: number): number {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
-}
-
 export interface PosScope {
   businessDate?: string;
   stationId?: string;
@@ -77,17 +74,6 @@ export interface PosScope {
 }
 
 interface ResolvedLine extends InsertPosOrderItemInput { }
-
-interface TaxTreatment {
-  taxProfileId: string | null;
-  rate: number;
-  cessRate: number;
-  cgstRate: number;
-  sgstRate: number;
-  igstRate: number;
-  priceIsInclusive: boolean;
-  interState: boolean;
-}
 
 export class PosService {
   /* --------------------------------------------------------------- reading */
@@ -143,23 +129,40 @@ export class PosService {
       ...(scope.counterId !== undefined ? { counterId: scope.counterId } : {}),
     };
 
-    const [counts, salesToday, drafts, scheduled, takeaway, named, open] = await Promise.all([
-      posRepository.dashboardCounts(pool, businessDate, scopeFilter),
-      posRepository.salesTotalForDate(pool, businessDate),
-      this.bucket(pool, { ...scopeFilter, status: [PosOrderStatus.DRAFT] }),
-      this.bucket(pool, { ...scopeFilter, status: [PosOrderStatus.SCHEDULED] }),
-      this.bucket(pool, {
-        ...scopeFilter,
-        status: [PosOrderStatus.OPEN, PosOrderStatus.SCHEDULED],
-        orderType: [PosOrderType.TAKEAWAY],
-      }),
-      this.bucket(pool, {
-        ...scopeFilter,
-        status: [...ACTIVE_POS_ORDER_STATUSES],
-        named: true,
-      }),
-      this.bucket(pool, { ...scopeFilter, status: [PosOrderStatus.OPEN] }),
-    ]);
+    const [counts, salesToday, salesByMethod, counterLoadRows, drafts, scheduled, takeaway, named, open] =
+      await Promise.all([
+        posRepository.dashboardCounts(pool, businessDate, scopeFilter),
+        posRepository.salesTotalForDate(pool, businessDate),
+        posRepository.salesByPaymentMethodForDate(pool, businessDate),
+        posRepository.counterLoad(pool, scopeFilter),
+        this.bucket(pool, { ...scopeFilter, status: [PosOrderStatus.DRAFT] }),
+        this.bucket(pool, { ...scopeFilter, status: [PosOrderStatus.SCHEDULED] }),
+        this.bucket(pool, {
+          ...scopeFilter,
+          status: [PosOrderStatus.OPEN, PosOrderStatus.SCHEDULED],
+          orderType: [PosOrderType.TAKEAWAY],
+        }),
+        this.bucket(pool, {
+          ...scopeFilter,
+          status: [...ACTIVE_POS_ORDER_STATUSES],
+          named: true,
+        }),
+        this.bucket(pool, { ...scopeFilter, status: [PosOrderStatus.OPEN] }),
+      ]);
+
+    const salesTodayByMethod: Record<PosPaymentMethod, number> = {
+      [PosPaymentMethod.CASH]: 0,
+      [PosPaymentMethod.CARD]: 0,
+      [PosPaymentMethod.UPI]: 0,
+      [PosPaymentMethod.WALLET]: 0,
+      [PosPaymentMethod.ACCOUNT]: 0,
+      [PosPaymentMethod.COMPLIMENTARY]: 0,
+    };
+    for (const [method, amount] of Object.entries(salesByMethod)) {
+      if (amount !== undefined) {
+        salesTodayByMethod[method as PosPaymentMethod] = money(amount);
+      }
+    }
 
     const summary: PosDashboardSummaryDto = {
       businessDate,
@@ -174,6 +177,7 @@ export class PosService {
       completedToday: 0,
       cancelledToday: 0,
       salesToday: money(salesToday),
+      salesTodayByMethod,
       outstandingAmount: 0,
     };
 
@@ -219,7 +223,15 @@ export class PosService {
     }
     summary.outstandingAmount = money(summary.outstandingAmount);
 
-    return { summary, drafts, scheduled, takeaway, named, open };
+    const counterLoad: PosCounterLoadDto[] = counterLoadRows.map((row) => ({
+      counterId: row.counter_id,
+      code: row.code,
+      name: row.name,
+      activeCount: Number(row.active_count),
+      openAmount: money(Number(row.open_amount)),
+    }));
+
+    return { summary, counterLoad, drafts, scheduled, takeaway, named, open };
   }
 
   private async bucket(db: Db, filter: Omit<PosOrderListFilter, 'limit' | 'offset'>): Promise<PosOrderDto[]> {
@@ -288,6 +300,7 @@ export class PosService {
       });
     });
 
+    await this.announceKdsChange(id);
     return this.getDetail(id);
   }
 
@@ -380,6 +393,7 @@ export class PosService {
       });
     });
 
+    await this.announceKdsChange(id);
     return this.getDetail(id);
   }
 
@@ -442,6 +456,7 @@ export class PosService {
       });
     });
 
+    await this.announceKdsChange(id);
     return this.getDetail(id);
   }
 
@@ -587,6 +602,7 @@ export class PosService {
       });
     });
 
+    await this.announceKdsChange(id);
     return this.getDetail(id);
   }
 
@@ -663,10 +679,24 @@ export class PosService {
       });
     });
 
+    await this.announceKdsChange(id);
     return this.getDetail(id);
   }
 
   /* ------------------------------------------------------------- internals */
+
+  /**
+   * Tells the kitchen and customer displays that this ticket moved. Strictly post-commit and
+   * best-effort: a failed broadcast must not fail a sale that already happened — a display
+   * that misses the hint simply refetches on its next poll.
+   */
+  private async announceKdsChange(orderId: string): Promise<void> {
+    try {
+      await kdsService.notifyPosOrderChanged(orderId);
+    } catch (error) {
+      logger.warn('KDS notification failed', { orderId }, error);
+    }
+  }
 
   /** A ticket may only be edited while it is still on the counter. */
   private async loadEditable(db: Db, id: string): Promise<PosOrderRow> {
@@ -943,43 +973,6 @@ export class PosService {
 /** `POS-YYYYMMDD-NNNN`, zero-padded so the day's bills sort lexically. */
 function buildPosOrderNumber(businessDate: string, sequence: number): string {
   return `${POS_ORDER_NUMBER.PREFIX}-${businessDate.replace(/-/g, '')}-${String(sequence).padStart(POS_ORDER_NUMBER.SEQUENCE_PAD, '0')}`;
-}
-
-/** Per-menu catalogue price beats the variant's list price, which beats the item's base. */
-function resolvePrice(sellable: SellableRow): number {
-  if (sellable.catalog_price !== null) return Number(sellable.catalog_price);
-  if (sellable.variant_price !== null) return Number(sellable.variant_price);
-  if (sellable.base_price !== null) return Number(sellable.base_price);
-  return 0;
-}
-
-function taxTreatmentFrom(sellable: SellableRow, interState: boolean): TaxTreatment {
-  if (sellable.tax_profile_id === null) {
-    return {
-      taxProfileId: null,
-      rate: 0,
-      cessRate: 0,
-      cgstRate: 0,
-      sgstRate: 0,
-      igstRate: 0,
-      priceIsInclusive: true,
-      interState,
-    };
-  }
-
-  // EXEMPT / NIL_RATED / ZERO_RATED / NON_GST all produce no tax; the profile already carries
-  // zero rates for those, but reading the taxability makes the intent explicit here too.
-  const taxable = sellable.gst_taxability === GstTaxability.TAXABLE;
-  return {
-    taxProfileId: sellable.tax_profile_id,
-    rate: taxable ? Number(sellable.gst_rate ?? 0) : 0,
-    cessRate: taxable ? Number(sellable.cess_rate ?? 0) : 0,
-    cgstRate: Number(sellable.cgst_rate ?? 0),
-    sgstRate: Number(sellable.sgst_rate ?? 0),
-    igstRate: Number(sellable.igst_rate ?? 0),
-    priceIsInclusive: sellable.price_is_inclusive !== 0,
-    interState,
-  };
 }
 
 export const posService = new PosService();

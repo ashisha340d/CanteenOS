@@ -1,12 +1,12 @@
 import { LIMITS, type OrderDto } from '@menuboard/shared';
 import { syncApi } from '../api';
 import { getDb } from '../db/client';
-import { orderRepository, settingsRepository, SETTINGS_KEYS } from '../db/repositories';
+import { orderRepository, settingsRepository, threadRepository, SETTINGS_KEYS } from '../db/repositories';
 import { getOrCreateDeviceId } from '../utils/deviceId';
 import { nowIso } from '../utils/date';
 import { applyChangeSet } from './applyChangeSet';
 import { useSyncStatusStore } from '../state/syncStatusStore';
-import { notifyNewOrders } from '../alerts/newOrderAlert';
+import { notifyNewOrders, playNewMessageAlert } from '../alerts/newOrderAlert';
 
 /**
  * Pulls deltas from the server starting at the persisted cursor. Each page is applied in
@@ -18,6 +18,7 @@ export async function runPull(): Promise<void> {
   const startCursor = (await settingsRepository.get<number>(SETTINGS_KEYS.SYNC_CURSOR)) ?? 0;
   let cursor = startCursor;
   const newOrders: OrderDto[] = [];
+  const newMessageIds: string[] = [];
 
   console.log(`[SYNC] runPull starting from cursor ${startCursor}`);
 
@@ -50,6 +51,19 @@ export async function runPull(): Promise<void> {
           }
         }
 
+        // Same test for chat: a message this device has never stored, written by someone else.
+        // System rows are skipped — they are the order's own paperwork and the order alert has
+        // already sounded for them.
+        if (startCursor > 0 && response.changes.thread_messages.length > 0) {
+          const currentUserId = await settingsRepository.get<string>(SETTINGS_KEYS.CURRENT_USER_ID);
+          for (const message of response.changes.thread_messages) {
+            if (message.deletedAt !== null) continue;
+            if (message.messageType === 'SYSTEM') continue;
+            if (message.authorId === currentUserId) continue;
+            if (!(await threadRepository.existsById(message.id))) newMessageIds.push(message.id);
+          }
+        }
+
         await applyChangeSet(response.changes, db);
         await settingsRepository.set(SETTINGS_KEYS.SYNC_CURSOR, response.cursor, db);
 
@@ -68,6 +82,12 @@ export async function runPull(): Promise<void> {
     // when the dataVersion bump below makes the feed reload.
     if (newOrders.length > 0) {
       void notifyNewOrders(newOrders);
+    }
+
+    // Only when no order sounded this cycle: an order arrives with its own ORDER_CREATED row
+    // plus any replies, and firing both buzzers back to back reads as one garbled noise.
+    if (newMessageIds.length > 0 && newOrders.length === 0) {
+      void playNewMessageAlert(newMessageIds);
     }
 
     // The cursor only advances when the server actually returned changes, so this is the

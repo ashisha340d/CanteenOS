@@ -6,11 +6,14 @@ import { asyncHandler } from '../middleware/errorHandler';
 import { validate } from '../middleware/validate';
 import {
   createPosOrderSchema,
+  kioskProfileQuerySchema,
   posCheckoutSchema,
   posDashboardQuerySchema,
   posOrderIdParam,
   posOrderListQuerySchema,
   posVoidSchema,
+  printPosBillSchema,
+  sendPosBillWhatsAppSchema,
   updatePosOrderSchema,
   updatePosOrderStatusSchema,
 } from '../validation/schemas';
@@ -36,6 +39,21 @@ export function posRoutes(): Router {
     validate({ query: posDashboardQuerySchema }),
     asyncHandler(PosController.dashboard),
   );
+
+  // How the organisation wants its kiosks to look and speak, plus the binding of the one stand
+  // that asked. Under POS_READ rather than SETTINGS_READ deliberately: a kiosk session holds
+  // the former and must never hold the latter, and this returns presentation and the billing
+  // identity already printed on every receipt — never an operational setting or a credential.
+  router.get(
+    '/kiosk-profile',
+    read,
+    validate({ query: kioskProfileQuerySchema }),
+    asyncHandler(PosController.kioskProfile),
+  );
+
+  // The stands a tablet may say it is. A deliberately narrow projection: enough for a member
+  // of staff to recognise the stand in front of them, and nothing about any other one.
+  router.get('/kiosk-devices', read, asyncHandler(PosController.kioskDevices));
 
   router.get(
     '/orders',
@@ -77,6 +95,22 @@ export function posRoutes(): Router {
     checkout,
     validate({ params: posOrderIdParam, body: posCheckoutSchema }),
     asyncHandler(PosController.checkout),
+  );
+
+  // Reprinting and re-sending a bill are the same authority as taking the money was: whoever
+  // may settle a ticket may hand the guest the document for it, and nobody else may.
+  router.post(
+    '/orders/:posOrderId/print',
+    checkout,
+    validate({ params: posOrderIdParam, body: printPosBillSchema }),
+    asyncHandler(PosController.printBill),
+  );
+
+  router.post(
+    '/orders/:posOrderId/whatsapp',
+    checkout,
+    validate({ params: posOrderIdParam, body: sendPosBillWhatsAppSchema }),
+    asyncHandler(PosController.sendBillWhatsApp),
   );
 
   router.post(

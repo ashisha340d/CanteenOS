@@ -11,6 +11,7 @@ import {
   PosOrderItemStatus,
   PosOrderStatus,
   PosOrderType,
+  PosPaymentMethod,
   TERMINAL_POS_ORDER_STATUSES,
   type EntityDto,
   type PosOrderDetailDto,
@@ -29,7 +30,6 @@ import {
   XIcon,
 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -50,7 +50,6 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup, useDefaultLayout } from '@/components/ui/resizable';
@@ -59,7 +58,8 @@ import { FieldGroup, NumberField, SelectField, TextField } from '@/components/fo
 import { BackButton } from '../../components/BackButton';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { StatusChip } from '../../components/StatusChip';
-import { menusApi } from '../../api/menuMaster';
+import { menusApi, countersApi } from '../../api/menuMaster';
+import { clearCdsLive, disconnectCdsLive, publishCdsLive } from '../../services/cdsLive';
 import { useEntity } from '../../hooks/useEntities';
 import { useMenus } from '../../hooks/useMenuMaster';
 import {
@@ -68,7 +68,6 @@ import {
   useSetPosOrderStatus,
   useUpdatePosOrder,
 } from '../../hooks/usePos';
-import { useDeviceProfile } from '@/hooks/useDeviceProfile';
 import { useAuth } from '../../services/AuthContext';
 import { readError } from '../../services/errorMessage';
 import { toOptions } from '@/lib/options';
@@ -188,7 +187,7 @@ export function PosEntryPage(): JSX.Element {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const { hasCapability } = useAuth();
-  const { isMobile } = useDeviceProfile();
+
 
   const orderId = params.get('orderId');
   const wantsCheckout = params.get('checkout') === '1';
@@ -264,8 +263,20 @@ export function PosEntryPage(): JSX.Element {
   const [customDraft, setCustomDraft] = useState({ name: '', price: '', quantity: '1' });
   const [entityPickerOpen, setEntityPickerOpen] = useState(false);
   const [checkoutOrder, setCheckoutOrder] = useState<PosOrderDetailDto | null>(null);
+  /* Tender methods currently selected in the checkout dialog — the customer display turns its
+     pay QR on the moment UPI is among them, before a rupee has moved. */
+  const [checkoutMethods, setCheckoutMethods] = useState<PosPaymentMethod[]>([]);
+  /* Which counter's customer display this till mirrors to. Empty means no display attached. */
+  const [cdsCounterId, setCdsCounterId] = useState(() => readStored('pos-cds-counter-id', ''));
+  useEffect(() => {
+    localStorage.setItem('pos-cds-counter-id', cdsCounterId);
+  }, [cdsCounterId]);
+
+  const { data: cdsCounters } = useQuery({
+    queryKey: ['counters', 'cds-picker'],
+    queryFn: () => countersApi.list({ status: MasterStatus.ACTIVE, page: 1, pageSize: 100 }),
+  });
   const [cancelOpen, setCancelOpen] = useState(false);
-  const [mobileTab, setMobileTab] = useState(() => readStored('pos-mobile-tab', 'menu'));
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [lineEditKey, setLineEditKey] = useState<string | null>(null);
@@ -286,9 +297,6 @@ export function PosEntryPage(): JSX.Element {
     localStorage.setItem('pos-cart-cols', JSON.stringify(cartCols));
   }, [cartCols]);
 
-  useEffect(() => {
-    localStorage.setItem('pos-mobile-tab', mobileTab);
-  }, [mobileTab]);
   const [cardSize, setCardSize] = useState(() =>
     readStored('pos-card-size', 5, Number),
   );
@@ -455,8 +463,44 @@ export function PosEntryPage(): JSX.Element {
   const estimatedGross = lines.reduce((sum, line) => sum + lineGross(line), 0);
   const estimatedDiscount = lines.reduce((sum, line) => sum + lineDiscount(line), 0);
   const estimatedNet = estimatedGross - estimatedDiscount;
-  const headlineTotal =
-    serverOrder !== null && !dirty ? serverOrder.totalAmount : estimatedNet;
+
+  /* The customer display mirrors this ticket as it is rung up — debounced so a burst of taps
+     repaints once, and cleared the moment the till holds nothing the customer should see. */
+  const cdsCounterIdRef = useRef(cdsCounterId);
+  cdsCounterIdRef.current = cdsCounterId;
+  useEffect(() => {
+    if (cdsCounterId === '') return;
+    const timer = window.setTimeout(() => {
+      if (lines.length === 0) {
+        clearCdsLive(cdsCounterId);
+        return;
+      }
+      publishCdsLive({
+        counterId: cdsCounterId,
+        orderNumber: serverOrder?.orderNumber ?? null,
+        lines: lines.map((line) => ({
+          itemName: line.name,
+          variantName: line.variantName,
+          quantity: line.quantity,
+          unitPrice: line.unitPrice,
+          lineTotal: Math.round(lineNet(line) * 100) / 100,
+        })),
+        subtotalAmount: Math.round(estimatedGross * 100) / 100,
+        discountAmount: Math.round(estimatedDiscount * 100) / 100,
+        totalAmount: Math.round(estimatedNet * 100) / 100,
+        paymentMethods: checkoutMethods,
+      });
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [cdsCounterId, lines, serverOrder, checkoutMethods, estimatedGross, estimatedDiscount, estimatedNet]);
+
+  useEffect(
+    () => () => {
+      if (cdsCounterIdRef.current !== '') clearCdsLive(cdsCounterIdRef.current);
+      disconnectCdsLive();
+    },
+    [],
+  );
 
   /* How much of each dish is already on the ticket, keyed by food item so a card shows the sum
      across its portions — "3 on the ticket" is the useful answer, not three separate counts. */
@@ -661,6 +705,9 @@ export function PosEntryPage(): JSX.Element {
     const header = {
       orderType,
       menuId,
+      /* Which counter rang this ticket up. Without it the customer display has nothing to bind
+         its settled bill to, and an unrouted dish has no counter board to fall back to. */
+      counterId: cdsCounterId === '' ? null : cdsCounterId,
       entityId: quickSale ? null : entityId,
       entityName: walkIn ? entityName.trim() || null : null,
       entityPhone: walkIn ? entityPhone.trim() || null : null,
@@ -1193,10 +1240,6 @@ export function PosEntryPage(): JSX.Element {
     );
   }
 
-  const primaryAction = canCheckout
-    ? { label: 'Checkout', reason: checkoutReason, run: startCheckout }
-    : { label: 'Place order', reason: placeReason, run: () => saveAs(PosOrderStatus.OPEN, 'Order placed.') };
-
   return (
     <>
       <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -1286,111 +1329,59 @@ export function PosEntryPage(): JSX.Element {
         </Alert>
       )}
 
-      {isMobile ? (
-        <>
-          <Tabs value={mobileTab} onValueChange={setMobileTab}>
-            <TabsList className="w-full">
-              <TabsTrigger value="menu" className="touch-target">
-                Menu
-              </TabsTrigger>
-              <TabsTrigger value="ticket" className="touch-target">
-                Ticket
-                {lines.length > 0 && (
-                  <Badge variant="secondary" className="ml-1.5 tabular-nums">
-                    {lines.length}
-                  </Badge>
-                )}
-              </TabsTrigger>
-            </TabsList>
-            {/* Definite heights, not min-heights: the panes scroll internally, and a flex child
-                with `min-h-0` inside an auto-height parent collapses to nothing. */}
-            <TabsContent value="menu" className="flex flex-col gap-3">
-              <div className="h-[17rem]">{menuPane}</div>
-              <Separator />
-              <div className="h-[30rem]">{productPane}</div>
-            </TabsContent>
-            <TabsContent value="ticket">
-              <div className="h-[calc(100dvh-11rem)] min-h-[34rem]">{ticketPane}</div>
-            </TabsContent>
-          </Tabs>
-
-          {/* The ticket total and the one action that matters never scroll away. */}
-          <div className="bg-background/95 safe-bottom sticky bottom-0 z-20 -mx-4 mt-4 flex items-center gap-3 border-t px-4 py-3 backdrop-blur-md">
-            <div className="min-w-0 flex-1">
-              <p className="text-muted-foreground text-[0.6875rem]">
-                {serverOrder !== null && !dirty ? 'Total' : 'Estimated'}
-              </p>
-              <p className="font-heading text-lg font-semibold tabular-nums">
-                {formatMoney(headlineTotal)}
-              </p>
-            </div>
-            <Button
-              type="button"
-              className="touch-target"
-              disabled={busy || primaryAction.reason !== null}
-              title={primaryAction.reason ?? undefined}
-              onClick={() => void primaryAction.run()}
-            >
-              {busy && <Spinner data-icon="inline-start" />}
-              {primaryAction.label}
-            </Button>
-          </div>
-        </>
-      ) : (
-        <div className="h-[calc(100dvh-6.5rem)] min-h-[36rem]">
-          <ResizablePanelGroup
-            id="pos-entry-panels"
-            orientation="horizontal"
-            className="h-full"
-            defaultLayout={defaultLayout}
-            onLayoutChanged={onLayoutChanged}
-          >
-            {panelOrder === 'ticket-products-menu' ? (
-              <>
-                <ResizablePanel id="pos-ticket" defaultSize="30" minSize="20" maxSize="55">
-                  <aside className="bg-card h-full rounded-lg border p-2">{ticketPane}</aside>
-                </ResizablePanel>
-                <ResizableHandle withHandle />
-                <ResizablePanel id="pos-products" defaultSize="54" minSize="30">
-                  <section className="h-full min-w-0 pl-1 pr-1">{productPane}</section>
-                </ResizablePanel>
-                <ResizableHandle withHandle />
-                <ResizablePanel id="pos-menu" defaultSize="16" minSize="10" maxSize="30">
-                  <aside className="bg-card h-full rounded-lg border p-2">{menuPane}</aside>
-                </ResizablePanel>
-              </>
-            ) : panelOrder === 'products-menu-ticket' ? (
-              <>
-                <ResizablePanel id="pos-products" defaultSize="54" minSize="30">
-                  <section className="h-full min-w-0 pl-1 pr-1">{productPane}</section>
-                </ResizablePanel>
-                <ResizableHandle withHandle />
-                <ResizablePanel id="pos-menu" defaultSize="16" minSize="10" maxSize="30">
-                  <aside className="bg-card h-full rounded-lg border p-2">{menuPane}</aside>
-                </ResizablePanel>
-                <ResizableHandle withHandle />
-                <ResizablePanel id="pos-ticket" defaultSize="30" minSize="20" maxSize="55">
-                  <aside className="bg-card h-full rounded-lg border p-2">{ticketPane}</aside>
-                </ResizablePanel>
-              </>
-            ) : (
-              <>
-                <ResizablePanel id="pos-menu" defaultSize="16" minSize="10" maxSize="30">
-                  <aside className="bg-card h-full rounded-lg border p-2">{menuPane}</aside>
-                </ResizablePanel>
-                <ResizableHandle withHandle />
-                <ResizablePanel id="pos-products" defaultSize="54" minSize="30">
-                  <section className="h-full min-w-0 pl-1 pr-1">{productPane}</section>
-                </ResizablePanel>
-                <ResizableHandle withHandle />
-                <ResizablePanel id="pos-ticket" defaultSize="30" minSize="20" maxSize="55">
-                  <aside className="bg-card h-full rounded-lg border p-2">{ticketPane}</aside>
-                </ResizablePanel>
-              </>
-            )}
-          </ResizablePanelGroup>
-        </div>
-      )}
+      <div className="h-[calc(100dvh-6.5rem)] min-h-[36rem]">
+        <ResizablePanelGroup
+          id="pos-entry-panels"
+          orientation="horizontal"
+          className="h-full"
+          defaultLayout={defaultLayout}
+          onLayoutChanged={onLayoutChanged}
+        >
+          {panelOrder === 'ticket-products-menu' ? (
+            <>
+              <ResizablePanel id="pos-ticket" defaultSize="30" minSize="20" maxSize="55">
+                <aside className="bg-card h-full rounded-lg border p-2">{ticketPane}</aside>
+              </ResizablePanel>
+              <ResizableHandle withHandle />
+              <ResizablePanel id="pos-products" defaultSize="54" minSize="30">
+                <section className="h-full min-w-0 pl-1 pr-1">{productPane}</section>
+              </ResizablePanel>
+              <ResizableHandle withHandle />
+              <ResizablePanel id="pos-menu" defaultSize="16" minSize="10" maxSize="30">
+                <aside className="bg-card h-full rounded-lg border p-2">{menuPane}</aside>
+              </ResizablePanel>
+            </>
+          ) : panelOrder === 'products-menu-ticket' ? (
+            <>
+              <ResizablePanel id="pos-products" defaultSize="54" minSize="30">
+                <section className="h-full min-w-0 pl-1 pr-1">{productPane}</section>
+              </ResizablePanel>
+              <ResizableHandle withHandle />
+              <ResizablePanel id="pos-menu" defaultSize="16" minSize="10" maxSize="30">
+                <aside className="bg-card h-full rounded-lg border p-2">{menuPane}</aside>
+              </ResizablePanel>
+              <ResizableHandle withHandle />
+              <ResizablePanel id="pos-ticket" defaultSize="30" minSize="20" maxSize="55">
+                <aside className="bg-card h-full rounded-lg border p-2">{ticketPane}</aside>
+              </ResizablePanel>
+            </>
+          ) : (
+            <>
+              <ResizablePanel id="pos-menu" defaultSize="16" minSize="10" maxSize="30">
+                <aside className="bg-card h-full rounded-lg border p-2">{menuPane}</aside>
+              </ResizablePanel>
+              <ResizableHandle withHandle />
+              <ResizablePanel id="pos-products" defaultSize="54" minSize="30">
+                <section className="h-full min-w-0 pl-1 pr-1">{productPane}</section>
+              </ResizablePanel>
+              <ResizableHandle withHandle />
+              <ResizablePanel id="pos-ticket" defaultSize="30" minSize="20" maxSize="55">
+                <aside className="bg-card h-full rounded-lg border p-2">{ticketPane}</aside>
+              </ResizablePanel>
+            </>
+          )}
+        </ResizablePanelGroup>
+      </div>
 
       {/* Variant chooser */}
       <Dialog open={variantFor !== null} onOpenChange={(next) => !next && setVariantFor(null)}>
@@ -1694,6 +1685,7 @@ export function PosEntryPage(): JSX.Element {
         <PosCheckoutModal
           open
           order={checkoutOrder}
+          onPaymentMethodsChange={setCheckoutMethods}
           onClose={() => setCheckoutOrder(null)}
           onSettled={(settledOrder) => {
             setCheckoutOrder(null);
@@ -1756,6 +1748,23 @@ export function PosEntryPage(): JSX.Element {
                 { value: 'products-menu-ticket', label: 'Products · Menu · Ticket' },
               ]}
             />
+            <SelectField
+              label="This till's counter"
+              value={cdsCounterId === '' ? '__off__' : cdsCounterId}
+              onChange={(value) => setCdsCounterId(value === '__off__' ? '' : value)}
+              options={[
+                { value: '__off__', label: 'Not set — no counter, no customer display' },
+                ...(cdsCounters?.items ?? []).map((counter) => ({
+                  value: counter.id,
+                  label: counter.name,
+                })),
+              ]}
+            />
+            <p className="text-muted-foreground -mt-2 text-xs">
+              Stamped on every ticket this till writes. Its customer display mirrors the ticket
+              live and keeps the bill (with the UPI QR) on screen after checkout; the counter's
+              Service KDS also picks up dishes that carry no routing of their own.
+            </p>
           </div>
         </DialogContent>
       </Dialog>

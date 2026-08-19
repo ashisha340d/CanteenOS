@@ -5,7 +5,10 @@ import { closePool, verifyConnection } from './db/pool';
 import { migrationStatus } from './db/migrator';
 import { createSocketServer } from './realtime/socketServer';
 import { realtime } from './realtime/RealtimeGateway';
+import { menuBoardRealtime } from './realtime/menuBoardSocket';
 import { attachmentService } from './services/AttachmentService';
+import { maintenanceSchedulerService } from './services/MaintenanceSchedulerService';
+import { menuShiftSchedulerService } from './services/MenuShiftSchedulerService';
 import { permissionsCacheService } from './services/PermissionsCacheService';
 import { youtubeImportService } from './services/YoutubeImportService';
 import { refreshTokenRepository } from './repositories/RefreshTokenRepository';
@@ -38,6 +41,14 @@ async function main(): Promise<void> {
   // The YouTube Recipe Downloader's in-process worker: the queue is its DB table, so this
   // just re-queues anything a previous process left mid-flight and starts the drain loop.
   await youtubeImportService.startWorker();
+
+  // Preventive maintenance: turns schedules that have fallen due into tickets and raises the
+  // due/overdue/warranty reminders. Idempotent, so a missed run costs nothing.
+  maintenanceSchedulerService.start();
+
+  // Un-hides whatever the morning/evening shift boundary brings back onto a menu. Also
+  // idempotent — see MenuShiftSchedulerService's `menu.last_shift_reset` bookkeeping.
+  menuShiftSchedulerService.start();
 
   const app = createApp();
   const httpServer = http.createServer(app);
@@ -118,7 +129,10 @@ function registerShutdownHandlers(
     logger.info('Shutting down', { signal });
     clearInterval(housekeeping);
     youtubeImportService.stopWorker();
+    maintenanceSchedulerService.stop();
+    menuShiftSchedulerService.stop();
     realtime.detach();
+    menuBoardRealtime.detach();
 
     // Stop accepting new work, let in-flight requests finish, then release the pool.
     const closed = new Promise<void>((resolve) => httpServer.close(() => resolve()));

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { NumberField, SelectField, TextField } from '@/components/form/fields';
 import { Modal } from '../../components/Modal/Modal';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { ingredientsApi } from '../../api/ingredients';
 import { useCreateModifier, useDeleteModifier, useUpdateModifier } from '../../hooks/useMenuMaster';
 import { enumOptions } from '@/lib/options';
 import { notify } from '@/lib/notify';
@@ -40,6 +41,7 @@ export function ModifiersModal({
 
   const [drafts, setDrafts] = useState<Record<string, DraftModifier>>({});
   const [deleting, setDeleting] = useState<ModifierDto | null>(null);
+  const [translatingId, setTranslatingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!group?.modifiers) return;
@@ -68,6 +70,20 @@ export function ModifiersModal({
       notify.success('Modifier saved.');
     } catch (err) {
       notify.fromError(err);
+    }
+  }
+
+  async function translateRow(id: string): Promise<void> {
+    const draft = drafts[id];
+    if (!draft || !draft.name.trim()) return;
+    setTranslatingId(id);
+    try {
+      const { translated } = await ingredientsApi.translate(draft.name);
+      setField(id, { nameHi: translated });
+    } catch (err) {
+      notify.fromError(err);
+    } finally {
+      setTranslatingId(null);
     }
   }
 
@@ -103,9 +119,10 @@ export function ModifiersModal({
       >
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-2">
-            <div className="text-muted-foreground grid grid-cols-[1.2fr_1fr_0.8fr_0.8fr_auto] gap-2 px-1 text-xs font-medium">
+            <div className="text-muted-foreground grid grid-cols-[1.2fr_1fr_auto_0.8fr_0.8fr_auto] gap-2 px-1 text-xs font-medium">
               <span>Name</span>
               <span>Hindi name</span>
+              <span />
               <span>Price delta</span>
               <span>Status</span>
               <span />
@@ -120,7 +137,7 @@ export function ModifiersModal({
               return (
                 <div
                   key={modifier.id}
-                  className="grid grid-cols-[1.2fr_1fr_0.8fr_0.8fr_auto] items-center gap-2 rounded-md border p-1.5"
+                  className="grid grid-cols-[1.2fr_1fr_auto_0.8fr_0.8fr_auto] items-center gap-2 rounded-md border p-1.5"
                 >
                   <TextField
                     value={draft.name}
@@ -130,6 +147,15 @@ export function ModifiersModal({
                     value={draft.nameHi}
                     onChange={(e) => setField(modifier.id, { nameHi: e.target.value })}
                   />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={translatingId === modifier.id || !draft.name.trim()}
+                    onClick={() => translateRow(modifier.id)}
+                  >
+                    {translatingId === modifier.id ? '…' : 'हिंदी →'}
+                  </Button>
                   <NumberField
                     value={draft.priceDelta}
                     onChange={(e) => setField(modifier.id, { priceDelta: e.target.value })}

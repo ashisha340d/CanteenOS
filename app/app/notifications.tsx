@@ -24,7 +24,25 @@ const TYPE_ICON: Record<NotificationType, keyof typeof Ionicons.glyphMap> = {
   STATUS_CHANGED: 'sync-outline',
   BOARD_INVITATION: 'people-outline',
   ALERT: 'alarm-outline',
+  MAINTENANCE_DUE: 'calendar-outline',
+  MAINTENANCE_OVERDUE: 'alert-circle-outline',
+  MAINTENANCE_CRITICAL: 'warning-outline',
+  MAINTENANCE_REPORTED: 'construct-outline',
+  MAINTENANCE_ASSIGNED: 'person-add-outline',
+  MAINTENANCE_COMPLETED: 'checkmark-done-outline',
+  EQUIPMENT_OUT_OF_SERVICE: 'close-circle-outline',
+  WARRANTY_EXPIRING: 'shield-outline',
+  SUPPLIER_FOLLOW_UP: 'call-outline',
 };
+
+/** Equipment notifications carry their subject in `data` rather than in a column. */
+function stringFromData(
+  data: Record<string, unknown> | null,
+  key: 'ticketId' | 'equipmentId',
+): string | null {
+  const value = data?.[key];
+  return typeof value === 'string' && value !== '' ? value : null;
+}
 
 export default function NotificationsScreen(): React.JSX.Element {
   const router = useRouter();
@@ -61,7 +79,15 @@ export default function NotificationsScreen(): React.JSX.Element {
   const onOpen = async (notification: NotificationDto): Promise<void> => {
     await notificationRepository.markReadLocal([notification.id]);
     await load();
-    if (notification.orderId) {
+
+    // A maintenance notification points at a ticket, or failing that at the asset itself.
+    const ticketId = stringFromData(notification.data, 'ticketId');
+    const equipmentId = stringFromData(notification.data, 'equipmentId');
+    if (ticketId !== null) {
+      router.push({ pathname: '/equipment/tickets/[ticketId]', params: { ticketId } });
+    } else if (equipmentId !== null) {
+      router.push({ pathname: '/equipment/[equipmentId]', params: { equipmentId } });
+    } else if (notification.orderId) {
       router.push({ pathname: '/orders/[orderId]', params: { orderId: notification.orderId } });
     } else if (notification.boardId) {
       router.push({ pathname: '/boards/[boardId]', params: { boardId: notification.boardId } });

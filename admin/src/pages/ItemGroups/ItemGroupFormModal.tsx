@@ -5,11 +5,17 @@ import { FieldGroup, SelectField, TextField } from '@/components/form/fields';
 import { FormModalFooter } from '@/components/form/FormModalFooter';
 import { Modal } from '../../components/Modal/Modal';
 import { usePersistedFormState } from '../../components/Modal/modalState';
-import { useCreateItemGroup, useUpdateItemGroup } from '../../hooks/useMenuMaster';
+import {
+  useCatalogueOptions,
+  useCreateItemGroup,
+  useUpdateItemGroup,
+} from '../../hooks/useMenuMaster';
 import { readError } from '../../services/errorMessage';
 import { enumOptions } from '@/lib/options';
 
 interface FormValues {
+  /** `''` means no catalogue — the group exists in the master but sits on no menu. */
+  catalogueId: string;
   name: string;
   code: string;
   description: string;
@@ -30,14 +36,16 @@ export function ItemGroupFormModal({
   const modalId = `item-group-form-${editing?.id ?? 'new'}`;
   const initial: FormValues = editing
     ? {
-        name: editing.name,
-        code: editing.code ?? '',
-        description: editing.description ?? '',
-        status: editing.status,
-      }
-    : { name: '', code: '', description: '', status: MasterStatus.ACTIVE };
+      catalogueId: editing.catalogueId ?? '',
+      name: editing.name,
+      code: editing.code ?? '',
+      description: editing.description ?? '',
+      status: editing.status,
+    }
+    : { catalogueId: '', name: '', code: '', description: '', status: MasterStatus.ACTIVE };
   const { value, setValue, clear } = usePersistedFormState<FormValues>(modalId, initial, open);
   const [error, setError] = useState<string | null>(null);
+  const { options: catalogueOptions, isLoading: cataloguesLoading } = useCatalogueOptions();
   const create = useCreateItemGroup();
   const update = useUpdateItemGroup();
   const submitting = create.isPending || update.isPending;
@@ -50,6 +58,7 @@ export function ItemGroupFormModal({
         await update.mutateAsync({
           id: editing.id,
           body: {
+            catalogueId: value.catalogueId || null,
             name: value.name,
             code: value.code || null,
             description: value.description || null,
@@ -58,6 +67,7 @@ export function ItemGroupFormModal({
         });
       } else {
         await create.mutateAsync({
+          catalogueId: value.catalogueId || null,
           name: value.name,
           code: value.code || null,
           description: value.description || null,
@@ -86,6 +96,15 @@ export function ItemGroupFormModal({
             </Alert>
           )}
 
+          <SelectField
+            label="Menu Catalogue"
+            helperText="The catalogue this group belongs to. A group belongs to one catalogue; leave it unassigned to keep it out of every menu for now."
+            value={value.catalogueId}
+            onChange={(v) => setValue({ ...value, catalogueId: v })}
+            disabled={cataloguesLoading}
+            emptyLabel="No catalogue"
+            options={catalogueOptions}
+          />
           <TextField
             label="Group name"
             helperText="e.g. À La Carte, Combo Eligible, Set Menu"

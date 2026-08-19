@@ -10,6 +10,7 @@ import {
   billingListQuerySchema,
   billingStatusSchema,
   boardRoleCapabilityParam,
+  createKioskDeviceSchema,
   generateBillingSchema,
   idParam,
   reportKindParamSchema,
@@ -17,6 +18,7 @@ import {
   roleCapabilityParam,
   settingKeyParamSchema,
   settingValueSchema,
+  updateKioskDeviceSchema,
   updatePermissionSchema,
 } from '../validation/schemas';
 
@@ -34,7 +36,7 @@ const entityAuditParams = z
 export function adminRoutes(): Router {
   const router = Router();
 
-  router.use(denyClient(ClientType.ANDROID));
+  router.use(denyClient(ClientType.ANDROID, ClientType.KIOSK));
 
   router.get(
     '/dashboard',
@@ -138,6 +140,42 @@ export function adminRoutes(): Router {
     requireCapability(Capability.SETTINGS_WRITE),
     validate({ params: settingKeyParamSchema, body: settingValueSchema }),
     asyncHandler(AdminController.updateSetting),
+  );
+
+  /* -------------------------------------------------------- kiosk devices */
+
+  /*
+   * The self-service stands. Under the settings capabilities rather than a pair of its own:
+   * a kiosk row is configuration of how the organisation presents itself and takes money at a
+   * counter, which is the same authority that already sets the GSTIN and the payee's own
+   * printer. `denyClient(ANDROID, KIOSK)` at the mount point is what keeps a tablet in the
+   * hall from reaching its own registry — it reads the narrow projection under POS_READ.
+   */
+  router.get(
+    '/kiosk-devices',
+    requireCapability(Capability.SETTINGS_READ),
+    asyncHandler(AdminController.listKioskDevices),
+  );
+
+  router.post(
+    '/kiosk-devices',
+    requireCapability(Capability.SETTINGS_WRITE),
+    validate({ body: createKioskDeviceSchema }),
+    asyncHandler(AdminController.createKioskDevice),
+  );
+
+  router.patch(
+    '/kiosk-devices/:id',
+    requireCapability(Capability.SETTINGS_WRITE),
+    validate({ params: idParam, body: updateKioskDeviceSchema }),
+    asyncHandler(AdminController.updateKioskDevice),
+  );
+
+  router.delete(
+    '/kiosk-devices/:id',
+    requireCapability(Capability.SETTINGS_WRITE),
+    validate({ params: idParam }),
+    asyncHandler(AdminController.deleteKioskDevice),
   );
 
   return router;

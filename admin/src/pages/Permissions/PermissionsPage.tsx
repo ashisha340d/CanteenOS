@@ -1,9 +1,16 @@
+import { useState } from 'react';
 import { BoardRole, Capability, UserRole } from '@menuboard/shared';
-import { CheckIcon, InfoIcon } from 'lucide-react';
+import { CheckIcon, InfoIcon, SearchIcon, XIcon } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from '@/components/ui/input-group';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { TableSkeleton } from '../../components/ui/Skeletons';
@@ -15,6 +22,7 @@ import {
 } from '../../hooks/useAdmin';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { humanise } from '@/lib/options';
+import { looseMatch } from '@/lib/search';
 import { notify } from '@/lib/notify';
 
 /**
@@ -29,6 +37,7 @@ export function PermissionsPage(): JSX.Element {
   const canEdit = hasCapability(Capability.PERMISSION_WRITE);
   const setRoleCapability = useSetRoleCapability();
   const setBoardRoleCapability = useSetBoardRoleCapability();
+  const [search, setSearch] = useState('');
 
   if (isLoading || !data) {
     return <TableSkeleton rows={10} columns={5} />;
@@ -43,6 +52,27 @@ export function PermissionsPage(): JSX.Element {
 
   const roles = Object.keys(data.roleCapabilities);
   const boardRoles = Object.keys(data.boardRoleCapabilities);
+
+  const roleCapabilities = allCapabilities.filter(
+    (cap) =>
+      looseMatch(search, cap) &&
+      roles.some((role) =>
+        data.roleCapabilities[role as keyof typeof data.roleCapabilities]?.includes(cap as never),
+      ),
+  );
+  const boardCapabilities = allCapabilities.filter(
+    (cap) =>
+      looseMatch(search, cap) &&
+      boardRoles.some((role) =>
+        data.boardRoleCapabilities[role as keyof typeof data.boardRoleCapabilities]?.includes(
+          cap as never,
+        ),
+      ),
+  );
+  const androidForbidden = data.androidForbiddenCapabilities.filter((cap) =>
+    looseMatch(search, cap),
+  );
+  const matchCount = new Set([...roleCapabilities, ...boardCapabilities]).size;
 
   async function toggleRole(role: string, capability: string, granted: boolean): Promise<void> {
     try {
@@ -90,6 +120,40 @@ export function PermissionsPage(): JSX.Element {
           </AlertDescription>
         </Alert>
 
+        {/* Loose matching: punctuation is ignored and each word only has to appear in order,
+            so "eq wr" or "equipwrite" both land on equipment.write. */}
+        <div className="flex flex-wrap items-center gap-3">
+          <InputGroup className="w-full sm:w-[320px]">
+            <InputGroupAddon>
+              <SearchIcon />
+            </InputGroupAddon>
+            <InputGroupInput
+              placeholder="Search capabilities…"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              aria-label="Search capabilities"
+            />
+            {search && (
+              <InputGroupAddon align="inline-end">
+                <InputGroupButton
+                  size="icon-xs"
+                  onClick={() => setSearch('')}
+                  aria-label="Clear search"
+                >
+                  <XIcon />
+                </InputGroupButton>
+              </InputGroupAddon>
+            )}
+          </InputGroup>
+          {search && (
+            <span className="text-muted-foreground text-sm tabular-nums">
+              {matchCount === 0
+                ? 'No capabilities match'
+                : `${matchCount} of ${allCapabilities.length} capabilities`}
+            </span>
+          )}
+        </div>
+
         <Card>
           <CardHeader>
             <CardTitle>Global role capabilities</CardTitle>
@@ -99,13 +163,7 @@ export function PermissionsPage(): JSX.Element {
             <MatrixTable
               columns={roles}
               formatColumn={humanise}
-              capabilities={allCapabilities.filter((cap) =>
-                roles.some((role) =>
-                  data.roleCapabilities[role as keyof typeof data.roleCapabilities]?.includes(
-                    cap as never,
-                  ),
-                ),
-              )}
+              capabilities={roleCapabilities}
               has={(cap, role) =>
                 Boolean(
                   data.roleCapabilities[role as keyof typeof data.roleCapabilities]?.includes(
@@ -134,13 +192,7 @@ export function PermissionsPage(): JSX.Element {
             <MatrixTable
               columns={boardRoles}
               formatColumn={(role) => role}
-              capabilities={allCapabilities.filter((cap) =>
-                boardRoles.some((role) =>
-                  data.boardRoleCapabilities[
-                    role as keyof typeof data.boardRoleCapabilities
-                  ]?.includes(cap as never),
-                ),
-              )}
+              capabilities={boardCapabilities}
               has={(cap, role) =>
                 Boolean(
                   data.boardRoleCapabilities[
@@ -165,7 +217,10 @@ export function PermissionsPage(): JSX.Element {
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
-              {data.androidForbiddenCapabilities.map((cap) => (
+              {androidForbidden.length === 0 && (
+                <p className="text-muted-foreground text-sm">No matches.</p>
+              )}
+              {androidForbidden.map((cap) => (
                 <Badge
                   key={cap}
                   variant="outline"
@@ -223,6 +278,16 @@ function MatrixTable({
           </TableRow>
         </TableHeader>
         <TableBody>
+          {capabilities.length === 0 && (
+            <TableRow className="hover:bg-transparent">
+              <TableCell
+                colSpan={columns.length + 1}
+                className="text-muted-foreground py-8 text-center text-sm"
+              >
+                No capabilities match your search.
+              </TableCell>
+            </TableRow>
+          )}
           {capabilities.map((capability) => (
             <TableRow key={capability}>
               <TableCell className="bg-card text-foreground sticky left-0 z-10 font-mono text-[0.8125rem]">

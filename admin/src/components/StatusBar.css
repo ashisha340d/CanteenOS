@@ -1,0 +1,185 @@
+.os-status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  height: 30px;
+  padding: 0 4px;
+  font-size: 11px;
+  color: var(--desk-bar-fg);
+  background: linear-gradient(180deg, var(--desk-bar-from) 0%, var(--desk-bar-to) 100%);
+  border-top: 1px solid var(--desk-bar-border);
+  user-select: none;
+}
+
+.os-status__cell {
+  display: flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 10px;
+  white-space: nowrap;
+  /* Sunken bevel: light on the outside edges, dark on the inside — the old status-cell look. */
+  border: 1px solid;
+  border-color: var(--desk-bevel-lo) var(--desk-bevel-hi) var(--desk-bevel-hi) var(--desk-bevel-lo);
+  background: var(--desk-cell-bg);
+}
+
+.os-status__cell--grow {
+  flex: 1;
+  min-width: 0;
+  gap: 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.os-status__cell--grow::-webkit-scrollbar {
+  display: none;
+}
+
+.os-status__idle {
+  opacity: 0.6;
+}
+
+.os-status__task {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  height: 20px;
+  max-width: 170px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--desk-task-fg);
+  cursor: pointer;
+  /* Raised bevel, inverted from the cells above. */
+  border: 1px solid;
+  border-color: var(--desk-bevel-hi) var(--desk-bevel-lo) var(--desk-bevel-lo) var(--desk-bevel-hi);
+  background: var(--desk-task-bg);
+}
+
+.os-status__task:hover {
+  background: var(--desk-task-hover-bg);
+}
+
+.os-status__task--active {
+  border-color: var(--desk-bevel-lo) var(--desk-bevel-hi) var(--desk-bevel-hi) var(--desk-bevel-lo);
+  background: var(--desk-task-active-bg);
+}
+
+.os-status__task--minimised .os-status__task-label {
+  opacity: 0.6;
+  font-style: italic;
+}
+
+.os-status__task-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.os-status__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.os-status__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+}
+
+.os-status__icon-glyph {
+  width: 9px;
+  height: 9px;
+  color: #fff;
+  stroke-width: 2.4;
+}
+
+/* ---------------------------------------------------------------------- system tray */
+
+.os-status__tray {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  height: 20px;
+  padding: 0 2px 0 6px;
+  border: 1px solid;
+  border-color: var(--desk-bevel-lo) var(--desk-bevel-hi) var(--desk-bevel-hi) var(--desk-bevel-lo);
+  background: var(--desk-cell-bg);
+}
+
+.os-status__tray-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  opacity: 0.75;
+}
+
+.os-status__tray-item--alert {
+  color: #f87171;
+  opacity: 1;
+}
+
+.os-status__tray-glyph {
+  width: 12px;
+  height: 12px;
+}
+
+@keyframes os-tray-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.os-status__tray-glyph--spin {
+  animation: os-tray-spin 1.1s linear infinite;
+  color: var(--desk-accent);
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .os-status__tray-glyph--spin {
+    animation: none;
+  }
+}
+
+.os-status__tray-user {
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 6px;
+  font-weight: 600;
+}
+
+.os-status__clock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 0;
+  padding: 0 6px;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+}
+
+.os-status__clock-time {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.os-status__clock-date {
+  font-size: 8.5px;
+  opacity: 0.7;
+}

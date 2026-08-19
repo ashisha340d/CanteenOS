@@ -8,7 +8,7 @@ import type {
 } from '@menuboard/shared';
 import { masterService, type MasterQuery } from '../services/MasterService';
 import { requireAuth } from '../middleware/types';
-import { created, noContent, ok, paginated } from '../utils/http';
+import { catalogueFilterFrom, created, noContent, ok, paginated } from '../utils/http';
 import { actorFrom } from './context';
 
 /**
@@ -81,7 +81,14 @@ export const MasterController = {
   /* ------------------------------------------------------- menu categories */
 
   async listMenuCategories(req: Request, res: Response): Promise<void> {
-    paginated(res, await masterService.listMenuCategories(req.query as unknown as MasterQuery));
+    const query = req.query as unknown as MasterQuery & { catalogueId?: string };
+    paginated(
+      res,
+      await masterService.listMenuCategories({
+        ...query,
+        ...catalogueFilterFrom(req.query.catalogueId as string | undefined),
+      }),
+    );
   },
 
   async createMenuCategory(req: Request, res: Response): Promise<void> {
@@ -113,7 +120,7 @@ export const MasterController = {
     paginated(
       res,
       await masterService.listMenuItems(
-        req.query as unknown as MasterQuery & { categoryId?: string },
+        req.query as unknown as MasterQuery & { categoryId?: string; groupId?: string },
         requireAuth(req).userId,
       ),
     );

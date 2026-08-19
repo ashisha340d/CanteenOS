@@ -87,6 +87,86 @@ export const AuditAction = {
   POS_ORDER_CHECKED_OUT: 'pos.order.checked.out',
   /** A settled sale reversed by an offsetting payment. Manager and above. */
   POS_ORDER_VOIDED: 'pos.order.voided',
+  /** A bill sent to a physical printer — the one moment MenuBoard drives hardware. */
+  POS_BILL_PRINTED: 'pos.bill.printed',
+  /** A bill sent to a guest's own phone. Recorded because it leaves the premises. */
+  POS_BILL_WHATSAPP_SENT: 'pos.bill.whatsapp.sent',
+
+  /**
+   * A counter swap on a settled-but-open ticket: lines cancelled as EXCHANGED and replacement
+   * lines written at the same value. Audited because it rewrites what a paid bill is for.
+   */
+  KDS_ORDER_EXCHANGED: 'kds.order.exchanged',
+
+  /**
+   * A counter marked a dish finished (or put it back), or its counted stock ran out. Audited
+   * because it is a write from a wall screen into the *menu* — the dish leaves every Digital
+   * Menu Board until the next shift reset, and later "why did it vanish at 7pm" deserves an
+   * answer naming the counter that said so.
+   */
+  MENU_ITEM_AVAILABILITY_SET: 'menu.item.availability.set',
+
+  /**
+   * The self-service stands. Audited because a kiosk row names the UPI account a guest's money
+   * goes to: re-pointing a stand at a different payee is a financial change, and one made from
+   * a desk rather than in front of the device it affects.
+   */
+  KIOSK_DEVICE_CREATED: 'kiosk.device.created',
+  KIOSK_DEVICE_UPDATED: 'kiosk.device.updated',
+  KIOSK_DEVICE_DELETED: 'kiosk.device.deleted',
+
+  /**
+   * The Digital Menu Board screens. Audited because a screen row decides which menu — and
+   * therefore which prices — a hall full of guests reads off the wall, and because the board
+   * itself is unauthenticated: the row is the only place that choice is recorded being made.
+   */
+  MENU_BOARD_SCREEN_CREATED: 'menuBoard.screen.created',
+  MENU_BOARD_SCREEN_UPDATED: 'menuBoard.screen.updated',
+  MENU_BOARD_SCREEN_DELETED: 'menuBoard.screen.deleted',
+
+  /**
+   * The shift-change auto-reset (`MenuShiftSchedulerService`): un-hides whatever a shift boundary
+   * brings back onto a menu. Audited under a system actor because nobody clicked anything — the
+   * clock did — and an operator later wondering why an item that was 86'd is available again
+   * needs a row that says so, not a mystery.
+   */
+  MENU_SHIFT_RESET: 'menu.shift.reset',
+
+  EQUIPMENT_CREATED: 'equipment.created',
+  EQUIPMENT_UPDATED: 'equipment.updated',
+  EQUIPMENT_DELETED: 'equipment.deleted',
+  EQUIPMENT_STATUS_CHANGED: 'equipment.status.changed',
+  EQUIPMENT_MOVED: 'equipment.moved',
+  EQUIPMENT_DOCUMENT_UPLOADED: 'equipment.document.uploaded',
+  EQUIPMENT_DOCUMENT_DELETED: 'equipment.document.deleted',
+  EQUIPMENT_WARRANTY_RECORDED: 'equipment.warranty.recorded',
+  EQUIPMENT_SUPPLIER_LINKED: 'equipment.supplier.linked',
+  EQUIPMENT_SUPPLIER_UNLINKED: 'equipment.supplier.unlinked',
+
+  FLOOR_PLAN_UPLOADED: 'equipment.floorplan.uploaded',
+  FLOOR_PLAN_UPDATED: 'equipment.floorplan.updated',
+  FLOOR_PLAN_DELETED: 'equipment.floorplan.deleted',
+  FLOOR_PLAN_POSITION_SET: 'equipment.floorplan.position.set',
+  FLOOR_PLAN_POSITION_REMOVED: 'equipment.floorplan.position.removed',
+
+  MAINTENANCE_TICKET_CREATED: 'maintenance.ticket.created',
+  MAINTENANCE_TICKET_UPDATED: 'maintenance.ticket.updated',
+  MAINTENANCE_TICKET_STATUS_CHANGED: 'maintenance.ticket.status.changed',
+  MAINTENANCE_TICKET_ASSIGNED: 'maintenance.ticket.assigned',
+  MAINTENANCE_TICKET_COMPLETED: 'maintenance.ticket.completed',
+  MAINTENANCE_TICKET_DELETED: 'maintenance.ticket.deleted',
+  MAINTENANCE_SCHEDULE_CREATED: 'maintenance.schedule.created',
+  MAINTENANCE_SCHEDULE_UPDATED: 'maintenance.schedule.updated',
+  MAINTENANCE_SCHEDULE_DELETED: 'maintenance.schedule.deleted',
+
+  SUPPLIER_CREATED: 'supplier.created',
+  SUPPLIER_UPDATED: 'supplier.updated',
+  SUPPLIER_DELETED: 'supplier.deleted',
+  SUPPLIER_CONTACT_SAVED: 'supplier.contact.saved',
+  SUPPLIER_CONTACT_DELETED: 'supplier.contact.deleted',
+  /** The dial intent was opened. Written before the call connects — see the 025 header. */
+  SUPPLIER_CALLED: 'supplier.called',
+  SUPPLIER_WHATSAPP_SENT: 'supplier.whatsapp.sent',
 } as const;
 export type AuditAction = (typeof AuditAction)[keyof typeof AuditAction];
 

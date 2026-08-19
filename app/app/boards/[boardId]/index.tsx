@@ -14,7 +14,7 @@ import type {
   OrderStatus,
   ThreadMessageDto,
 } from '@menuboard/shared';
-import { Capability, UserRole, isOrderLocked } from '@menuboard/shared';
+import { Capability, UserRole, canDeleteOwnOrder, isOrderLocked } from '@menuboard/shared';
 import {
   acknowledgementRepository,
   attachmentRepository,
@@ -24,6 +24,7 @@ import {
   threadRepository,
 } from '../../../src/db/repositories';
 import { useAuthStore } from '../../../src/state/authStore';
+import { useSyncStatusStore } from '../../../src/state/syncStatusStore';
 import { useLanguage } from '../../../src/state/languageStore';
 import { useBoardCapability } from '../../../src/permissions/useBoardCapability';
 import { shoppingApi } from '../../../src/api';
@@ -51,6 +52,7 @@ import { useTypingStore } from '../../../src/state/typingStore';
 import { emitTyping } from '../../../src/sync/socketClient';
 import { orderLineName, t } from '../../../src/i18n';
 import { wa, waSenderColor } from '../../../src/theme/whatsapp';
+import { localDayOf, todayIsoDate } from '../../../src/utils/date';
 
 /**
  * The board feed — the screen the product is actually about.
@@ -134,7 +136,8 @@ export default function BoardFeedScreen(): React.JSX.Element {
   const router = useRouter();
   const language = useLanguage();
   const user = useAuthStore((s) => s.user);
-  const isSyncing = useAuthStore((s) => s.isSyncing);
+  // See boards.tsx: the sync engine writes `syncStatusStore`, not `authStore.isSyncing`.
+  const isSyncing = useSyncStatusStore((s) => s.isSyncing);
   const refreshLocalData = useAuthStore((s) => s.refreshLocalData);
 
   const canCreateOrder = useBoardCapability(boardId, Capability.ORDER_CREATE);
@@ -145,6 +148,7 @@ export default function BoardFeedScreen(): React.JSX.Element {
   const canEditQuantity = useBoardCapability(boardId, Capability.ORDER_QUANTITY_EDIT);
   const canGenerateShopping = useBoardCapability(boardId, Capability.SHOPPING_LIST_GENERATE);
   const canAssign = useBoardCapability(boardId, Capability.ORDER_ASSIGN);
+  const canUpdateOrder = useBoardCapability(boardId, Capability.ORDER_UPDATE);
 
   const [data, setData] = useState<FeedData>(EMPTY);
   const [recipeFor, setRecipeFor] = useState<{ item: OrderItemDto; pax: number } | null>(null);
@@ -153,6 +157,8 @@ export default function BoardFeedScreen(): React.JSX.Element {
   const [menuOrder, setMenuOrder] = useState<OrderDto | null>(null);
   /** Which line's menu is open, and the order it belongs to. */
   const [itemMenu, setItemMenu] = useState<{ item: OrderItemDto; order: OrderDto } | null>(null);
+  /** Which message's long-press menu is open. */
+  const [messageMenu, setMessageMenu] = useState<ThreadMessageDto | null>(null);
   const [editQtyFor, setEditQtyFor] = useState<{ item: OrderItemDto; order: OrderDto } | null>(null);
   const [assignFor, setAssignFor] = useState<OrderDto | null>(null);
   /** The message being replied to; drives the compose bar's quoted header. */
@@ -163,6 +169,9 @@ export default function BoardFeedScreen(): React.JSX.Element {
    * board id, not a bare flag, so switching boards scrolls to the bottom again instead of
    * silently reusing the previous board's "already scrolled" state. */
   const autoScrolledBoardId = useRef<string | null>(null);
+  /** Whether the reader is parked at the live end of the feed — gates the follow-along scroll.
+   * Starts true because the feed opens scrolled to the bottom. */
+  const atBottomRef = useRef(true);
   const recorder = useVoiceNoteRecorder();
 
   const typingByBoard = useTypingStore((s) => s.byBoard);
@@ -177,6 +186,16 @@ export default function BoardFeedScreen(): React.JSX.Element {
           data.members.find((m) => m.userId === entry.userId)?.userName ?? 'Someone',
       );
   }, [typingByBoard, boardId, user?.id, data.members]);
+
+  /**
+   * `router.back()` alone is a silent no-op when this screen is the first entry in the stack —
+   * opened from a push notification, or landed on via `replace` — so the arrow did nothing.
+   * Falling back to the board list gives the button somewhere to go in every case.
+   */
+  const goBack = useCallback(() => {
+    if (router.canGoBack()) router.back();
+    else router.replace('/(tabs)/boards');
+  }, [router]);
 
   const announceTyping = useCallback(
     (typing: boolean) => {
@@ -213,9 +232,26 @@ export default function BoardFeedScreen(): React.JSX.Element {
       return;
     }
 
-    const ordersById = new Map(orders.map((order) => [order.id, order]));
-    const orderIds = orders.map((order) => order.id);
-    const messageIds = messages.map((message) => message.id);
+    // The feed is today-and-upcoming only — an order whose date has passed belongs in the
+    // Archive, not sitting in the live conversation.
+    //
+    // An order is judged by the day it is *for*, a loose message by the day it was *sent*.
+    // These cannot be collapsed into one rule: an order card is drawn from its ORDER_CREATED
+    // message, so filtering that message by its own timestamp deleted every upcoming order
+    // raised before today — the board came up empty. A message belonging to a visible order
+    // is part of that order's card and always travels with it, however old it is.
+    const today = todayIsoDate();
+    const visibleOrders = orders.filter((order) => order.requiredDate >= today);
+    const visibleOrderIds = new Set(visibleOrders.map((order) => order.id));
+    const visibleMessages = messages.filter((message) =>
+      message.orderId === null
+        ? localDayOf(message.createdAt) >= today
+        : visibleOrderIds.has(message.orderId),
+    );
+
+    const ordersById = new Map(visibleOrders.map((order) => [order.id, order]));
+    const orderIds = visibleOrders.map((order) => order.id);
+    const messageIds = visibleMessages.map((message) => message.id);
 
     const [itemsByOrder, acksByOrder, attachmentsByMessage] = await Promise.all([
       orderRepository.listItemsForOrders(orderIds),
@@ -240,7 +276,7 @@ export default function BoardFeedScreen(): React.JSX.Element {
       }),
     );
 
-    const { entries, statusEventsByOrder } = buildEntries(messages, ordersById, language);
+    const { entries, statusEventsByOrder } = buildEntries(visibleMessages, ordersById, language);
 
     setData({
       board,
@@ -281,6 +317,23 @@ export default function BoardFeedScreen(): React.JSX.Element {
     }
     return undefined;
   }, [boardId, data.entries]);
+
+  /**
+   * Follow the conversation: a message landing from someone else, or their typing bubble
+   * appearing, pulls the view down to it. Only the *own* messages used to do this, so an
+   * incoming reply arrived below the fold and the board looked idle.
+   *
+   * Gated on the reader already being near the bottom. Someone scrolled up reading yesterday's
+   * order must not be yanked away mid-sentence every time a bubble appears — which is exactly
+   * how every chat app behaves.
+   */
+  const entryCount = data.entries.length;
+  const isTyping = typingNames.length > 0;
+  useEffect(() => {
+    if (!atBottomRef.current) return;
+    const id = setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
+    return () => clearTimeout(id);
+  }, [entryCount, isTyping]);
 
   const myAcks = useMemo(() => {
     const map = new Map<string, AcknowledgementDto>();
@@ -384,6 +437,10 @@ export default function BoardFeedScreen(): React.JSX.Element {
     try {
       await orderRepository.updateLocal(order.id, {
         expectedRevision: order.revision,
+        // Every line is resubmitted, cancelled ones included: `updateLocal` replaces the item
+        // set outright, so omitting a line deletes it. Their cancellation is preserved by the
+        // repository rather than by anything passed here — a cancelled line's quantity is
+        // never the one being edited, since the menu that opens this is gated on it.
         items: items.map((line) => ({
           id: line.id,
           menuItemId: line.menuItemId,
@@ -491,6 +548,43 @@ export default function BoardFeedScreen(): React.JSX.Element {
     ]);
   };
 
+  /**
+   * Withdrawing an order the user raised. Worded as what actually happens — the card stays on
+   * the board struck through rather than vanishing, because a board is a record of what was
+   * asked for and a silently disappearing order is how a kitchen loses track of one.
+   */
+  const confirmDeleteOrder = (order: OrderDto): void => {
+    if (!user || !canDeleteOwnOrder(order, user.id)) return;
+    const replyCount = data.entries
+      .filter((entry) => entry.kind === 'ORDER' && entry.order.id === order.id)
+      .reduce((total, entry) => total + (entry.kind === 'ORDER' ? entry.replies.length : 0), 0);
+
+    Alert.alert(
+      `Delete order ${order.orderNumber}?`,
+      replyCount > 0
+        ? `It will be marked cancelled for everyone on the board, and the ${replyCount} ${replyCount === 1 ? 'comment' : 'comments'} on it will be removed. This cannot be undone.`
+        : 'It will be marked cancelled for everyone on the board. This cannot be undone.',
+      [
+        { text: 'Keep it', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await orderRepository.deleteLocal(order.id, user.id);
+              await load();
+            } catch (error) {
+              Alert.alert(
+                'Could not delete',
+                error instanceof Error ? error.message : 'Try again.',
+              );
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const scrollToEnd = (): void => {
     // Deferred: the row for the message just posted has not been laid out yet.
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
@@ -504,7 +598,7 @@ export default function BoardFeedScreen(): React.JSX.Element {
           title={data.board.name}
           subtitle="No access"
           typingNames={[]}
-          onBack={() => router.back()}
+          onBack={goBack}
         />
         <EmptyState
           title="No access"
@@ -530,7 +624,7 @@ export default function BoardFeedScreen(): React.JSX.Element {
         title={data.board?.name ?? 'Board'}
         subtitle={memberLine}
         typingNames={typingNames}
-        onBack={() => router.back()}
+        onBack={goBack}
       />
 
       <KeyboardAvoidingView
@@ -548,6 +642,15 @@ export default function BoardFeedScreen(): React.JSX.Element {
             windowSize={9}
             removeClippedSubviews={true}
             updateCellsBatchingPeriod={40}
+            // Feeds the follow-along scroll above. 120px of slack counts as "at the bottom",
+            // so a small nudge while reading the latest message does not switch following off.
+            onScroll={({ nativeEvent }) => {
+              const { contentOffset, contentSize, layoutMeasurement } = nativeEvent;
+              const distanceFromEnd =
+                contentSize.height - contentOffset.y - layoutMeasurement.height;
+              atBottomRef.current = distanceFromEnd <= 120;
+            }}
+            scrollEventThrottle={64}
             ListFooterComponent={typingNames.length > 0 ? <TypingBubble /> : null}
             refreshControl={
               <RefreshControl
@@ -646,9 +749,7 @@ export default function BoardFeedScreen(): React.JSX.Element {
                                   : entry.replies.find((r) => r.id === message.parentMessageId)
                                     ?.body ?? undefined
                               }
-                              onLongPress={
-                                message.authorId === user?.id ? () => unsend(message) : undefined
-                              }
+                              onLongPress={() => setMessageMenu(message)}
                             />
                           ),
                         )}
@@ -670,9 +771,7 @@ export default function BoardFeedScreen(): React.JSX.Element {
                         delivery={deliveryOf(entry.message)}
                         showTail={startsRun}
                         showAuthor={startsRun}
-                        onLongPress={
-                          entry.message.authorId === user?.id ? () => unsend(entry.message) : undefined
-                        }
+                        onLongPress={() => setMessageMenu(entry.message)}
                       />
                     </Animated.View>
                   );
@@ -774,6 +873,13 @@ export default function BoardFeedScreen(): React.JSX.Element {
             onClose={() => setMenuOrder(null)}
             title={menuOrder?.orderNumber}
             items={menuItems}
+          />
+
+          <ActionSheet
+            isOpen={messageMenu !== null}
+            onClose={() => setMessageMenu(null)}
+            title={messageMenu?.body ?? 'Message'}
+            items={buildMessageMenu()}
           />
 
           <ActionSheet
@@ -882,6 +988,29 @@ export default function BoardFeedScreen(): React.JSX.Element {
       });
     }
 
+    if (canUpdateOrder && !isOrderLocked(order) && order.status !== 'CANCELLED') {
+      built.push({
+        id: 'edit',
+        label: 'Edit order',
+        icon: 'create-outline',
+        onPress: () =>
+          router.push({ pathname: '/orders/[orderId]/edit', params: { orderId: order.id } }),
+      });
+    }
+
+    // Only the person who raised it, and only up to "Got it" — see `canDeleteOwnOrder`.
+    // Withdrawing someone else's order, or one already being worked on, is a manager action
+    // and does not belong on a chevron menu one tap from every member of the board.
+    if (user !== null && canDeleteOwnOrder(order, user.id)) {
+      built.push({
+        id: 'delete',
+        label: 'Delete order',
+        icon: 'trash-outline',
+        destructive: true,
+        onPress: () => confirmDeleteOrder(order),
+      });
+    }
+
     if (canPost) {
       const created = data.entries.find(
         (entry) => entry.kind === 'ORDER' && entry.order.id === order.id,
@@ -893,6 +1022,40 @@ export default function BoardFeedScreen(): React.JSX.Element {
         onPress: () => {
           if (created !== undefined && created.kind === 'ORDER') setReplyTo(created.message);
         },
+      });
+    }
+
+    return built;
+  }
+
+  /**
+   * The long-press menu on a message. Replaces going straight to a destructive confirm: a
+   * hidden gesture that could only ever delete was both undiscoverable and alarming, and
+   * there was no way to reply to a specific message from the bubble itself.
+   */
+  function buildMessageMenu(): ActionSheetItem[] {
+    const message = messageMenu;
+    if (message === null) return [];
+    const built: ActionSheetItem[] = [];
+
+    if (canPost) {
+      built.push({
+        id: 'reply',
+        label: 'Reply',
+        icon: 'arrow-undo-outline',
+        onPress: () => setReplyTo(message),
+      });
+    }
+
+    // Your own words only. The server re-checks on push, so a board role holding
+    // THREAD_DELETE_ANY still moderates from the admin side rather than from here.
+    if (message.authorId === user?.id) {
+      built.push({
+        id: 'unsend',
+        label: 'Delete message',
+        icon: 'trash-outline',
+        destructive: true,
+        onPress: () => unsend(message),
       });
     }
 
@@ -1026,7 +1189,7 @@ function buildEntries(
       }
     }
 
-    const day = message.createdAt.slice(0, 10);
+    const day = localDayOf(message.createdAt);
     if (day !== lastDay) {
       entries.push({ kind: 'DATE', key: `date-${day}`, label: dayLabel(day, language) });
       lastDay = day;
@@ -1093,7 +1256,8 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   container: { flex: 1, backgroundColor: wa.wallpaper },
   list: {
-    paddingHorizontal: 4,
+    paddingLeft: 12,
+    paddingRight: 12,
     paddingTop: 8,
     paddingBottom: 10,
     flexGrow: 1,
