@@ -82,7 +82,7 @@
   justify-content: center;
   width: var(--icon-tile-size);
   height: var(--icon-tile-size);
-  border: 1px solid var(--icon-tile-border);
+  border: var(--icon-tile-border-width) solid var(--icon-tile-border);
   border-radius: var(--icon-tile-radius);
   background-color: var(--icon-tile-bg);
   background-image: var(--icon-tile-overlay);
@@ -97,14 +97,6 @@
 
 .os-icon:active .os-icon__tile {
   transform: translateY(0) scale(0.97);
-}
-
-.os-icon__glyph {
-  width: var(--icon-glyph-size);
-  height: var(--icon-glyph-size);
-  color: var(--icon-glyph-color);
-  stroke-width: var(--icon-glyph-stroke);
-  filter: var(--icon-glyph-shadow);
 }
 
 .os-icon__label {

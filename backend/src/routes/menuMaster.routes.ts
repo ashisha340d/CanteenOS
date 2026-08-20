@@ -69,6 +69,8 @@ export function menuMasterRoutes(): Router {
 
   /* menus */
   router.get('/menus', read, validate({ query: menuListQuerySchema }), asyncHandler(MenuMasterController.listMenus));
+  // Ahead of '/menus/:id': Express matches in order, and the uuid param would reject 'active'.
+  router.get('/menus/active', read, asyncHandler(MenuMasterController.activeMenus));
   router.get('/menus/:id', read, validate({ params: idParam }), asyncHandler(MenuMasterController.getMenuById));
   router.post('/menus', write, validate({ body: createMenuSchema }), asyncHandler(MenuMasterController.createMenu));
   router.patch(

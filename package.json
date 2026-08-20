@@ -49,5 +49,8 @@
     "concurrently": "^10.0.4",
     "typescript": "^5.5.4",
     "vitest": "^2.1.9"
+  },
+  "dependencies": {
+    "@fluentui/react-icons": "^2.0.337"
   }
 }

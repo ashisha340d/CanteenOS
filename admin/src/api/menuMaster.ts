@@ -1,4 +1,5 @@
 import type {
+  ActiveMenusDto,
   AvailabilityStatus,
   CounterDto,
   CounterRouteDto,
@@ -52,6 +53,8 @@ export const menuAssignmentWorkspaceApi = {
 
 export const menusApi = {
   list: (query: MasterListQuery) => unwrapPaged<MenuDto>(http.get('/menus', { params: query })),
+  /** Which menus are servable at this instant, resolved against the server clock. */
+  active: () => unwrap<ActiveMenusDto>(http.get('/menus/active')),
   get: (id: string) => unwrap<MenuDto>(http.get(`/menus/${id}`)),
   create: (body: MenuWriteRequest) => unwrap<MenuDto>(http.post('/menus', body)),
   update: (id: string, body: Partial<MenuWriteRequest>) =>

@@ -1,11 +1,13 @@
-import { useEffect } from 'react';
-import { DockableWidget } from './DockableWidget';
-import { findWidget, type WidgetDefinition } from './registry';
+import { useEffect, useMemo } from 'react';
+import { DockableWidget, type WidgetSwitch } from './DockableWidget';
+import { defaultOptions, findWidget, type WidgetDefinition } from './registry';
 import {
   hostIsSeeded,
   removeHostWidget,
   setHostWidgets,
+  setWidgetOption,
   useHostWidgets,
+  useWidgetOptions,
   type WidgetDock,
 } from './widgetState';
 import './widgetSurface.css';
@@ -14,10 +16,11 @@ import './widgetSurface.css';
  * Drop this into any screen and that screen can carry widgets.
  *
  * The surface is a transparent, click-through overlay pinned to its positioned parent, so a
- * page keeps working normally underneath it — only the widgets themselves take the pointer.
- * Everything else is a consequence of `hostId`: the widgets a surface shows, and where each
- * one sits, are stored against that id, so the desktop, a module page and a form each keep
- * their own arrangement of the same widget types without knowing about one another.
+ * page keeps working normally underneath it — only the cards themselves take the pointer.
+ * Everything else follows from `hostId`: which widgets a surface shows, where each one sits
+ * and how each is configured are all stored against that id, so the desktop, a module page
+ * and a form each keep their own arrangement of the same widget types without knowing about
+ * one another.
  *
  *   <div className="relative">
  *     <MyForm />
@@ -37,15 +40,15 @@ export interface WidgetSurfaceProps {
    * whatever the operator has left it as, including empty.
    */
   defaults?: string[];
-  /** Removes the close button, so the surface's widgets are fixed rather than user-managed. */
+  /** Removes the remove control, so the surface's widgets are fixed rather than user-managed. */
   permanent?: boolean;
   className?: string;
 }
 
 /**
  * First-time placement: a gadget column down the right-hand edge, wrapping into a second
- * column when it runs out of height. Only ever used for a widget that has never been placed
- * — once it has been dragged, its stored corner offsets win.
+ * column when it runs out of height. Only ever used for a widget that has never been placed —
+ * once it has been dragged, its stored corner offsets win.
  */
 function defaultPlacement(
   definitions: WidgetDefinition[],
@@ -97,21 +100,57 @@ export function WidgetSurface({
   return (
     <div className={`widget-surface ${className ?? ''}`.trim()}>
       {definitions.map((definition, index) => (
-        <DockableWidget
+        <MountedWidget
           key={definition.id}
-          id={definition.id}
+          definition={definition}
           hostId={hostId}
-          title={definition.label}
-          Icon={definition.Icon}
-          accent={definition.accent}
-          defaultPlacement={defaultPlacement(definitions, index)}
-          minWidth={definition.min.w}
-          minHeight={definition.min.h}
-          {...(permanent ? {} : { onClose: () => removeHostWidget(hostId, definition.id) })}
-        >
-          <definition.Body />
-        </DockableWidget>
+          placement={defaultPlacement(definitions, index)}
+          permanent={permanent}
+        />
       ))}
     </div>
+  );
+}
+
+/**
+ * One widget and its own configuration. Split out because options are read with a hook, and a
+ * hook cannot be called inside the map above.
+ */
+function MountedWidget({
+  definition,
+  hostId,
+  placement,
+  permanent,
+}: {
+  definition: WidgetDefinition;
+  hostId: string;
+  placement: { dock: WidgetDock; offsetX: number; offsetY: number; w: number; h: number };
+  permanent: boolean;
+}): JSX.Element {
+  const defaults = useMemo(() => defaultOptions(definition), [definition]);
+  const options = useWidgetOptions(hostId, definition.id, defaults);
+
+  const switches: WidgetSwitch[] = (definition.switches ?? []).map((option) => ({
+    key: option.key,
+    label: option.label,
+    on: options[option.key] === true,
+    toggle: () =>
+      setWidgetOption(hostId, definition.id, option.key, options[option.key] !== true),
+  }));
+
+  return (
+    <DockableWidget
+      id={definition.id}
+      hostId={hostId}
+      title={definition.label}
+      accent={definition.accent}
+      defaultPlacement={placement}
+      minWidth={definition.min.w}
+      minHeight={definition.min.h}
+      {...(switches.length > 0 ? { switches } : {})}
+      {...(permanent ? {} : { onClose: () => removeHostWidget(hostId, definition.id) })}
+    >
+      <definition.Body options={options} />
+    </DockableWidget>
   );
 }

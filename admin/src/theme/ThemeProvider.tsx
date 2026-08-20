@@ -1,4 +1,10 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  defaultIconSetFor,
+  iconSetSuits,
+  iconSetsForSkin,
+  type IconSetDefinition,
+} from './iconSets';
 
 /**
  * Theme state for the portal: which skin is painted and how large the type runs.
@@ -45,11 +51,6 @@ export const FONT_CHOICES: FontChoice[] = [
   'public',
   'outfit',
 ];
-
-/** How the desktop draws its icons — tile shape, fill and glyph treatment. */
-export type IconSet = 'aurora' | 'slate' | 'frost' | 'outline' | 'mono' | 'classic';
-
-export const ICON_SETS: IconSet[] = ['aurora', 'slate', 'frost', 'outline', 'mono', 'classic'];
 
 const SKIN_KEY = 'menuboard.admin.theme';
 const TEXT_SIZE_KEY = 'menuboard.admin.textSize';
@@ -99,10 +100,26 @@ export function getStoredFont(): FontChoice {
   return 'geist';
 }
 
-export function getStoredIconSet(): IconSet {
-  const raw = localStorage.getItem(ICON_SET_KEY);
-  if (ICON_SETS.includes(raw as IconSet)) return raw as IconSet;
-  return 'aurora';
+/**
+ * Icon sets are chosen *per skin*, not once globally: a set belongs to the wallpaper it was
+ * drawn for, so switching to Graphite and back to Sandalwood should return the icons you had
+ * under Sandalwood rather than the nearest legal substitute for a Graphite set.
+ */
+function getStoredIconSets(): Partial<Record<DesktopSkin, string>> {
+  try {
+    const raw: unknown = JSON.parse(localStorage.getItem(ICON_SET_KEY) ?? '{}');
+    if (typeof raw !== 'object' || raw === null) return {};
+    return Object.fromEntries(
+      Object.entries(raw as Record<string, unknown>).filter(
+        ([skin, id]) =>
+          DESKTOP_SKINS.includes(skin as DesktopSkin) &&
+          typeof id === 'string' &&
+          iconSetSuits(id, skin as DesktopSkin),
+      ),
+    ) as Partial<Record<DesktopSkin, string>>;
+  } catch {
+    return {};
+  }
 }
 
 interface ThemeContextValue {
@@ -114,8 +131,11 @@ interface ThemeContextValue {
   setDesktopSkin: (skin: DesktopSkin) => void;
   font: FontChoice;
   setFont: (font: FontChoice) => void;
-  iconSet: IconSet;
-  setIconSet: (set: IconSet) => void;
+  /** Always a set that suits the current desktop skin. */
+  iconSet: string;
+  setIconSet: (set: string) => void;
+  /** The sets the current skin offers, for the picker and the context menu. */
+  iconSetOptions: IconSetDefinition[];
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -125,7 +145,13 @@ export function ThemeProvider({ children }: { children: ReactNode }): JSX.Elemen
   const [textSize, setTextSizeState] = useState<TextSize>(getStoredTextSize);
   const [desktopSkin, setDesktopSkinState] = useState<DesktopSkin>(getStoredDesktopSkin);
   const [font, setFontState] = useState<FontChoice>(getStoredFont);
-  const [iconSet, setIconSetState] = useState<IconSet>(getStoredIconSet);
+  const [iconSets, setIconSets] = useState<Partial<Record<DesktopSkin, string>>>(getStoredIconSets);
+
+  /* Resolved rather than stored: whatever this skin was last given, falling back to the set
+     the skin ships with. This is what makes an incompatible pairing unrepresentable — there
+     is no state in which the active skin and the active icon set disagree. */
+  const iconSet = iconSets[desktopSkin] ?? defaultIconSetFor(desktopSkin);
+  const iconSetOptions = useMemo(() => iconSetsForSkin(desktopSkin), [desktopSkin]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -170,10 +196,17 @@ export function ThemeProvider({ children }: { children: ReactNode }): JSX.Elemen
     localStorage.setItem(FONT_KEY, next);
   }, []);
 
-  const setIconSet = useCallback((next: IconSet) => {
-    setIconSetState(next);
-    localStorage.setItem(ICON_SET_KEY, next);
-  }, []);
+  const setIconSet = useCallback(
+    (next: string) => {
+      if (!iconSetSuits(next, desktopSkin)) return;
+      setIconSets((prev) => {
+        const merged = { ...prev, [desktopSkin]: next };
+        localStorage.setItem(ICON_SET_KEY, JSON.stringify(merged));
+        return merged;
+      });
+    },
+    [desktopSkin],
+  );
 
   const value = useMemo(
     () => ({
@@ -187,6 +220,7 @@ export function ThemeProvider({ children }: { children: ReactNode }): JSX.Elemen
       setFont,
       iconSet,
       setIconSet,
+      iconSetOptions,
     }),
     [
       skin,
@@ -199,6 +233,7 @@ export function ThemeProvider({ children }: { children: ReactNode }): JSX.Elemen
       setFont,
       iconSet,
       setIconSet,
+      iconSetOptions,
     ],
   );
 
@@ -252,24 +287,6 @@ export const FONT_HINT: Record<FontChoice, string> = {
   source: 'Adobe’s UI workhorse. Compact, so more fits on a row.',
   public: 'Plain, sturdy, and neutral. Nothing about it draws attention.',
   outfit: 'Pure geometric. Strong at large sizes, best paired with a large text size.',
-};
-
-export const ICON_SET_LABEL: Record<IconSet, string> = {
-  aurora: 'Aurora',
-  slate: 'Slate',
-  frost: 'Frost',
-  outline: 'Outline',
-  mono: 'Mono',
-  classic: 'Classic',
-};
-
-export const ICON_SET_HINT: Record<IconSet, string> = {
-  aurora: 'Glossy rounded tiles in each module’s colour. The default.',
-  slate: 'The same tiles, flat — no gloss, no shadow, tighter corners.',
-  frost: 'Translucent panes over the wallpaper, with the colour on the glyph.',
-  outline: 'No fill at all. The quietest set over a busy wallpaper.',
-  mono: 'One neutral surface for every module. Shape carries the identity.',
-  classic: 'No tile — a large drawn glyph, the way a file manager shows a document.',
 };
 
 export const DESKTOP_SKIN_LABEL: Record<DesktopSkin, string> = {

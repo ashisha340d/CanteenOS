@@ -144,6 +144,19 @@ const MENU_COLUMNS = `
   effective_from, effective_until, published_at, created_by,
   created_at, updated_at, deleted_at, revision, sync_seq`;
 
+/** One servable menu paired with one of the schedule windows that apply to it today. */
+export interface MenuScheduleWindowRow extends RowDataPacket {
+  id: string;
+  code: string;
+  name: string;
+  priority: number;
+  /** Null when the LEFT JOIN found no window for today, whatever the reason. */
+  start_time: string | null;
+  end_time: string | null;
+  /** 1 when the menu carries an ACTIVE schedule row on any day at all. */
+  has_schedule: number;
+}
+
 export class MenuRepository {
   async findById(db: Db, id: string) {
     return selectOne<MenuRow>(
@@ -171,6 +184,42 @@ export class MenuRepository {
     );
     const countRow = await selectOne<CountRow>(db, `SELECT COUNT(*) AS total FROM menus ${where}`, params);
     return { rows, total: countRow === null ? 0 : Number(countRow.total) };
+  }
+
+  /**
+   * Every menu servable on `today`, joined to whichever of its ACTIVE schedule windows fall on
+   * `weekday`. A menu with no window today still returns one row, with a null `start_time`.
+   *
+   * `has_schedule` is what tells the two null cases apart: a menu with no schedule rows at all
+   * is always on, whereas a breakfast-only menu asked about on a Sunday is merely closed. Both
+   * arrive with a null `start_time`, so the flag is the only thing separating them.
+   */
+  async listScheduleWindows(
+    db: Db,
+    params: { today: string; weekday: number },
+  ): Promise<MenuScheduleWindowRow[]> {
+    return selectRows<MenuScheduleWindowRow>(
+      db,
+      `SELECT m.id, m.code, m.name, m.priority,
+              s.start_time, s.end_time,
+              EXISTS (SELECT 1 FROM menu_schedules any_day
+                       WHERE any_day.menu_id = m.id
+                         AND any_day.deleted_at IS NULL
+                         AND any_day.status = 'ACTIVE') AS has_schedule
+         FROM menus m
+         LEFT JOIN menu_schedules s
+                ON s.menu_id = m.id
+               AND s.deleted_at IS NULL
+               AND s.status = 'ACTIVE'
+               AND (s.day_of_week IS NULL OR s.day_of_week = ?)
+        WHERE m.deleted_at IS NULL
+          AND m.status = 'ACTIVE'
+          AND m.published_at IS NOT NULL
+          AND (m.effective_from IS NULL OR m.effective_from <= ?)
+          AND (m.effective_until IS NULL OR m.effective_until >= ?)
+        ORDER BY m.priority DESC, m.name ASC, s.start_time ASC`,
+      [params.weekday, params.today, params.today],
+    );
   }
 
   async insert(

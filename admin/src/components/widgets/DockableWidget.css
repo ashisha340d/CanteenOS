@@ -1,7 +1,12 @@
 /*
- * The widget frame. Painted from the shadcn content tokens rather than the desktop-skin ones,
- * because a widget can sit on the desktop *or* inside a module page, and it has to look
- * native in both. The only desktop-specific value it takes is the fallback accent.
+ * The widget frame.
+ *
+ * At rest it has no chrome at all: no title bar, no buttons, no border competing with the
+ * module windows around it. The depth comes from the *desktop skin's own* bevel tokens
+ * (`--desk-bevel-hi` / `--desk-bevel-lo`), which is what makes the card read as part of the
+ * wallpaper rather than as a small window. Those tokens already encode each skin's character
+ * — Sandalwood's warm bevels, Azure's bright highlight, Beta's flat hairlines where both
+ * "edges" are deliberately the same low-contrast line — so no skin is special-cased here.
  */
 
 .os-widget {
@@ -10,139 +15,146 @@
   position: absolute;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-lg);
-  background: var(--card);
-  color: var(--card-foreground);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 8px 24px -12px rgba(0, 0, 0, 0.3);
+  overflow: visible;
+  border-radius: 12px;
+  color: var(--desk-fg);
+
+  /* The surface above the page is click-through; the cards on it are not. Without this the
+     widget never receives a mousedown at all, so nothing inside it works and the long press
+     can never start. */
   pointer-events: auto;
-  transition: box-shadow 0.16s ease, border-color 0.16s ease;
+
+  /* Tinted from the wallpaper it sits on, not from the card token — a widget belongs to the
+     desktop, and `--card` would make it the colour of a window's interior. */
+  background: color-mix(in srgb, var(--desk-bg) 72%, transparent);
+  backdrop-filter: blur(14px) saturate(1.15);
+
+  /* The 3D hint: a lit top edge and a shadowed bottom one, plus the faintest contact shadow.
+     Two inset hairlines rather than a border, so the card has no outline of its own. */
+  box-shadow:
+    0 1px 0 var(--desk-bevel-hi) inset,
+    0 -1px 0 var(--desk-bevel-lo) inset,
+    1px 0 0 color-mix(in srgb, var(--desk-bevel-lo) 60%, transparent) inset,
+    -1px 0 0 color-mix(in srgb, var(--desk-bevel-hi) 60%, transparent) inset,
+    0 2px 6px -2px rgba(0, 0, 0, 0.28);
+
+  transition: box-shadow 0.16s ease, transform 0.16s ease;
 }
 
-.os-widget:focus-within,
-.os-widget:hover {
-  border-color: color-mix(in srgb, var(--widget-accent) 40%, var(--border-strong));
-}
-
-/* Lifted while it is being moved or sized, so the card reads as picked up off the surface. */
-.os-widget--interacting {
-  box-shadow: 0 12px 40px -8px rgba(0, 0, 0, 0.4);
+/* Lifted out of the wallpaper while it is being placed. */
+.os-widget--adjusting {
+  box-shadow:
+    0 0 0 1.5px var(--widget-accent),
+    0 14px 40px -10px rgba(0, 0, 0, 0.55);
+  cursor: grab;
   user-select: none;
 }
 
-.os-widget--collapsed {
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
-}
-
-/* ------------------------------------------------------------------------- header */
-
-.os-widget__header {
-  display: flex;
-  flex-shrink: 0;
-  align-items: center;
-  gap: 6px;
-  height: 34px;
-  padding: 0 4px 0 2px;
-  border-bottom: 1px solid var(--border);
-  background: var(--muted);
-  cursor: grab;
-}
-
-.os-widget--collapsed .os-widget__header {
-  border-bottom-color: transparent;
-}
-
-.os-widget--interacting .os-widget__header {
+.os-widget--moving {
   cursor: grabbing;
+  transform: scale(1.012);
 }
 
-.os-widget__grip {
-  width: 14px;
-  height: 14px;
-  flex-shrink: 0;
-  color: var(--muted-foreground);
-  opacity: 0.5;
-}
-
-.os-widget__icon {
-  width: 14px;
-  height: 14px;
-  flex-shrink: 0;
-  color: var(--widget-accent);
-}
-
-.os-widget__title {
+.os-widget__body {
   flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  text-overflow: ellipsis;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 14px;
+}
+
+/* ------------------------------------------------------------------ adjust overlay */
+
+/*
+ * Only exists while the card is lifted. It sits *outside* the top edge rather than inside it,
+ * so entering adjust mode never reflows the content underneath — the figures stay exactly
+ * where they were while the card is being moved.
+ */
+.os-widget__adjust {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  max-width: 100%;
+  padding: 3px;
+  border-radius: 8px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: 0 6px 20px -6px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--border-strong);
+  cursor: default;
   white-space: nowrap;
 }
 
-.os-widget__toolbar {
-  display: flex;
-  flex-shrink: 0;
-  align-items: center;
-  gap: 2px;
-  cursor: default;
+.os-widget__adjust--below {
+  top: calc(100% + 6px);
+  bottom: auto;
 }
 
-.os-widget__control {
+.os-widget__caption {
   display: flex;
-  flex-shrink: 0;
+  align-items: center;
+  gap: 3px;
+  padding: 0 5px;
+  overflow: hidden;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+}
+
+.os-widget__switch {
+  height: 20px;
+  padding: 0 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 0.625rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.os-widget__switch:hover {
+  border-color: var(--border-strong);
+  color: var(--foreground);
+}
+
+.os-widget__switch--on {
+  border-color: transparent;
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.os-widget__act {
+  display: flex;
   align-items: center;
   justify-content: center;
   width: 22px;
   height: 22px;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: 6px;
   background: transparent;
   color: var(--muted-foreground);
   cursor: pointer;
   transition: background 0.12s, color 0.12s;
 }
 
-.os-widget__control:hover {
+.os-widget__act:hover {
   background: var(--accent);
   color: var(--accent-foreground);
 }
 
-.os-widget__control--close:hover {
+.os-widget__act--remove:hover {
   background: var(--destructive);
   color: var(--destructive-foreground);
 }
 
-.os-widget__control:focus-visible {
+.os-widget__switch:focus-visible,
+.os-widget__act:focus-visible {
   outline: 2px solid var(--ring);
-  outline-offset: -1px;
-}
-
-.os-widget__control-glyph {
-  width: 13px;
-  height: 13px;
-  transition: transform 0.18s ease;
-}
-
-/* The chevron points at what the click will do: down to collapse, right to expand. */
-.os-widget--collapsed .os-widget__control-glyph {
-  transform: rotate(-90deg);
-}
-
-.os-widget--collapsed .os-widget__control--close .os-widget__control-glyph {
-  transform: none;
-}
-
-/* --------------------------------------------------------------------------- body */
-
-.os-widget__body {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding: 10px 12px 12px;
+  outline-offset: 1px;
 }
 
 /* ------------------------------------------------------------------------- resize */
@@ -151,35 +163,32 @@
   position: absolute;
   right: 0;
   bottom: 0;
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   cursor: nwse-resize;
 }
 
-/* Two hairlines rather than a filled triangle: visible enough to find, quiet enough to
-   ignore while reading the figure above it. */
 .os-widget__resize::after {
   content: '';
   position: absolute;
   right: 3px;
   bottom: 3px;
-  width: 7px;
-  height: 7px;
-  border-right: 1.5px solid var(--muted-foreground);
-  border-bottom: 1.5px solid var(--muted-foreground);
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--widget-accent);
+  border-bottom: 2px solid var(--widget-accent);
   border-bottom-right-radius: 2px;
-  opacity: 0.35;
-}
-
-.os-widget:hover .os-widget__resize::after {
-  opacity: 0.6;
 }
 
 @media (prefers-reduced-motion: reduce) {
 
   .os-widget,
-  .os-widget__control,
-  .os-widget__control-glyph {
+  .os-widget__switch,
+  .os-widget__act {
     transition: none;
+  }
+
+  .os-widget--moving {
+    transform: none;
   }
 }

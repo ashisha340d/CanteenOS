@@ -47,6 +47,11 @@ export const MenuMasterController = {
     ok(res, await menuMasterService.getMenuById(req.params.id as string));
   },
 
+  /** Admin Portal widget: what is being served right now, and what opens next today. */
+  async activeMenus(_req: Request, res: Response): Promise<void> {
+    ok(res, await menuMasterService.activeMenus());
+  },
+
   async createMenu(req: Request, res: Response): Promise<void> {
     created(res, await menuMasterService.createMenu(req.body as MenuWriteRequest, actorFrom(req)));
   },

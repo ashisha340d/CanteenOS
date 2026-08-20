@@ -57,3 +57,17 @@ export function addDays(date: Date, days: number): Date {
 export function todayIsoDate(): string {
   return new Date().toISOString().slice(0, 10);
 }
+
+/**
+ * The calendar day `at` falls on in the server's own zone, as 'YYYY-MM-DD'.
+ *
+ * Wall-clock rules — a menu's schedule, a shift's hours — are read against the clock on the
+ * kitchen wall, not UTC, so the day they belong to is the local one. Taking it from a passed
+ * instant rather than `new Date()` lets a caller derive date, weekday and time of day from a
+ * single reading of the clock.
+ */
+export function localIsoDate(at: Date): string {
+  const month = String(at.getMonth() + 1).padStart(2, '0');
+  const day = String(at.getDate()).padStart(2, '0');
+  return `${at.getFullYear()}-${month}-${day}`;
+}

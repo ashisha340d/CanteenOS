@@ -24,124 +24,352 @@
   --app-font-sans: var(--font-stack-geist);
 }
 
-html[data-font='geist'] { --app-font-sans: var(--font-stack-geist); }
-html[data-font='inter'] { --app-font-sans: var(--font-stack-inter); }
-html[data-font='manrope'] { --app-font-sans: var(--font-stack-manrope); }
-html[data-font='jakarta'] { --app-font-sans: var(--font-stack-jakarta); }
-html[data-font='figtree'] { --app-font-sans: var(--font-stack-figtree); }
-html[data-font='lexend'] { --app-font-sans: var(--font-stack-lexend); }
-html[data-font='plex'] { --app-font-sans: var(--font-stack-plex); }
-html[data-font='source'] { --app-font-sans: var(--font-stack-source); }
-html[data-font='public'] { --app-font-sans: var(--font-stack-public); }
-html[data-font='outfit'] { --app-font-sans: var(--font-stack-outfit); }
+html[data-font='geist'] {
+  --app-font-sans: var(--font-stack-geist);
+}
+
+html[data-font='inter'] {
+  --app-font-sans: var(--font-stack-inter);
+}
+
+html[data-font='manrope'] {
+  --app-font-sans: var(--font-stack-manrope);
+}
+
+html[data-font='jakarta'] {
+  --app-font-sans: var(--font-stack-jakarta);
+}
+
+html[data-font='figtree'] {
+  --app-font-sans: var(--font-stack-figtree);
+}
+
+html[data-font='lexend'] {
+  --app-font-sans: var(--font-stack-lexend);
+}
+
+html[data-font='plex'] {
+  --app-font-sans: var(--font-stack-plex);
+}
+
+html[data-font='source'] {
+  --app-font-sans: var(--font-stack-source);
+}
+
+html[data-font='public'] {
+  --app-font-sans: var(--font-stack-public);
+}
+
+html[data-font='outfit'] {
+  --app-font-sans: var(--font-stack-outfit);
+}
 
 /* ---------------------------------------------------------------- desktop icon sets */
 
 /*
- * Six ways to draw the same icon. Each app still supplies one colour — `--icon-accent`, set
- * per icon from the app registry — and the set decides what to do with it: fill the tile,
- * tint it, outline it, ignore it, or hand it straight to the glyph. Nothing here knows which
- * application it is drawing.
+ * Ten sets, each drawn for particular wallpaper. The *artwork* differs between them, not just
+ * the tile: `theme/iconArt.tsx` swaps in a Phosphor weight, a monogram, a projected slab or an
+ * embossed lucide glyph, and the tokens below dress whatever it produced.
+ *
+ * Each app supplies exactly one value — `--icon-accent`, set per icon from the registry — and
+ * the set decides what to do with it. Nothing here knows which application it is drawing.
+ *
+ * Every block is scoped to both `html[data-icon-set='x']` (the live desktop) and `.icon-set--x`
+ * (a Settings card previewing a set that is not currently applied), so no token value is ever
+ * written twice.
  */
 
-:root,
+/* Sensible ground state, so a set that omits a token never renders an unresolved value. */
+:root {
+  --icon-tile-size: 52px;
+  --icon-tile-radius: 12px;
+  --icon-tile-bg: var(--icon-accent);
+  --icon-tile-overlay: none;
+  --icon-tile-border: transparent;
+  --icon-tile-border-width: 1px;
+  --icon-tile-shadow: none;
+  --icon-tile-blur: none;
+  --icon-glyph-color: #ffffff;
+  --icon-glyph-size: 26px;
+  --icon-glyph-stroke: 1.8;
+  --icon-glyph-shadow: none;
+  --icon-label-weight: 600;
+}
+
+/* ------------------------------------------------------------------- house default */
+
+/*
+ * Canteen OS — the product's own icon, offered by every skin and the one each starts on.
+ * Same drawing and same flat accent tile as `.start-menu__item-icon`, scaled from 22px to
+ * desktop size. Nothing here is decorative; it is the brand mark doing its job.
+ */
+html[data-icon-set='canteen'],
+.icon-set--canteen {
+  --icon-tile-size: 50px;
+  --icon-tile-radius: 12px;
+  --icon-tile-bg: var(--icon-accent);
+  --icon-tile-overlay: none;
+  --icon-tile-border: transparent;
+  --icon-tile-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  --icon-glyph-color: #ffffff;
+  --icon-glyph-size: 26px;
+  --icon-glyph-stroke: 2;
+  --icon-label-weight: 600;
+}
+
+/* ---------------------------------------------------------------------- sandalwood */
+
+/*
+ * Blossom — the colourful one. The module's own accent underneath, with a gold bloom from one
+ * corner and a rose one from the other, so no two icons land on the same pair of hues. The
+ * duotone glyph then reads as two tones of white against it.
+ */
+html[data-icon-set='blossom'],
+.icon-set--blossom {
+  --icon-tile-size: 52px;
+  --icon-tile-radius: 16px;
+  --icon-tile-bg: var(--icon-accent);
+  --icon-tile-overlay:
+    radial-gradient(circle at 15% 12%, rgba(255, 205, 84, 0.95) 0%, rgba(255, 205, 84, 0) 62%),
+    radial-gradient(circle at 88% 90%, rgba(255, 94, 158, 0.85) 0%, rgba(255, 94, 158, 0) 66%),
+    linear-gradient(150deg, rgba(255, 255, 255, 0.34) 0%, rgba(0, 0, 0, 0.16) 100%);
+  --icon-tile-border: transparent;
+  --icon-tile-shadow: 0 4px 12px -3px color-mix(in srgb, var(--icon-accent) 65%, transparent);
+  --icon-glyph-color: #ffffff;
+  --icon-glyph-size: 28px;
+  --icon-glyph-shadow: drop-shadow(0 1px 2px rgba(80, 30, 60, 0.42));
+  --icon-label-weight: 600;
+}
+
+/*
+ * Sticker — a die-cut vinyl sticker. Thick white cut line, fully saturated fill and a hard
+ * unblurred shadow, which is what makes it read as a physical thing lying on the wallpaper
+ * rather than a coloured square drawn on it.
+ */
+html[data-icon-set='sticker'],
+.icon-set--sticker {
+  --icon-tile-size: 50px;
+  --icon-tile-radius: 15px;
+  --icon-tile-bg: var(--icon-accent);
+  --icon-tile-overlay: linear-gradient(180deg, rgba(255, 255, 255, 0.28) 0%, transparent 55%);
+  --icon-tile-border: #ffffff;
+  --icon-tile-border-width: 3px;
+  --icon-tile-shadow: 0 3px 0 rgba(0, 0, 0, 0.26);
+  --icon-glyph-color: #ffffff;
+  --icon-glyph-size: 25px;
+  --icon-glyph-shadow: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.3));
+  --icon-label-weight: 700;
+}
+
+/*
+ * Relief — carved rather than printed. The same house line glyph as Canteen OS, cut into the
+ * surface instead of laid on it: a light edge above, a dark one below. Shared with Graphite,
+ * whose bevels are the only other ones deep enough for the carve to read.
+ */
+html[data-icon-set='relief'],
+.icon-set--relief {
+  --icon-tile-size: 50px;
+  --icon-tile-radius: 12px;
+  --icon-tile-bg: color-mix(in srgb, var(--icon-accent) 22%, var(--desk-bg));
+  --icon-tile-overlay: none;
+  --icon-tile-border: color-mix(in srgb, var(--icon-accent) 30%, transparent);
+  --icon-tile-shadow: 0 1px 0 rgba(255, 255, 255, 0.28) inset, 0 -1px 0 rgba(0, 0, 0, 0.22) inset;
+  --icon-glyph-color: color-mix(in srgb, var(--icon-accent) 80%, var(--desk-fg));
+  --icon-glyph-size: 24px;
+  --icon-glyph-stroke: 2;
+  --icon-glyph-shadow: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.5)) drop-shadow(0 -1px 0 rgba(0, 0, 0, 0.3));
+  --icon-label-weight: 600;
+}
+
+/* ------------------------------------------------------------------------ graphite */
+
+/* Aurora — lit. Solid glyphs on a gradient tile built to glow off a dark wallpaper. */
 html[data-icon-set='aurora'],
 .icon-set--aurora {
   --icon-tile-size: 52px;
   --icon-tile-radius: 13px;
   --icon-tile-bg: var(--icon-accent);
-  --icon-tile-overlay: linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(0, 0, 0, 0.08) 100%);
-  --icon-tile-border: transparent;
-  --icon-tile-shadow: 0 1px 6px rgba(0, 0, 0, 0.12), 0 1px 0 rgba(255, 255, 255, 0.35) inset;
-  --icon-tile-blur: none;
+  --icon-tile-overlay: linear-gradient(160deg, rgba(255, 255, 255, 0.34) 0%, rgba(0, 0, 0, 0.22) 100%);
+  --icon-tile-border: color-mix(in srgb, var(--icon-accent) 55%, #ffffff);
+  --icon-tile-shadow: 0 3px 12px color-mix(in srgb, var(--icon-accent) 45%, transparent), 0 1px 0 rgba(255, 255, 255, 0.3) inset;
   --icon-glyph-color: #ffffff;
-  --icon-glyph-size: 26px;
-  --icon-glyph-stroke: 1.9;
-  --icon-glyph-shadow: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.25));
+  --icon-glyph-size: 27px;
+  --icon-glyph-shadow: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
   --icon-label-weight: 600;
 }
 
-/* Slate — the same tile with the gloss and the contact shadow taken off. */
-html[data-icon-set='slate'],
-.icon-set--slate {
-  --icon-tile-size: 50px;
-  --icon-tile-radius: 10px;
-  --icon-tile-bg: var(--icon-accent);
-  --icon-tile-overlay: none;
-  --icon-tile-border: transparent;
-  --icon-tile-shadow: none;
-  --icon-tile-blur: none;
-  --icon-glyph-color: #ffffff;
-  --icon-glyph-size: 25px;
-  --icon-glyph-stroke: 2;
-  --icon-glyph-shadow: none;
-  --icon-label-weight: 600;
-}
-
-/* Frost — a tinted pane over the wallpaper; the accent moves from the fill to the glyph. */
-html[data-icon-set='frost'],
-.icon-set--frost {
+/* Nightfall — frosted glass. Hairline glyphs, almost no fill. */
+html[data-icon-set='nightfall'],
+.icon-set--nightfall {
   --icon-tile-size: 52px;
-  --icon-tile-radius: 15px;
-  --icon-tile-bg: color-mix(in srgb, var(--icon-accent) 18%, transparent);
-  --icon-tile-overlay: linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0%, transparent 100%);
-  --icon-tile-border: color-mix(in srgb, var(--icon-accent) 42%, transparent);
-  --icon-tile-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  --icon-tile-blur: blur(8px);
-  --icon-glyph-color: var(--icon-accent);
-  --icon-glyph-size: 25px;
-  --icon-glyph-stroke: 2;
-  --icon-glyph-shadow: none;
-  --icon-label-weight: 600;
+  --icon-tile-radius: 16px;
+  --icon-tile-bg: color-mix(in srgb, var(--icon-accent) 14%, rgba(255, 255, 255, 0.05));
+  --icon-tile-overlay: linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, transparent 60%);
+  --icon-tile-border: color-mix(in srgb, var(--icon-accent) 34%, transparent);
+  --icon-tile-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+  --icon-tile-blur: blur(10px);
+  --icon-glyph-color: color-mix(in srgb, var(--icon-accent) 60%, #ffffff);
+  --icon-glyph-size: 28px;
+  --icon-label-weight: 500;
 }
 
-/* Outline — no fill at all. The quietest set over a busy wallpaper. */
-html[data-icon-set='outline'],
-.icon-set--outline {
+/* Halo — no tile. The ring is the only chrome, and the glyph floats inside it. */
+html[data-icon-set='halo'],
+.icon-set--halo {
   --icon-tile-size: 50px;
-  --icon-tile-radius: 12px;
+  --icon-tile-radius: 50%;
   --icon-tile-bg: transparent;
   --icon-tile-overlay: none;
   --icon-tile-border: color-mix(in srgb, var(--icon-accent) 70%, transparent);
-  --icon-tile-shadow: none;
-  --icon-tile-blur: none;
+  --icon-tile-shadow: 0 0 12px -2px color-mix(in srgb, var(--icon-accent) 55%, transparent);
+  --icon-glyph-color: color-mix(in srgb, var(--icon-accent) 75%, #ffffff);
+  --icon-glyph-size: 25px;
+  --icon-label-weight: 500;
+}
+
+/* ---------------------------------------------------------------------------- azure */
+
+/* Chrome — a stamped steel plate. The heaviest glyphs, for reading in daylight. */
+html[data-icon-set='chrome'],
+.icon-set--chrome {
+  --icon-tile-size: 52px;
+  --icon-tile-radius: 6px;
+  /* The brushed finish is the overlay, not the fill: `--icon-tile-bg` is painted as a colour,
+     so a gradient has to arrive through the background-image slot. */
+  --icon-tile-bg: #e6edf5;
+  --icon-tile-overlay: linear-gradient(180deg, #fdfefe 0%, #dbe4ee 48%, #c2cfdf 52%, #e6edf5 100%);
+  --icon-tile-border: #8fa5be;
+  --icon-tile-shadow: 0 1px 2px rgba(28, 48, 74, 0.3), 0 1px 0 rgba(255, 255, 255, 0.9) inset;
   --icon-glyph-color: var(--icon-accent);
-  --icon-glyph-size: 24px;
-  --icon-glyph-stroke: 1.8;
-  --icon-glyph-shadow: none;
-  --icon-label-weight: 500;
+  --icon-glyph-size: 26px;
+  --icon-glyph-shadow: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.85));
+  --icon-label-weight: 600;
 }
 
-/* Mono — one surface for every application. Shape carries the identity, not colour. */
-html[data-icon-set='mono'],
-.icon-set--mono {
-  --icon-tile-size: 50px;
-  --icon-tile-radius: 11px;
-  --icon-tile-bg: var(--desk-cell-bg);
-  --icon-tile-overlay: none;
-  --icon-tile-border: var(--desk-icon-hover-border);
-  --icon-tile-shadow: none;
-  --icon-tile-blur: none;
-  --icon-glyph-color: var(--desk-fg);
-  --icon-glyph-size: 24px;
-  --icon-glyph-stroke: 1.7;
-  --icon-glyph-shadow: none;
-  --icon-label-weight: 500;
-}
-
-/* Classic — no tile. A large drawn glyph, the way a file manager shows a document. */
-html[data-icon-set='classic'],
-.icon-set--classic {
-  --icon-tile-size: 48px;
-  --icon-tile-radius: 0px;
+/* Blueprint — projected solids. The tile is the slab itself, so no box is drawn behind it. */
+html[data-icon-set='blueprint'],
+.icon-set--blueprint {
+  --icon-tile-size: 54px;
+  --icon-tile-radius: 0;
   --icon-tile-bg: transparent;
   --icon-tile-overlay: none;
   --icon-tile-border: transparent;
   --icon-tile-shadow: none;
-  --icon-tile-blur: none;
-  --icon-glyph-color: var(--icon-accent);
-  --icon-glyph-size: 38px;
-  --icon-glyph-stroke: 1.5;
-  --icon-glyph-shadow: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.3));
+  --icon-glyph-color: #ffffff;
+  --icon-glyph-size: 22px;
+  --icon-glyph-stroke: 2.2;
   --icon-label-weight: 600;
+}
+
+/* ----------------------------------------------------------------------------- beta */
+
+/* Fluent — flat and hairlined. Nothing shines and nothing casts a shadow. */
+html[data-icon-set='fluent'],
+.icon-set--fluent {
+  --icon-tile-size: 48px;
+  --icon-tile-radius: 8px;
+  --icon-tile-bg: color-mix(in srgb, var(--icon-accent) 16%, transparent);
+  --icon-tile-overlay: none;
+  --icon-tile-border: color-mix(in srgb, var(--icon-accent) 32%, transparent);
+  --icon-tile-shadow: none;
+  --icon-glyph-color: color-mix(in srgb, var(--icon-accent) 62%, var(--desk-fg));
+  --icon-glyph-size: 25px;
+  --icon-label-weight: 500;
+}
+
+/*
+ * Marker — a labelled drawer front. No pictogram at all: once an operator knows the modules,
+ * two letters in the module's colour are read faster than any picture of them. The tile is
+ * deliberately plain so the letters carry the whole identity.
+ */
+html[data-icon-set='marker'],
+.icon-set--marker {
+  --icon-tile-size: 50px;
+  --icon-tile-radius: 8px;
+  --icon-tile-bg: color-mix(in srgb, var(--icon-accent) 12%, var(--desk-bg));
+  --icon-tile-overlay: none;
+  --icon-tile-border: color-mix(in srgb, var(--icon-accent) 40%, transparent);
+  --icon-tile-shadow: none;
+  --icon-glyph-color: var(--icon-accent);
+  --icon-glyph-size: 20px;
+  --icon-label-weight: 500;
+}
+
+/* ------------------------------------------------------------------- icon artwork */
+
+/*
+ * How each art family actually paints, given the tokens above. Kept here rather than with the
+ * desktop page because the Settings picker previews every set on a card, and those styles have
+ * to be present whether or not the desktop chunk happens to be loaded.
+ */
+.os-icon__glyph {
+  width: var(--icon-glyph-size);
+  height: var(--icon-glyph-size);
+  color: var(--icon-glyph-color);
+  stroke-width: var(--icon-glyph-stroke);
+  filter: var(--icon-glyph-shadow);
+}
+
+/* The lettermark families draw no picture at all — the monogram is the artwork. */
+.os-icon__monogram {
+  font-size: var(--icon-glyph-size);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--icon-glyph-color);
+  font-variant-ligatures: none;
+}
+
+/*
+ * The projected slab. A real CSS 3D rotation rather than a traced SVG, so the face carries the
+ * module's own glyph and can never drift out of step with the registry. The thickness is a
+ * hard, unblurred shadow directly beneath the plate — cheaper than a second rotated element
+ * and indistinguishable at icon size.
+ */
+.os-iso {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--icon-tile-size);
+  height: var(--icon-tile-size);
+}
+
+.os-iso__slab,
+.os-iso__face {
+  position: absolute;
+  transform: rotateX(56deg) rotateZ(45deg);
+}
+
+/*
+ * Square, and it has to stay square: `rotateX(56deg) rotateZ(45deg)` turns a square into a
+ * true isometric diamond and anything else into a skewed parallelogram. Uniform inset rather
+ * than separate axes for exactly that reason. At 62% the projected diamond is 1.41 × 0.79 of
+ * the slab, which leaves room for the thickness underneath inside the tile.
+ */
+.os-iso__slab {
+  inset: 19%;
+  border-radius: 3px;
+  background: linear-gradient(135deg,
+      color-mix(in srgb, var(--icon-accent) 82%, #ffffff) 0%,
+      var(--icon-accent) 100%);
+  box-shadow:
+    0 5px 0 color-mix(in srgb, var(--icon-accent) 55%, #000000),
+    0 7px 10px rgba(0, 0, 0, 0.4);
+}
+
+.os-iso__face {
+  display: flex;
+}
+
+.os-iso__glyph {
+  width: var(--icon-glyph-size);
+  height: var(--icon-glyph-size);
+  color: var(--icon-glyph-color);
+  stroke-width: var(--icon-glyph-stroke);
+}
+
+.os-icon:hover .os-iso__slab {
+  box-shadow:
+    0 6px 0 color-mix(in srgb, var(--icon-accent) 55%, #000000),
+    0 9px 14px rgba(0, 0, 0, 0.45);
 }

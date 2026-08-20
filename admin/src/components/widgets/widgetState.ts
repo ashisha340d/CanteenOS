@@ -1,4 +1,4 @@
-import { useCallback, useSyncExternalStore } from 'react';
+import { useCallback, useMemo, useSyncExternalStore } from 'react';
 import { STATE_RESTORED_EVENT } from '@/services/desktopState';
 
 /**
@@ -27,12 +27,11 @@ export interface WidgetPlacement {
   offsetY: number;
   w: number;
   h: number;
-  /** Rolled up to its header bar, the way a real desktop gadget collapses. */
-  collapsed: boolean;
 }
 
 export const WIDGET_PLACEMENT_KEY = 'canteenos_widget_placement_v1';
 export const WIDGET_MEMBERSHIP_KEY = 'canteenos_widgets_v1';
+export const WIDGET_OPTIONS_KEY = 'canteenos_widget_options_v1';
 
 /** The desktop's own surface id. Named so Settings and the desktop cannot disagree on it. */
 export const DESKTOP_HOST = 'desktop';
@@ -86,6 +85,60 @@ export function savePlacement(hostId: string, widgetId: string, placement: Widge
   localStorage.setItem(WIDGET_PLACEMENT_KEY, JSON.stringify(all));
 }
 
+/* ------------------------------------------------------------------------- options */
+
+/**
+ * A widget's own display switches — whether the clock also shows weather, and so on. Kept
+ * apart from placement for the same reason placement is kept apart from membership: they
+ * change on completely different occasions, and a drag must not rewrite a preference.
+ */
+export type WidgetOptions = Record<string, boolean>;
+
+type OptionsMap = Record<string, WidgetOptions>;
+
+let optionsCache: OptionsMap | undefined;
+
+function allOptions(): OptionsMap {
+  optionsCache ??= readJson<OptionsMap>(WIDGET_OPTIONS_KEY, {});
+  return optionsCache;
+}
+
+const NO_OPTIONS: WidgetOptions = {};
+
+export function widgetOptions(hostId: string, widgetId: string): WidgetOptions {
+  return allOptions()[slotKey(hostId, widgetId)] ?? NO_OPTIONS;
+}
+
+export function setWidgetOption(
+  hostId: string,
+  widgetId: string,
+  key: string,
+  value: boolean,
+): void {
+  const slot = slotKey(hostId, widgetId);
+  const next: OptionsMap = {
+    ...allOptions(),
+    [slot]: { ...(allOptions()[slot] ?? {}), [key]: value },
+  };
+  optionsCache = next;
+  localStorage.setItem(WIDGET_OPTIONS_KEY, JSON.stringify(next));
+  window.dispatchEvent(new CustomEvent(WIDGETS_CHANGED_EVENT));
+}
+
+/** Stored switches merged over the registry's defaults, so an untouched widget still works. */
+export function useWidgetOptions(
+  hostId: string,
+  widgetId: string,
+  defaults: WidgetOptions,
+): WidgetOptions {
+  const stored = useSyncExternalStore(
+    subscribe,
+    useCallback(() => widgetOptions(hostId, widgetId), [hostId, widgetId]),
+    () => NO_OPTIONS,
+  );
+  return useMemo(() => ({ ...defaults, ...stored }), [defaults, stored]);
+}
+
 /* ---------------------------------------------------------------------- membership */
 
 /**
@@ -137,12 +190,19 @@ export function resetHost(hostId: string): void {
   const next = { ...membership() };
   delete next[hostId];
 
-  const placements = readJson<PlacementMap>(WIDGET_PLACEMENT_KEY, {});
   const prefix = `${hostId}:`;
+  const placements = readJson<PlacementMap>(WIDGET_PLACEMENT_KEY, {});
   for (const key of Object.keys(placements)) {
     if (key.startsWith(prefix)) delete placements[key];
   }
   localStorage.setItem(WIDGET_PLACEMENT_KEY, JSON.stringify(placements));
+
+  const options = { ...allOptions() };
+  for (const key of Object.keys(options)) {
+    if (key.startsWith(prefix)) delete options[key];
+  }
+  optionsCache = options;
+  localStorage.setItem(WIDGET_OPTIONS_KEY, JSON.stringify(options));
 
   commit(next);
 }
@@ -150,6 +210,7 @@ export function resetHost(hostId: string): void {
 function subscribe(onChange: () => void): () => void {
   const invalidate = (): void => {
     membershipCache = undefined;
+    optionsCache = undefined;
     onChange();
   };
   window.addEventListener(WIDGETS_CHANGED_EVENT, invalidate);

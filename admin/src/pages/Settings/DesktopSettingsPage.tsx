@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckIcon, DownloadIcon, RotateCcwIcon, Trash2Icon, UploadIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -12,13 +12,15 @@ import { ModulePage } from '@/components/ModulePage';
 import { ChatSoundsCard, KdsAlarmSoundsCard } from '@/components/KdsAlarmSounds';
 import { KdsAlarmTiming } from '@/components/KdsAlarmTiming';
 import { SearchPickerField } from '@/components/SearchPickerField';
-import { WIDGETS } from '@/components/widgets/registry';
+import { defaultOptions, WIDGETS, type WidgetDefinition } from '@/components/widgets/registry';
 import {
   addHostWidget,
   DESKTOP_HOST,
   removeHostWidget,
   resetHost,
+  setWidgetOption,
   useHostWidgets,
+  useWidgetOptions,
 } from '@/components/widgets/widgetState';
 import { useLocationSearch } from '@/hooks/useEnvironment';
 import {
@@ -34,18 +36,16 @@ import {
   FONT_CHOICES,
   FONT_HINT,
   FONT_LABEL,
-  ICON_SET_HINT,
-  ICON_SET_LABEL,
-  ICON_SETS,
   SKIN_LABEL,
   TEXT_SIZE_LABEL,
   useTheme,
   type DesktopSkin,
   type FontChoice,
-  type IconSet,
   type TextSize,
   type ThemeSkin,
 } from '@/theme/ThemeProvider';
+import { AppMark } from '@/theme/iconArt';
+import { APPS } from '@/services/appRegistry';
 import { notify } from '@/lib/notify';
 import { RESET_ICONS_EVENT } from '../Dashboard/desktopIcons';
 import './DesktopSettingsPage.css';
@@ -60,6 +60,15 @@ const SEARCH_DEBOUNCE_MS = 300;
 function locationId(latitude: number, longitude: number): string {
   return `${latitude.toFixed(4)},${longitude.toFixed(4)}`;
 }
+
+/**
+ * Three real modules for the icon-set previews. Real ones rather than colour swatches,
+ * because the sets differ in their *artwork* — a monogram set and a projected-slab set are
+ * indistinguishable if all three cards show the same abstract square.
+ */
+const PREVIEW_APPS = ['menu-master', 'pos', 'people'].flatMap(
+  (id) => APPS.find((app) => app.id === id) ?? [],
+);
 
 /** A miniature of the desktop in a given skin: wallpaper, a window, and the status bar. */
 function SkinPreview({ skin }: { skin: DesktopSkin }): JSX.Element {
@@ -335,9 +344,16 @@ function TypefaceSection(): JSX.Element {
   );
 }
 
-/** Six ways to draw the desktop icons, each previewed in its own set. */
+/**
+ * Icon sets, filtered to the wallpaper on screen.
+ *
+ * A set is drawn *for* a skin — Aurora's lit tiles are built to glow off dark slate and look
+ * like a mistake on Sandalwood's ivory — so the sets a skin was not drawn for are not offered
+ * at all rather than offered and regretted. Each card previews its own set live, including
+ * the artwork family, which is why they do not all show the same three shapes.
+ */
 function IconSetSection(): JSX.Element {
-  const { iconSet, setIconSet } = useTheme();
+  const { iconSet, setIconSet, iconSetOptions, desktopSkin } = useTheme();
 
   function resetIcons(): void {
     window.dispatchEvent(new CustomEvent(RESET_ICONS_EVENT));
@@ -347,35 +363,35 @@ function IconSetSection(): JSX.Element {
   return (
     <Section
       title="Desktop icons"
-      description="Icons can be dragged anywhere, grouped into boxes drawn on the desktop, and arranged from the desktop's right-click menu."
+      description={`The ${iconSetOptions.length} sets drawn for the ${DESKTOP_SKIN_LABEL[desktopSkin]} desktop. Each set changes the icon artwork itself, not just the tile behind it — switch skins to see a different range.`}
     >
-      <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(min(150px,100%),1fr))]">
-        {ICON_SETS.map((option) => {
-          const active = option === iconSet;
+      <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(min(170px,100%),1fr))]">
+        {iconSetOptions.map((option) => {
+          const active = option.id === iconSet;
           return (
             <button
-              key={option}
+              key={option.id}
               type="button"
-              onClick={() => setIconSet(option as IconSet)}
+              onClick={() => setIconSet(option.id)}
               aria-pressed={active}
-              className={`skin-card icon-set--${option} ${active ? 'skin-card--active' : ''}`}
+              className={`skin-card icon-set--${option.id} ${active ? 'skin-card--active' : ''}`}
             >
               <span className="icon-preview" aria-hidden>
-                {['#5b4ff5', '#0e9f6e', '#d08511'].map((accent) => (
+                {PREVIEW_APPS.map((app) => (
                   <span
-                    key={accent}
+                    key={app.id}
                     className="icon-preview__tile"
-                    style={{ ['--icon-accent' as string]: accent }}
-                  />
+                    style={{ ['--icon-accent' as string]: app.accent }}
+                  >
+                    <AppMark app={app} art={option.art} />
+                  </span>
                 ))}
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="text-sm font-semibold">{ICON_SET_LABEL[option]}</span>
-                {active && <CheckIcon className="text-primary size-3.5" />}
+                <span className="text-sm font-semibold">{option.label}</span>
+                {active && <CheckIcon className="text-primary size-3.5 shrink-0" />}
               </span>
-              <span className="text-muted-foreground text-xs leading-snug">
-                {ICON_SET_HINT[option]}
-              </span>
+              <span className="text-muted-foreground text-xs leading-snug">{option.hint}</span>
             </button>
           );
         })}
@@ -393,43 +409,15 @@ function IconSetSection(): JSX.Element {
 
 /** Which cards the desktop carries. The same list the desktop's right-click menu offers. */
 function WidgetSection(): JSX.Element {
-  const shown = useHostWidgets(DESKTOP_HOST);
-
   return (
     <Section
       title="Desktop widgets"
-      description="Cards that float above the desktop. Each one can be dragged to any corner, resized, rolled up, and stays where it was left."
+      description="Cards that sit in the desktop surface itself — no title bar, no frame. Press and hold one to lift it out for moving, resizing or switching, and let go to settle it back in."
     >
-      <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr))]">
-        {WIDGETS.map((widget) => {
-          const active = shown.includes(widget.id);
-          return (
-            <label
-              key={widget.id}
-              className="hover:bg-accent/40 flex cursor-pointer items-start gap-2.5 rounded-lg border p-2.5"
-            >
-              <Checkbox
-                checked={active}
-                onCheckedChange={(next) => {
-                  if (next === true) addHostWidget(DESKTOP_HOST, widget.id);
-                  else removeHostWidget(DESKTOP_HOST, widget.id);
-                }}
-                className="mt-0.5"
-              />
-              <span className="min-w-0">
-                <span className="flex items-center gap-1.5 text-sm font-medium">
-                  <span className="flex shrink-0" style={{ color: widget.accent }}>
-                    <widget.Icon className="size-3.5" />
-                  </span>
-                  {widget.label}
-                </span>
-                <span className="text-muted-foreground mt-0.5 block text-xs leading-snug">
-                  {widget.description}
-                </span>
-              </span>
-            </label>
-          );
-        })}
+      <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr))]">
+        {WIDGETS.map((widget) => (
+          <WidgetCard key={widget.id} widget={widget} />
+        ))}
       </div>
 
       <div>
@@ -446,6 +434,69 @@ function WidgetSection(): JSX.Element {
         </Button>
       </div>
     </Section>
+  );
+}
+
+/**
+ * One widget's row. Its display switches are repeated here as well as on the card itself:
+ * long-press is the right gesture once you know it exists, and a settings page is where
+ * somebody looks when they do not.
+ */
+function WidgetCard({ widget }: { widget: WidgetDefinition }): JSX.Element {
+  const shown = useHostWidgets(DESKTOP_HOST);
+  const defaults = useMemo(() => defaultOptions(widget), [widget]);
+  const options = useWidgetOptions(DESKTOP_HOST, widget.id, defaults);
+  const active = shown.includes(widget.id);
+
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border p-2.5">
+      <label className="flex cursor-pointer items-start gap-2.5">
+        <Checkbox
+          checked={active}
+          onCheckedChange={(next) => {
+            if (next === true) addHostWidget(DESKTOP_HOST, widget.id);
+            else removeHostWidget(DESKTOP_HOST, widget.id);
+          }}
+          className="mt-0.5"
+        />
+        <span className="min-w-0">
+          <span className="flex items-center gap-1.5 text-sm font-medium">
+            <span className="flex shrink-0" style={{ color: widget.accent }}>
+              <widget.Icon className="size-3.5" />
+            </span>
+            {widget.label}
+          </span>
+          <span className="text-muted-foreground mt-0.5 block text-xs leading-snug">
+            {widget.description}
+          </span>
+        </span>
+      </label>
+
+      {active && widget.switches !== undefined && (
+        <div className="flex flex-wrap gap-1.5 pl-[1.625rem]">
+          {widget.switches.map((option) => (
+            <Button
+              key={option.key}
+              variant={options[option.key] === true ? 'secondary' : 'outline'}
+              size="sm"
+              className="h-6 px-2 text-xs"
+              aria-pressed={options[option.key] === true}
+              onClick={() =>
+                setWidgetOption(
+                  DESKTOP_HOST,
+                  widget.id,
+                  option.key,
+                  options[option.key] !== true,
+                )
+              }
+            >
+              {options[option.key] === true && <CheckIcon data-icon="inline-start" />}
+              {option.label}
+            </Button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

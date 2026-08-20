@@ -85,49 +85,6 @@
   border-radius: 2px;
 }
 
-/* ------------------------------------------------------------------------ calendar */
-
-.widget-calendar {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 1px;
-  flex-shrink: 0;
-}
-
-.widget-calendar__weekday {
-  padding-bottom: 2px;
-  color: var(--muted-foreground);
-  font-size: 0.5625rem;
-  font-weight: 600;
-  text-align: center;
-  text-transform: uppercase;
-}
-
-.widget-calendar__day {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  aspect-ratio: 1;
-  border-radius: var(--radius-sm);
-  font-size: 0.625rem;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-}
-
-/* A holiday is tinted, not dotted: at this cell size a 3px dot is invisible across a desk. */
-.widget-calendar__day--holiday {
-  background: var(--tone-danger-bg);
-  color: var(--tone-danger);
-  font-weight: 600;
-}
-
-/* Today wins over a holiday when the two coincide — it is the more urgent fact. */
-.widget-calendar__day--today {
-  background: var(--primary);
-  color: var(--primary-foreground);
-  font-weight: 700;
-}
-
 /* --------------------------------------------------------------------- bar chart */
 
 .widget-bars {

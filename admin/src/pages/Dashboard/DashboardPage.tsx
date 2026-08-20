@@ -38,7 +38,9 @@ import { useWindowManager } from '@/services/WindowManager';
 import { useLaunchApp } from '@/services/useLaunchApp';
 import { APPS, SETTINGS_APP_ID, type DesktopApp } from '@/services/appRegistry';
 import { STATE_RESTORED_EVENT } from '@/services/desktopState';
-import { ICON_SET_LABEL, ICON_SETS, useTheme, type IconSet } from '@/theme/ThemeProvider';
+import { useTheme } from '@/theme/ThemeProvider';
+import { AppMark, type IconArt } from '@/theme/iconArt';
+import { findIconSet } from '@/theme/iconSets';
 import { WidgetSurface } from '@/components/widgets/WidgetSurface';
 import { WIDGETS } from '@/components/widgets/registry';
 import {
@@ -102,8 +104,12 @@ function trackDrag(
 export function DashboardPage(): JSX.Element {
   const { windows, minimizeAll, closeAll, cascade } = useWindowManager();
   const launch = useLaunchApp();
-  const { iconSet, setIconSet } = useTheme();
+  const { iconSet, setIconSet, iconSetOptions } = useTheme();
   const shownWidgets = useHostWidgets(DESKTOP_HOST);
+
+  /* The set is guaranteed to suit the current skin by the theme provider, so the fallback
+     here only ever covers a set retired between releases. */
+  const art: IconArt = findIconSet(iconSet)?.art ?? { family: 'phosphor', weight: 'regular' };
 
   const [positions, setPositions] = useState<IconPositions>(loadIconPositions);
   const [groups, setGroups] = useState<DesktopGroup[]>(loadGroups);
@@ -435,7 +441,7 @@ export function DashboardPage(): JSX.Element {
                 }}
               >
                 <span className="os-icon__tile">
-                  <app.Icon className="os-icon__glyph" />
+                  <AppMark app={app} art={art} />
                 </span>
                 <span className="os-icon__label">{app.label}</span>
               </button>
@@ -467,14 +473,13 @@ export function DashboardPage(): JSX.Element {
             <ShapesIcon data-icon="inline-start" />
             Change icons
           </ContextMenuSubTrigger>
-          <ContextMenuSubContent className="w-44">
-            <ContextMenuRadioGroup
-              value={iconSet}
-              onValueChange={(next) => setIconSet(next as IconSet)}
-            >
-              {ICON_SETS.map((option) => (
-                <ContextMenuRadioItem key={option} value={option}>
-                  {ICON_SET_LABEL[option]}
+          <ContextMenuSubContent className="w-48">
+            {/* Only the sets drawn for the wallpaper currently on screen. Changing the desktop
+                skin changes this list, and the icons with it. */}
+            <ContextMenuRadioGroup value={iconSet} onValueChange={setIconSet}>
+              {iconSetOptions.map((option) => (
+                <ContextMenuRadioItem key={option.id} value={option.id}>
+                  {option.label}
                 </ContextMenuRadioItem>
               ))}
             </ContextMenuRadioGroup>

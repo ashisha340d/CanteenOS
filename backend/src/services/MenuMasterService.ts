@@ -1,5 +1,7 @@
 import {
   MasterStatus,
+  type ActiveMenuDto,
+  type ActiveMenusDto,
   type AvailabilityStatus,
   type CounterRouteMoveRequest,
   type CounterRouteWriteRequest,
@@ -26,6 +28,7 @@ import {
   type ResolvedMenuItemDto,
   type ResolvedMenuVariantDto,
   type RoutableEntityType,
+  type UpcomingMenuDto,
 } from '@menuboard/shared';
 import { getPool } from '../db/pool';
 import { withTransaction } from '../db/transaction';
@@ -65,6 +68,7 @@ import {
   printingGroupRepository,
   printingRouteRepository,
   type MenuItemAssignmentListFilter,
+  type MenuScheduleWindowRow,
 } from '../repositories/MenuMasterRepository';
 import { mediaAssignmentRepository } from '../repositories/MediaRepository';
 import { menuBoardRealtime } from '../realtime/menuBoardSocket';
@@ -73,6 +77,7 @@ import { ConflictError, NotFoundError, ValidationError } from '../utils/errors';
 import { signMenuMediaUrl } from '../utils/mediaStorage';
 import { buildPage, resolvePaging } from '../utils/http';
 import { newId } from '../utils/ids';
+import { fromDbTime, localIsoDate } from '../utils/time';
 import { AuditAction, auditService, type AuditActor } from './AuditService';
 
 export interface MenuMasterQuery {
@@ -82,6 +87,24 @@ export interface MenuMasterQuery {
   catalogueId?: string | null;
   page?: number;
   pageSize?: number;
+}
+
+/** One of a menu's schedule windows for today, in both the wire and the arithmetic form. */
+interface ScheduleWindow {
+  startTime: string;
+  endTime: string;
+  startsAt: number;
+  endsAt: number;
+}
+
+/** 'HH:MM:SS' from a TIME column to seconds since local midnight. */
+function clockSeconds(value: string): number {
+  return Number(value.slice(0, 2)) * 3600 + Number(value.slice(3, 5)) * 60;
+}
+
+/** Never negative: a window that closed while the request was in flight reads as 0, not -1. */
+function wholeMinutesUntil(targetSeconds: number, nowSeconds: number): number {
+  return Math.max(0, Math.floor((targetSeconds - nowSeconds) / 60));
 }
 
 function pagingFor(query: MenuMasterQuery): MasterListFilter & { page: number; pageSize: number } {
@@ -1450,6 +1473,94 @@ export class MenuMasterService {
       });
     });
     this.announce('menu-schedules', 0);
+  }
+
+  /**
+   * Which menus are servable at this instant, and which of the rest open later today.
+   *
+   * The whole answer hangs off one reading of the clock: a request that straddled midnight
+   * could otherwise be resolved against yesterday's date and today's weekday.
+   */
+  async activeMenus(): Promise<ActiveMenusDto> {
+    const now = new Date();
+    const weekday = now.getDay();
+    const nowSeconds = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+
+    const rows = await menuRepository.listScheduleWindows(getPool(), {
+      today: localIsoDate(now),
+      weekday,
+    });
+
+    const active: ActiveMenuDto[] = [];
+    const next: UpcomingMenuDto[] = [];
+
+    // One row per window, already ordered by priority then name, so grouping by insertion order
+    // preserves the order the DTO promises for `active`. A menu closed today contributes a row
+    // with no window at all, which is why the windows list can end up empty.
+    const byMenu = new Map<string, { menu: MenuScheduleWindowRow; windows: ScheduleWindow[] }>();
+    for (const row of rows) {
+      const entry = byMenu.get(row.id) ?? { menu: row, windows: [] };
+      if (row.start_time !== null && row.end_time !== null) {
+        entry.windows.push({
+          startTime: fromDbTime(row.start_time) as string,
+          endTime: fromDbTime(row.end_time) as string,
+          startsAt: clockSeconds(row.start_time),
+          endsAt: clockSeconds(row.end_time),
+        });
+      }
+      byMenu.set(row.id, entry);
+    }
+
+    for (const { menu, windows } of byMenu.values()) {
+      if (Number(menu.has_schedule) === 0) {
+        active.push({
+          id: menu.id,
+          code: menu.code,
+          name: menu.name,
+          priority: Number(menu.priority),
+          startTime: null,
+          endTime: null,
+          endsInMinutes: null,
+        });
+        continue;
+      }
+
+      // Overlapping windows are legal, and the menu stays open until the last of them closes.
+      const open = windows
+        .filter((window) => window.startsAt <= nowSeconds && nowSeconds < window.endsAt)
+        .sort((a, b) => b.endsAt - a.endsAt)[0];
+
+      if (open !== undefined) {
+        active.push({
+          id: menu.id,
+          code: menu.code,
+          name: menu.name,
+          priority: Number(menu.priority),
+          startTime: open.startTime,
+          endTime: open.endTime,
+          endsInMinutes: wholeMinutesUntil(open.endsAt, nowSeconds),
+        });
+        continue;
+      }
+
+      const upcoming = windows
+        .filter((window) => window.startsAt > nowSeconds)
+        .sort((a, b) => a.startsAt - b.startsAt)[0];
+
+      if (upcoming !== undefined) {
+        next.push({
+          id: menu.id,
+          code: menu.code,
+          name: menu.name,
+          startTime: upcoming.startTime,
+          startsInMinutes: wholeMinutesUntil(upcoming.startsAt, nowSeconds),
+        });
+      }
+    }
+
+    next.sort((a, b) => a.startsInMinutes - b.startsInMinutes);
+
+    return { asOf: now.toISOString(), weekday, active, next };
   }
 
   /* -------------------------------------------------------- POS / MenuBoard resolution */

@@ -54,6 +54,22 @@ export function useMenuAssignmentWorkspace() {
 export function useMenus(query: MasterListQuery) {
   return useQuery({ queryKey: ['menus', query], queryFn: () => menusApi.list(query), placeholderData: (p) => p });
 }
+
+/**
+ * Which menus are servable right now. Answered against the *server* clock, so it re-reads on
+ * a minute-ish beat rather than trusting the workstation's own — a menu whose window has just
+ * closed must stop being shown even if nobody touched this screen, and the countdown to the
+ * next opening has to keep moving on its own.
+ */
+export function useActiveMenus(enabled = true) {
+  return useQuery({
+    queryKey: ['menus-active'],
+    queryFn: menusApi.active,
+    enabled,
+    refetchInterval: 60_000,
+    placeholderData: (previous) => previous,
+  });
+}
 /**
  * Every Menu Catalogue, as `SelectField` options, for the pickers on Menu Categories and Menu
  * Groups. There are a handful of catalogues, so one unpaginated read is cheaper than a

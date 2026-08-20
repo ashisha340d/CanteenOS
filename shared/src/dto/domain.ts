@@ -834,6 +834,41 @@ export interface MenuScheduleWriteRequest {
   status?: MasterStatus;
 }
 
+/** A menu that is servable at this instant, and when its current window closes. */
+export interface ActiveMenuDto {
+  id: Uuid;
+  code: string;
+  name: string;
+  priority: number;
+  /** Null when the menu carries no schedule rows at all — it is simply always on. */
+  startTime: ClockTime | null;
+  endTime: ClockTime | null;
+  /** Whole minutes until `endTime`. Null for an always-on menu. */
+  endsInMinutes: number | null;
+}
+
+/** A menu that is not live yet but opens later today. */
+export interface UpcomingMenuDto {
+  id: Uuid;
+  code: string;
+  name: string;
+  startTime: ClockTime;
+  /** Whole minutes until `startTime`. */
+  startsInMinutes: number;
+}
+
+/** Everything the Active Menus widget renders, resolved against the server clock. */
+export interface ActiveMenusDto {
+  /** The instant this was computed. The widget shows figures relative to it. */
+  asOf: IsoDateTime;
+  /** 0 = Sunday .. 6 = Saturday, as `menu_schedules.day_of_week` uses. */
+  weekday: number;
+  /** Highest `priority` first, then name. */
+  active: ActiveMenuDto[];
+  /** Soonest first. */
+  next: UpcomingMenuDto[];
+}
+
 /* ---------------------------------------------------------- food item schedules */
 
 /** Per food item, per weekday, per shift availability. Ignored entirely while the food
