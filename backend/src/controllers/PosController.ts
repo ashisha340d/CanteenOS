@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import type {
   CreatePosOrderRequest,
+  PosAnalyticsQuery,
   PosCheckoutRequest,
   PosOrderListQuery,
   PosVoidRequest,
@@ -20,6 +21,21 @@ import { actorFrom } from './context';
 export const PosController = {
   async dashboard(req: Request, res: Response): Promise<void> {
     ok(res, await posService.dashboard(req.query as unknown as PosScope));
+  },
+
+  async salesSummary(req: Request, res: Response): Promise<void> {
+    ok(res, await posService.salesSummary(req.query as unknown as PosAnalyticsQuery));
+  },
+
+  async topItems(req: Request, res: Response): Promise<void> {
+    ok(
+      res,
+      await posService.topItems(req.query as unknown as PosAnalyticsQuery & { limit?: number }),
+    );
+  },
+
+  async busyHours(req: Request, res: Response): Promise<void> {
+    ok(res, await posService.busyHours(req.query as unknown as PosAnalyticsQuery));
   },
 
   async list(req: Request, res: Response): Promise<void> {

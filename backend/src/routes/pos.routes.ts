@@ -7,10 +7,12 @@ import { validate } from '../middleware/validate';
 import {
   createPosOrderSchema,
   kioskProfileQuerySchema,
+  posAnalyticsQuerySchema,
   posCheckoutSchema,
   posDashboardQuerySchema,
   posOrderIdParam,
   posOrderListQuerySchema,
+  posTopItemsQuerySchema,
   posVoidSchema,
   printPosBillSchema,
   sendPosBillWhatsAppSchema,
@@ -38,6 +40,29 @@ export function posRoutes(): Router {
     read,
     validate({ query: posDashboardQuerySchema }),
     asyncHandler(PosController.dashboard),
+  );
+
+  // Reading the floor after the fact is still reading the floor: the analytics routes sit under
+  // POS_READ, and none of them can reach a ticket the dashboard would not already show.
+  router.get(
+    '/analytics/sales',
+    read,
+    validate({ query: posAnalyticsQuerySchema }),
+    asyncHandler(PosController.salesSummary),
+  );
+
+  router.get(
+    '/analytics/top-items',
+    read,
+    validate({ query: posTopItemsQuerySchema }),
+    asyncHandler(PosController.topItems),
+  );
+
+  router.get(
+    '/analytics/busy-hours',
+    read,
+    validate({ query: posAnalyticsQuerySchema }),
+    asyncHandler(PosController.busyHours),
   );
 
   // How the organisation wants its kiosks to look and speak, plus the binding of the one stand

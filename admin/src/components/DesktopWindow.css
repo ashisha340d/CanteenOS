@@ -16,9 +16,10 @@
   box-shadow: var(--desk-window-shadow-focus);
 }
 
-/* Docked (maximised): the caption lives in the app bar, so the frame itself disappears and
-   the content gets the whole client area. */
-.os-window--docked {
+/* Maximised: the frame has nothing to sit against, so the border, the radius and the shadow all
+   go. The caption stays — a maximised window in Windows still carries its own title and its own
+   close button, and here it is the only chrome left on the screen. */
+.os-window--maximized {
   border: none;
   border-radius: 0;
   box-shadow: none;
@@ -26,14 +27,21 @@
 
 .os-window__titlebar {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 8px;
   flex-shrink: 0;
-  padding: 0 12px;
+  /* No padding on the right: the caption buttons run flush into the corner, which is what
+     makes the corner of a window hittable by throwing the pointer at it. */
+  padding: 0 0 0 10px;
   cursor: move;
   user-select: none;
   background: linear-gradient(180deg, var(--desk-chrome-from) 0%, var(--desk-chrome-to) 100%);
   border-bottom: 1px solid var(--desk-chrome-border);
+}
+
+/* Nothing to drag a maximised window to. */
+.os-window--maximized .os-window__titlebar {
+  cursor: default;
 }
 
 .os-window:not(.os-window--focused) .os-window__titlebar {
@@ -42,59 +50,34 @@
       var(--desk-chrome-idle-to) 100%);
 }
 
-.os-window__lights {
-  display: flex;
-  gap: 6px;
-  flex-shrink: 0;
+/* An inactive window's caption ink fades rather than its bar changing shade — the flat skins
+   have no gradient to distinguish, so the title is what has to carry the state. */
+.os-window:not(.os-window--focused) .os-window__title,
+.os-window:not(.os-window--focused) .os-cap__btn {
+  opacity: 0.62;
 }
 
-.os-window__light {
-  width: 12px;
-  height: 12px;
-  padding: 0;
-  border-radius: 50%;
-  border: 1px solid rgba(0, 0, 0, 0.18);
-  cursor: pointer;
-  transition: filter 0.1s;
-}
-
-.os-window__light:hover {
-  filter: brightness(0.85);
-}
-
-.os-window__light:focus-visible {
-  outline: 2px solid var(--desk-accent);
-  outline-offset: 1px;
-}
-
-.os-window__light--close {
-  background: #ff5f57;
-}
-
-.os-window__light--min {
-  background: #febc2e;
-}
-
-.os-window__light--max {
-  background: #28c840;
+/* The close button follows the window's own corner, or it squares off a rounded frame. */
+.os-window:not(.os-window--maximized) .os-cap__btn--close {
+  border-top-right-radius: calc(var(--desk-window-radius, 12px) - 1.5px);
 }
 
 .os-window__accent {
+  align-self: center;
   width: 8px;
   height: 8px;
   border-radius: 2px;
   flex-shrink: 0;
-  margin-left: 4px;
 }
 
 .os-window__icon {
   display: flex;
+  align-self: center;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   width: 18px;
   height: 18px;
-  margin-left: 4px;
   border-radius: 5px;
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.3) inset;
 }
@@ -107,13 +90,15 @@
 }
 
 .os-window__title {
+  display: flex;
+  align-items: center;
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 12.5px;
-  font-weight: 700;
+  font-weight: 600;
   /* The chrome is a fixed gradient per skin, so the label follows the skin's caption ink
      rather than the content theme's foreground. */
   color: var(--desk-caption-fg);
@@ -123,7 +108,7 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 16px;
+  padding: 14px 16px;
   background: var(--background);
   color: var(--foreground);
 }

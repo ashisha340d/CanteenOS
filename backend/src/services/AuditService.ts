@@ -167,6 +167,125 @@ export const AuditAction = {
   /** The dial intent was opened. Written before the call connects — see the 025 header. */
   SUPPLIER_CALLED: 'supplier.called',
   SUPPLIER_WHATSAPP_SENT: 'supplier.whatsapp.sent',
+
+  /**
+   * Cleaning & hygiene. A hygiene record is the thing a food-safety auditor asks for, so every
+   * write that changes what was cleaned, by whom, or whether it passed is audited — including
+   * the ones a machine made.
+   */
+  CLEANING_MASTER_CREATED: 'cleaning.master.created',
+  CLEANING_MASTER_UPDATED: 'cleaning.master.updated',
+  CLEANING_MASTER_DELETED: 'cleaning.master.deleted',
+
+  CLEANABLE_ASSET_CREATED: 'cleaning.asset.created',
+  CLEANABLE_ASSET_UPDATED: 'cleaning.asset.updated',
+  CLEANABLE_ASSET_DELETED: 'cleaning.asset.deleted',
+  CLEANABLE_ASSET_AVAILABILITY_CHANGED: 'cleaning.asset.availability.changed',
+
+  CLEANING_PROCEDURE_CREATED: 'cleaning.procedure.created',
+  CLEANING_PROCEDURE_UPDATED: 'cleaning.procedure.updated',
+  CLEANING_PROCEDURE_DELETED: 'cleaning.procedure.deleted',
+  CLEANING_PROCEDURE_VERSION_SAVED: 'cleaning.procedure.version.saved',
+  CLEANING_PROCEDURE_PUBLISHED: 'cleaning.procedure.published',
+  CLEANING_PROCEDURE_ARCHIVED: 'cleaning.procedure.archived',
+
+  CLEANING_RULE_CREATED: 'cleaning.rule.created',
+  CLEANING_RULE_UPDATED: 'cleaning.rule.updated',
+  CLEANING_RULE_DELETED: 'cleaning.rule.deleted',
+  CLEANING_RULE_RUN: 'cleaning.rule.run',
+
+  CLEANING_TASK_CREATED: 'cleaning.task.created',
+  CLEANING_TASK_ASSIGNED: 'cleaning.task.assigned',
+  CLEANING_TASK_STARTED: 'cleaning.task.started',
+  CLEANING_TASK_STEP_RECORDED: 'cleaning.task.step.recorded',
+  CLEANING_TASK_COMPLETED: 'cleaning.task.completed',
+  CLEANING_TASK_VERIFIED: 'cleaning.task.verified',
+  CLEANING_TASK_FAILED: 'cleaning.task.failed',
+  CLEANING_TASK_CANCELLED: 'cleaning.task.cancelled',
+  CLEANING_TASK_DELETED: 'cleaning.task.deleted',
+  CLEANING_EVIDENCE_ADDED: 'cleaning.task.evidence.added',
+  CLEANING_EVIDENCE_DELETED: 'cleaning.task.evidence.deleted',
+
+  CLEANING_INCIDENT_REPORTED: 'cleaning.incident.reported',
+  CLEANING_EVENT_PUBLISHED: 'cleaning.event.published',
+
+  CLEANING_CORRECTIVE_ACTION_RAISED: 'cleaning.corrective_action.raised',
+  CLEANING_CORRECTIVE_ACTION_UPDATED: 'cleaning.corrective_action.updated',
+  CLEANING_CORRECTIVE_ACTION_CLOSED: 'cleaning.corrective_action.closed',
+
+  CLEANING_SKILL_GRANTED: 'cleaning.workforce.skill.granted',
+  CLEANING_SKILL_REVOKED: 'cleaning.workforce.skill.revoked',
+  CLEANING_SHIFT_ASSIGNED: 'cleaning.workforce.shift.assigned',
+  CLEANING_SHIFT_UNASSIGNED: 'cleaning.workforce.shift.unassigned',
+  CLEANING_AREA_RESPONSIBILITY_SET: 'cleaning.workforce.area.set',
+  CLEANING_AREA_RESPONSIBILITY_REMOVED: 'cleaning.workforce.area.removed',
+  CLEANING_ASSIGNMENT_POLICY_SAVED: 'cleaning.assignment_policy.saved',
+  CLEANING_ASSIGNMENT_POLICY_DELETED: 'cleaning.assignment_policy.deleted',
+
+  /**
+   * The purchase masters. Audited to the same standard as the menu: a product's unit, tax
+   * profile and reorder level decide what a bill is checked against and what gets ordered, so
+   * "who changed the pack size" has to have an answer.
+   */
+  PRODUCT_CREATED: 'product.created',
+  PRODUCT_UPDATED: 'product.updated',
+  PRODUCT_DELETED: 'product.deleted',
+  /** Per-location stock policy: the reorder levels that drive requirement generation. */
+  PRODUCT_LOCATION_UPSERTED: 'product.location.upserted',
+  PRODUCT_LOCATION_DELETED: 'product.location.deleted',
+
+  INVENTORY_LOCATION_CREATED: 'inventory.location.created',
+  INVENTORY_LOCATION_UPDATED: 'inventory.location.updated',
+  INVENTORY_LOCATION_DELETED: 'inventory.location.deleted',
+
+  UOM_CREATED: 'inventory.uom.created',
+  UOM_UPDATED: 'inventory.uom.updated',
+  UOM_DELETED: 'inventory.uom.deleted',
+
+  /** The mapping bill-scanning resolves against. One action for insert and update alike. */
+  SUPPLIER_PRODUCT_UPSERTED: 'purchase.supplier_product.upserted',
+  SUPPLIER_PRODUCT_DELETED: 'purchase.supplier_product.deleted',
+
+  /** Credit terms, bank details and the approval flag on a VENDOR entity. */
+  VENDOR_PROFILE_UPDATED: 'purchase.vendor.profile.updated',
+
+  /**
+   * Stock adjustments. Audited harder than any other purchase document, because an adjustment
+   * rewrites the physical truth with no supplier paperwork behind it — POSTED is the moment a
+   * balance changed on somebody's word alone, and it needs a name against it forever.
+   */
+  STOCK_ADJUSTMENT_CREATED: 'stock.adjustment.created',
+  STOCK_ADJUSTMENT_UPDATED: 'stock.adjustment.updated',
+  STOCK_ADJUSTMENT_SUBMITTED: 'stock.adjustment.submitted',
+  STOCK_ADJUSTMENT_POSTED: 'stock.adjustment.posted',
+  STOCK_ADJUSTMENT_CANCELLED: 'stock.adjustment.cancelled',
+
+  /** Physical counts. RECORDED covers a sheet of physical quantities being entered. */
+  STOCK_COUNT_CREATED: 'stock.count.created',
+  STOCK_COUNT_RECORDED: 'stock.count.recorded',
+  STOCK_COUNT_SUBMITTED: 'stock.count.submitted',
+  STOCK_COUNT_APPROVED: 'stock.count.approved',
+  STOCK_COUNT_CANCELLED: 'stock.count.cancelled',
+
+  /**
+   * The direct purchase chain. POSTED is the moment stock, an invoice, a vendor liability and
+   * possibly a payment all came into existence in one transaction, so each generated document
+   * is audited in its own right rather than folded into the entry's row.
+   */
+  PURCHASE_ENTRY_CREATED: 'purchase.entry.created',
+  PURCHASE_ENTRY_UPDATED: 'purchase.entry.updated',
+  PURCHASE_ENTRY_READY: 'purchase.entry.ready',
+  PURCHASE_ENTRY_POSTED: 'purchase.entry.posted',
+  PURCHASE_ENTRY_CANCELLED: 'purchase.entry.cancelled',
+
+  GOODS_RECEIPT_CREATED: 'purchase.goods_receipt.created',
+  GOODS_RECEIPT_POSTED: 'purchase.goods_receipt.posted',
+
+  PURCHASE_INVOICE_CREATED: 'purchase.invoice.created',
+  PURCHASE_INVOICE_POSTED: 'purchase.invoice.posted',
+
+  /** Money left the business. Admin only, and audited with the allocation it settled. */
+  VENDOR_PAYMENT_POSTED: 'purchase.vendor_payment.posted',
 } as const;
 export type AuditAction = (typeof AuditAction)[keyof typeof AuditAction];
 

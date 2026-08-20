@@ -1203,6 +1203,195 @@ Other rules worth knowing before writing a client:
 
 ---
 
+## 17c. Equipment Monitoring & Maintenance Management
+
+Reserved. The module is built and live (`/equipment/*`, `/maintenance/*`, the `/equipment-*`
+masters and `/suppliers`) and is specified in
+[MENUBOARD_SPEC.md §3c](./MENUBOARD_SPEC.md#3c-equipment-monitoring--maintenance-management-extension);
+its endpoint reference has never been written into this file. Read
+`backend/src/routes/equipment.routes.ts` and `maintenance.routes.ts` until it is.
+
+---
+
+## 17d. Cleaning & Hygiene Management
+
+Everything a canteen cleans, the rules that schedule it, the work those rules raise, and the
+record of what was actually done — see
+[MENUBOARD_SPEC.md §3e](./MENUBOARD_SPEC.md#3e-cleaning--hygiene-management-extension).
+
+All routes are global (cleaning belongs to an area, not a board) and mounted at the API root.
+Capabilities, from the widest down: `CLEANING_VIEW`, `CLEANING_WORK` and
+`CLEANING_REPORT_INCIDENT` reach **Employee**; `CLEANING_VERIFY`, `CLEANING_ASSIGN`,
+`CLEANING_ASSET_MANAGE`, `CLEANING_RULE_MANAGE`, `CLEANING_PROCEDURE_MANAGE`,
+`CLEANING_CHEMICAL_MANAGE`, `CLEANING_CORRECTIVE_ACTION_MANAGE`, `CLEANING_WORKFORCE_MANAGE`,
+`CLEANING_EVENT_PUBLISH` and `CLEANING_COMPLIANCE_VIEW` start at **Manager**; `CLEANING_DELETE`
+is **Admin**.
+
+### 17d.1 Landing and reference
+
+- `GET /cleaning/mine` → `200 MyCleaningDto` (`{ assigned, dueToday, toVerify, reported,
+  correctiveActions, counts }`). The phone's landing payload. `toVerify` is empty for anyone
+  without `CLEANING_VERIFY` and **never contains the reader's own work**.
+- `GET /cleaning/setup` → `200 CleaningSetupDto` — areas, asset types, methods, standards,
+  chemicals, tools, skills, shifts and procedures in one request. Every write form in both
+  clients needs the same eight lookups, and eight round trips on canteen wifi is the difference
+  between a form that opens and one that spins.
+- `GET /cleaning/dashboard` → `200 CleaningDashboardDto`
+
+### 17d.2 Reporting — the endpoint every user reaches
+
+- `POST /cleaning/reports` — `CleaningReportRequest` → `201 CleaningReportResultDto`.
+  Requires `CLEANING_REPORT_INCIDENT`. **One of `areaId`, `cleanableAssetId` or `equipmentId`
+  is the only hard requirement.** An area alone resolves to that area's general (`AREA`-typed)
+  cleanable asset, created on first use. `eventType` must be one of
+  `CLEANING_REPORTABLE_EVENTS` (`MANUAL_TRIGGER`, `SPILL_REPORTED`, `CONTAMINATION_REPORTED`);
+  anything else is `VALIDATION_FAILED`. `priority` may only *raise* what the rule would give
+  the work, never lower it. The response carries the tasks that were raised, `usedFallback`,
+  and a `message` written for the reporter.
+- `GET /cleaning/events` — `?eventType&source&areaId&cleanableAssetId&reportedBy&mine&unprocessedOnly&from&to` + pageQuery
+  → `200 Paginated<CleaningEventDto>`. `mine` is resolved server-side.
+- `GET /cleaning/events/:id` → `200 CleaningEventDto`
+- `POST /cleaning/events` — `CleaningEventPublishRequest` → `201 CleaningReportResultDto`.
+  Machine-to-machine ingest, `CLEANING_EVENT_PUBLISH`. `SCHEDULE_DUE` is **refused**: it is the
+  scheduler's own signal, and letting a client claim a schedule is due would manufacture
+  occurrences the frequency engine never computed. `dedupeKey` makes the call idempotent — the
+  same key twice is accepted and changes nothing. No ad-hoc fallback on this door.
+
+### 17d.3 Tasks
+
+- `GET /cleaning/tasks` — `?status&priority&areaId&floorId&cleanableAssetId&assetTypeId&ruleId&shiftId&assignedTo&mine&openOnly&overdueOnly&unassignedOnly&awaitingVerification&dueFrom&dueTo` + pageQuery
+  → `200 Paginated<CleaningTaskDto>`
+- `GET /cleaning/tasks/:id` → `200 CleaningTaskDto` with `steps`, `evidence`, `verifications`,
+  `assignments`, `history`, `correctiveActions` and the pinned `procedure` version.
+- `POST /cleaning/tasks/:id/assign` — `CleaningTaskAssignRequest` → `200`. `assignedTo: null`
+  returns it to the pool as `UNASSIGNED`.
+- `GET /cleaning/tasks/:id/candidates` → `200 CleaningAssignmentCandidateDto[]` — the engine's
+  own scoring, with `eligible` and `ineligibleReason` per person.
+- `POST /cleaning/tasks/:id/start` — `CleaningTaskStartRequest` → `200`
+- `POST /cleaning/tasks/:id/steps/:stepId` — `CleaningTaskStepUpdateRequest` → `200`.
+  `SKIPPED` without a `skipReason` is `VALIDATION_FAILED`.
+- `POST /cleaning/tasks/:id/complete` — `CleaningTaskCompleteRequest` → `200`. Steps may be
+  settled in this one call. **Refused** while a mandatory step is `PENDING`, or while a step
+  that `requiresPhoto` has none bound — both `VALIDATION_FAILED`, naming what is missing.
+  Where the task lands next is decided from the rule, not from the client.
+- `POST /cleaning/tasks/:id/evidence` — `CleaningTaskEvidenceRequest` → `200`
+- `DELETE /cleaning/tasks/:id/evidence/:evidenceId` → `204`
+- `POST /cleaning/tasks/:id/verify` — `CleaningVerifyRequest` → `200`. `CLEANING_VERIFY`.
+  **`FORBIDDEN` when the caller is the task's `completedBy`** — nobody signs off their own
+  clean. A `FAIL` requires `failureReason`, moves the task to `RECLEAN_REQUIRED` and raises a
+  corrective action. Measured `results` are judged against the standard on the rule, or failing
+  that the one on the pinned procedure version, and the window is frozen onto the result row.
+- `POST /cleaning/tasks/:id/cancel` — `CleaningTaskCancelRequest` → `200`
+- `DELETE /cleaning/tasks/:id` → `204`. `CLEANING_DELETE`.
+
+Movement is governed by `canTransitionCleaningTask` in shared — the same function both clients
+ask, so a button enabled on a phone is never refused by the server. `canStart`, `canComplete`
+and `canVerify` on the DTO are computed per viewing user for exactly that reason.
+
+### 17d.4 Corrective actions
+
+- `GET /cleaning/corrective-actions` — `?status&areaId&assignedTo&mine&openOnly&overdueOnly` + pageQuery
+  → `200 Paginated<CleaningCorrectiveActionDto>`
+- `GET /cleaning/corrective-actions/:id` → `200`
+- `PATCH /cleaning/corrective-actions/:id` — `CorrectiveActionUpdateRequest` → `200`.
+  Closing without both a `rootCause` and a `correctiveAction` is `VALIDATION_FAILED`: a
+  corrective action closed without either records that something went wrong and nothing was
+  learned.
+
+### 17d.5 The register and its rules
+
+- `GET /cleaning/assets` — `?areaId&floorId&assetTypeId&riskLevel&foodContact&status&equipmentId&availableOnly&withoutRules` + pageQuery
+  → `200 Paginated<CleanableAssetDto>`. `withoutRules=true` is the module's most useful single
+  filter: an asset nothing schedules looks healthy until an auditor asks.
+- `GET /cleaning/assets/resolve?code=…` → `200 CleanableAssetDto` (scanned label or typed code)
+- `GET /cleaning/assets/:id` → `200`
+- `POST /cleaning/assets` — `CleanableAssetCreateRequest` → `201`. `code` is optional; omitted,
+  the server allocates `<AREA>-<TYPE>-0001`. `riskLevel` and `foodContact` default from the type.
+- `PATCH /cleaning/assets/:id` — `CleanableAssetUpdateRequest` → `200`
+- `POST /cleaning/assets/:id/availability` — `CleanableAssetAvailabilityRequest` → `200`. Its
+  own endpoint because the generator reads the flag on every sweep, and "who took the fryer out
+  of the cleaning schedule, and why" must be directly answerable. Going unavailable requires a
+  `reason`.
+- `DELETE /cleaning/assets/:id` → `204`. `CONFLICT` while it has open tasks.
+- `GET /cleaning/rules` — `?scope&areaId&assetTypeId&cleanableAssetId&procedureId&frequencyKind&priority&includeInactive&problemsOnly` + pageQuery
+  → `200 Paginated<CleaningRuleDto>`. `problemsOnly=true` returns the rules that cannot
+  currently raise work.
+- `GET /cleaning/rules/:id` → `200`
+- `GET /cleaning/rules/:id/preview` → `200 CleaningRulePreviewDto` — the assets it reaches, the
+  next due moment, and `blockers` in plain words.
+- `POST /cleaning/rules` — `CleaningRuleWriteRequest` → `201`
+- `PATCH /cleaning/rules/:id` — `CleaningRuleUpdateRequest` → `200`
+- `DELETE /cleaning/rules/:id` → `204`
+- `POST /cleaning/rules/:id/run` → `200 CleaningReportResultDto`. Goes through the event log
+  like everything else, so a hand-run rule is as explainable afterwards as an automatic one.
+
+The three pairings the database also enforces are checked first, in words a person filling in a
+form can act on: `ASSET` scope needs `cleanableAssetId`, the other two need `assetTypeId` (and
+`ASSET_TYPE_IN_AREA` also needs `areaId`); `PERIODIC` needs `intervalDays`;
+`requiresVerification` needs a `verificationMethod`.
+
+### 17d.6 Procedures — controlled documents
+
+- `GET /cleaning/procedures` — `?includeInactive&publishedOnly` + pageQuery →
+  `200 Paginated<CleaningProcedureDto>`
+- `GET /cleaning/procedures/:id` → `200`, carrying every `version`
+- `POST /cleaning/procedures` → `201` · `PATCH /cleaning/procedures/:id` → `200` ·
+  `DELETE /cleaning/procedures/:id` → `204` (`CONFLICT` while rules use it)
+- `PUT /cleaning/procedures/:id/draft` — `CleaningProcedureVersionWriteRequest` →
+  `200 CleaningProcedureVersionDto`. Creates or replaces the single open draft. Steps arrive
+  whole and are renumbered from the submitted order.
+- `POST /cleaning/procedures/:id/draft-from-published` → `200` — starts a draft from what is in
+  force, because a published version may never be edited.
+- `DELETE /cleaning/procedures/:id/draft` → `204`
+- `POST /cleaning/procedures/:id/publish` → `200`. `VALIDATION_FAILED` when the draft has no
+  steps. Archives whatever was published before; from that moment new tasks pin the new version
+  and tasks already raised keep pointing at the old one.
+- `GET /cleaning/procedure-versions/:id` → `200`
+
+### 17d.7 Masters and workforce
+
+Each of these is `GET` (list, `?search&includeInactive`), `POST`, `PATCH /:id` and
+`DELETE /:id` → `204`:
+
+| Path | Write capability |
+| --- | --- |
+| `/cleaning/asset-types` | `CLEANING_ASSET_MANAGE` |
+| `/cleaning/methods`, `/cleaning/standards` | `CLEANING_PROCEDURE_MANAGE` |
+| `/cleaning/chemicals`, `/cleaning/tools` | `CLEANING_CHEMICAL_MANAGE` |
+| `/cleaning/skills`, `/cleaning/shifts` | `CLEANING_WORKFORCE_MANAGE` |
+
+Deletes are Admin (`CLEANING_DELETE`) and soft: a chemical named by a procedure written three
+years ago must still resolve, or the record of what was used stops being readable.
+
+- `GET /cleaning/workforce` → `200 CleaningWorkforceMemberDto[]` — the roster as the assignment
+  engine sees it. Deliberately unpaginated.
+- `GET|POST /cleaning/workforce/:userId/skills` · `DELETE …/skills/:skillId`
+- `GET|POST /cleaning/workforce/:userId/shifts` · `DELETE …/shifts/:assignmentId`
+- `GET|POST /cleaning/workforce/:userId/areas` · `DELETE …/areas/:areaId`
+- `GET /cleaning/areas/:areaId/responsibles` → `200 UserAreaResponsibilityDto[]`
+- `GET /cleaning/assignment-policies` → `200 CleaningAssignmentRuleDto[]`
+- `PUT /cleaning/assignment-policies` — `CleaningAssignmentRuleWriteRequest` → `200`. Upsert,
+  keyed on `areaId`; `null` is the global fallback.
+- `DELETE /cleaning/assignment-policies/:id` → `204`. `CONFLICT` on the global one — edit it,
+  or switch it off.
+
+### 17d.8 The record and the sweep
+
+- `GET /cleaning/compliance` — `?from&to&areaId&assetTypeId&shiftId` → `200 CleaningComplianceDto`.
+  One window cut four ways — area, asset type, shift, person — plus `missedAssets`. Compliance
+  has one definition, used by this report and by the dashboard alike: **fell due** = had a
+  `dueAt` inside the window that has passed; **on time** = completed at or before it; **late** =
+  completed after it; **missed** = fell due and was never completed. Rates read 100 when nothing
+  fell due, because nothing was missed.
+- `POST /cleaning/sweep` → `200 CleaningSweepResult`. `CLEANING_RULE_MANAGE`. The same sweep the
+  hourly timer runs — nothing here is test-only. Idempotent: a second call raises nothing.
+
+Wall-clock inputs in this module (a rule's `dueTime`, a shift's hours) are **local to the
+server**, matching the shift machinery they are compared against; `dueAt` and `scheduledAt` on
+the wire are UTC instants like every other datetime in the API.
+
+---
+
 ## 18. Socket.IO
 
 The Socket.IO server is attached to the same HTTP listener as the REST API. It is a **hint

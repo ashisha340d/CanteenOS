@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { KdsConfigDto, KdsQueueDto } from '@menuboard/shared';
 import { http } from '../api/client';
+import { fetchRecentActions } from '../api/kds';
 
 type Tone = 'newOrder' | 'attention' | 'critical';
 
@@ -41,6 +42,13 @@ function synthBeep(tone: Tone, ctx: AudioContext, volume: number): void {
   }
 }
 
+/**
+ * How long an order that has left the board is still recognised as one the board has already
+ * seen, so bringing it back does not buzz as an arrival. Longer than any shift; short enough
+ * that a screen left running for days does not accumulate ids forever.
+ */
+const REMEMBER_ORDER_MS = 12 * 60 * 60_000;
+
 /** Where one line stands in the alarm story. Each stage speaks once; critical then repeats. */
 type Phase = 'waiting' | 'attention' | 'critical';
 
@@ -73,7 +81,7 @@ export function useAlarms(queue: KdsQueueDto | undefined, config: KdsConfigDto |
   const audioCtxRef = useRef<AudioContext | null>(null);
   const elementsRef = useRef<Partial<Record<Tone, HTMLAudioElement>>>({});
   const linesRef = useRef<Map<string, LineClock>>(new Map());
-  const knownOrdersRef = useRef<Set<string>>(new Set());
+  const seenOrdersRef = useRef<Map<string, number>>(new Map());
   const bootstrappedRef = useRef(false);
   const volumeRef = useRef(0.8);
 
@@ -171,6 +179,39 @@ export function useAlarms(queue: KdsQueueDto | undefined, config: KdsConfigDto |
     setSoundReady(true);
   }, []);
 
+  /* Seed the memory with what has already been served at this counter.
+
+     `seenOrdersRef` alone only remembers orders this board has watched since it mounted, and a
+     fully-served order is not in the queue at all — the board's query drops an order once its
+     last line is served. So after a reload, reverting something served before that reload would
+     look like a brand new ticket and buzz. The revert list is exactly the set of orders that can
+     come back, so adopting it at mount closes the gap precisely, without guessing from clocks.
+
+     One request per board mount, and a failure is harmless: the worst case is the buzz this
+     whole mechanism exists to avoid, which is where the board stood before any of it. */
+  const counterId = queue?.scope.counterId;
+  useEffect(() => {
+    if (counterId === undefined) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const served = await fetchRecentActions(counterId);
+        if (cancelled) return;
+        const now = Date.now();
+        for (const action of served) {
+          if (!seenOrdersRef.current.has(action.orderId)) {
+            seenOrdersRef.current.set(action.orderId, now);
+          }
+        }
+      } catch {
+        // See above: this is a nicety, not a correctness requirement.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [counterId]);
+
   /* Track the queue: register new lines and their due times, retire lines that left. The
      new-order buzz is per *order*, not per line — a four-item ticket is one arrival. */
   useEffect(() => {
@@ -184,10 +225,8 @@ export function useAlarms(queue: KdsQueueDto | undefined, config: KdsConfigDto |
       const openLines = order.lines.filter((line) => line.kdsStatus !== 'SERVED');
       if (openLines.length === 0) continue;
 
-      if (!knownOrdersRef.current.has(order.id)) {
-        knownOrdersRef.current.add(order.id);
-        arrivals += 1;
-      }
+      if (!seenOrdersRef.current.has(order.id)) arrivals += 1;
+      seenOrdersRef.current.set(order.id, now);
 
       for (const line of openLines) {
         seenLines.add(line.id);
@@ -207,9 +246,22 @@ export function useAlarms(queue: KdsQueueDto | undefined, config: KdsConfigDto |
     for (const lineId of [...linesRef.current.keys()]) {
       if (!seenLines.has(lineId)) linesRef.current.delete(lineId);
     }
-    // An order that fully cleared can arrive again later (a revert) and count as fresh.
-    for (const orderId of [...knownOrdersRef.current]) {
-      if (!queue.orders.some((order) => order.id === orderId)) knownOrdersRef.current.delete(orderId);
+
+    /* An order that left the board is *remembered*, not forgotten. This used to drop the id the
+       moment its last line was served, so bringing that order back — a revert from the Completed
+       tab, an undo on the card, an exchange reopening it — made the board see a brand new ticket
+       and sound the new-order buzzer at a counter that had just put the plate down itself. The id
+       stays, so a return is a return; only genuine arrivals buzz.
+
+       Entries age out rather than being deleted on departure: ids are UUIDs and never come back
+       after a shift, so this is a memory bound, not a correctness rule. Nothing reverts half a
+       day later.
+
+       Note this is only about the *arrival* buzz. A reverted line re-registers in the loop
+       above with a `dueAt` already in the past, so it adopts `critical` silently rather than
+       replaying that stage on the spot. */
+    for (const [orderId, lastSeen] of seenOrdersRef.current) {
+      if (now - lastSeen > REMEMBER_ORDER_MS) seenOrdersRef.current.delete(orderId);
     }
 
     if (!bootstrappedRef.current) {

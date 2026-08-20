@@ -3,6 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import type { KdsExchangeRequest, KdsOrderDto } from '@menuboard/shared';
 import { fetchSellables } from '../api/kds';
 import { readErrorMessage } from '../api/client';
+import { shortOrderNumber } from './OrderCard';
+import { useT } from '../i18n';
 
 interface Addition {
   menuItemId: string;
@@ -27,6 +29,7 @@ const MONEY = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR
  * must total exactly what the exchanged ones were worth. The server re-checks the same sum.
  */
 export function ExchangeModal({ order, counterId, busy, onSubmit, onClose }: Props): JSX.Element {
+  const t = useT();
   const [pickedLines, setPickedLines] = useState<Set<string>>(new Set());
   const [additions, setAdditions] = useState<Addition[]>([]);
   const [search, setSearch] = useState('');
@@ -123,18 +126,20 @@ export function ExchangeModal({ order, counterId, busy, onSubmit, onClose }: Pro
   }
 
   return (
-    <div className="kds-exchange" role="dialog" aria-modal="true" aria-label={`Exchange on order ${order.orderNumber}`}>
+    <div className="kds-exchange" role="dialog" aria-modal="true" aria-label={t.exchangeTitle}>
       <div className="kds-exchange__panel">
         <header className="kds-exchange__head">
-          <h2>Exchange on #{order.orderNumber}</h2>
-          <button type="button" className="kds-recent-row__undo" onClick={onClose} disabled={busy}>
-            Close
+          <h2>
+            {t.exchangeTitle} · #{shortOrderNumber(order.orderNumber)}
+          </h2>
+          <button type="button" className="kds-served-row__undo" onClick={onClose} disabled={busy}>
+            {t.close}
           </button>
         </header>
 
         <div className="kds-exchange__cols">
           <div className="kds-exchange__col">
-            <h3>Take back</h3>
+            <h3>{t.exchangeLinesToReturn}</h3>
             <div className="kds-exchange__scroll">
               {exchangeableLines.map((line) => (
                 <label key={line.id} className="kds-exchange__line" style={{ cursor: 'pointer' }}>
@@ -151,16 +156,16 @@ export function ExchangeModal({ order, counterId, busy, onSubmit, onClose }: Pro
                 </label>
               ))}
               {exchangeableLines.length === 0 && (
-                <p style={{ color: '#5d6675', fontSize: 13 }}>Every line on this order is served.</p>
+                <p style={{ color: 'var(--kds-faint)', fontSize: 13 }}>{t.nothingOutstanding}</p>
               )}
             </div>
           </div>
 
           <div className="kds-exchange__col">
-            <h3>Give instead</h3>
+            <h3>{t.exchangeAdditions}</h3>
             <input
               className="kds-exchange__search"
-              placeholder="Search the counter menu…"
+              placeholder={t.exchangeSearch}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -186,8 +191,8 @@ export function ExchangeModal({ order, counterId, busy, onSubmit, onClose }: Pro
                 </button>
               ))}
               {sellables.error !== null && (
-                <p style={{ color: '#f87171', fontSize: 13 }}>
-                  {readErrorMessage(sellables.error, 'Could not load the menu.')}
+                <p style={{ color: 'var(--kds-late)', fontSize: 13 }}>
+                  {readErrorMessage(sellables.error, t.menuFileFailed)}
                 </p>
               )}
             </div>
@@ -196,15 +201,14 @@ export function ExchangeModal({ order, counterId, busy, onSubmit, onClose }: Pro
 
         <div className={`kds-exchange__total ${balanced ? 'kds-exchange__total--match' : 'kds-exchange__total--off'}`}>
           <span>
-            Returning {MONEY.format(exchangedValue)} · Giving {MONEY.format(additionsValue)}
-            {pickedLines.size > 0 && additionsValue !== exchangedValue
-              ? ` · ${additionsValue < exchangedValue ? 'short' : 'over'} by ${MONEY.format(Math.abs(exchangedValue - additionsValue))}`
-              : ''}
+            {t.exchangeValue}: {MONEY.format(exchangedValue)} · {MONEY.format(additionsValue)}
           </span>
-          <span>{balanced ? 'Value matches' : 'Values must match exactly'}</span>
+          <span>{balanced ? t.exchangeMatch : t.exchangeOff}</span>
         </div>
 
-        {error !== null && <p style={{ color: '#f87171', padding: '0 18px', fontSize: 13 }}>{error}</p>}
+        {error !== null && (
+          <p style={{ color: 'var(--kds-late)', padding: '0 18px', fontSize: 13 }}>{error}</p>
+        )}
 
         <footer className="kds-exchange__foot">
           <button
@@ -213,10 +217,10 @@ export function ExchangeModal({ order, counterId, busy, onSubmit, onClose }: Pro
             disabled={!balanced || busy}
             onClick={submit}
           >
-            Confirm exchange
+            {t.exchangeApply}
           </button>
           <button type="button" className="kds-card__action kds-card__action--exchange" onClick={onClose} disabled={busy}>
-            Cancel
+            {t.cancel}
           </button>
         </footer>
       </div>

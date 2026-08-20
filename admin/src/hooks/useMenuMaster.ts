@@ -1,9 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
+  CounterRouteMoveRequest,
   CounterRouteWriteRequest,
   CounterWriteRequest,
   ItemGroupWriteRequest,
   MenuCategoryAssignmentWriteRequest,
+  MenuAssignmentWorkspaceDto,
   MenuItemAssignmentWriteRequest,
   MenuItemScheduleBulkWriteRequest,
   MenuItemVariantCatalogPriceWriteRequest,
@@ -11,9 +13,11 @@ import type {
   MenuWriteRequest,
   CreateMenuBoardScreenRequest,
   UpdateMenuBoardScreenRequest,
+  ModifierAssignmentMoveRequest,
   ModifierGroupWriteRequest,
   ModifierWriteRequest,
   PrintingGroupWriteRequest,
+  PrintingRouteMoveRequest,
   PrintingRouteWriteRequest,
   RoutableEntityType,
 } from '@menuboard/shared';
@@ -25,8 +29,10 @@ import {
   menuItemAssignmentsApi,
   menuItemScheduleApi,
   menuItemVariantsApi,
+  menuAssignmentWorkspaceApi,
   menuBoardScreensApi,
   menusApi,
+  modifierAssignmentsApi,
   modifierGroupsApi,
   modifiersApi,
   printingGroupsApi,
@@ -37,6 +43,13 @@ import {
 } from '../api/menuMaster';
 
 /* --------------------------------------------------------------------------- menus */
+
+export function useMenuAssignmentWorkspace() {
+  return useQuery({
+    queryKey: ['menu-assignment-workspace'],
+    queryFn: menuAssignmentWorkspaceApi.get,
+  });
+}
 
 export function useMenus(query: MasterListQuery) {
   return useQuery({ queryKey: ['menus', query], queryFn: () => menusApi.list(query), placeholderData: (p) => p });
@@ -70,14 +83,22 @@ export function useUpdateMenu() {
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: Partial<MenuWriteRequest> }) =>
       menusApi.update(id, body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['menus'] }),
+    onSuccess: (menu, variables) => {
+      qc.setQueryData(['menu', variables.id], menu);
+      qc.invalidateQueries({ queryKey: ['menus'] });
+    },
   });
 }
 export function useDeleteMenu() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => menusApi.remove(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['menus'] }),
+    onSuccess: (_data, id) => {
+      qc.removeQueries({ queryKey: ['menu', id] });
+      qc.invalidateQueries({ queryKey: ['menus'] });
+      qc.invalidateQueries({ queryKey: ['menu-category-assignments'] });
+      qc.invalidateQueries({ queryKey: ['menu-item-assignments'] });
+    },
   });
 }
 export function useRestoreMenu() {
@@ -91,14 +112,20 @@ export function usePublishMenu() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => menusApi.publish(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['menus'] }),
+    onSuccess: (menu, id) => {
+      qc.setQueryData(['menu', id], menu);
+      qc.invalidateQueries({ queryKey: ['menus'] });
+    },
   });
 }
 export function useUnpublishMenu() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => menusApi.unpublish(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['menus'] }),
+    onSuccess: (menu, id) => {
+      qc.setQueryData(['menu', id], menu);
+      qc.invalidateQueries({ queryKey: ['menus'] });
+    },
   });
 }
 
@@ -220,7 +247,10 @@ export function useCreateCounter() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: CounterWriteRequest) => countersApi.create(body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['counters'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['counters'] });
+      qc.invalidateQueries({ queryKey: ['menu-assignment-workspace'] });
+    },
   });
 }
 export function useUpdateCounter() {
@@ -228,14 +258,20 @@ export function useUpdateCounter() {
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: Partial<CounterWriteRequest> }) =>
       countersApi.update(id, body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['counters'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['counters'] });
+      qc.invalidateQueries({ queryKey: ['menu-assignment-workspace'] });
+    },
   });
 }
 export function useDeleteCounter() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => countersApi.remove(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['counters'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['counters'] });
+      qc.invalidateQueries({ queryKey: ['menu-assignment-workspace'] });
+    },
   });
 }
 
@@ -258,6 +294,31 @@ export function useAssignCounterRoute() {
       qc.invalidateQueries({ queryKey: ['counter-routes', variables.entityType, variables.entityId] }),
   });
 }
+export function useMoveCounterRoute() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CounterRouteMoveRequest) => counterRoutesApi.move(body),
+    onSuccess: (routes, variables) => {
+      qc.setQueryData<MenuAssignmentWorkspaceDto>(['menu-assignment-workspace'], (workspace) =>
+        workspace
+          ? {
+            ...workspace,
+            counterRoutes: [
+              ...workspace.counterRoutes.filter(
+                (route) =>
+                  route.entityType !== variables.entityType || route.entityId !== variables.entityId,
+              ),
+              ...routes,
+            ],
+          }
+          : workspace,
+      );
+      qc.invalidateQueries({ queryKey: ['counter-routes', variables.entityType, variables.entityId] });
+    },
+    onError: () => qc.invalidateQueries({ queryKey: ['menu-assignment-workspace'] }),
+  });
+}
+
 export function useRemoveCounterRoute() {
   const qc = useQueryClient();
   return useMutation({
@@ -348,7 +409,10 @@ export function useCreatePrintingGroup() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: PrintingGroupWriteRequest) => printingGroupsApi.create(body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['printing-groups'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['printing-groups'] });
+      qc.invalidateQueries({ queryKey: ['menu-assignment-workspace'] });
+    },
   });
 }
 export function useUpdatePrintingGroup() {
@@ -356,14 +420,20 @@ export function useUpdatePrintingGroup() {
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: Partial<PrintingGroupWriteRequest> }) =>
       printingGroupsApi.update(id, body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['printing-groups'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['printing-groups'] });
+      qc.invalidateQueries({ queryKey: ['menu-assignment-workspace'] });
+    },
   });
 }
 export function useDeletePrintingGroup() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => printingGroupsApi.remove(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['printing-groups'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['printing-groups'] });
+      qc.invalidateQueries({ queryKey: ['menu-assignment-workspace'] });
+    },
   });
 }
 
@@ -384,6 +454,31 @@ export function useAssignPrintingRoute() {
       qc.invalidateQueries({ queryKey: ['printing-routes', variables.entityType, variables.entityId] }),
   });
 }
+export function useMovePrintingRoute() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: PrintingRouteMoveRequest) => printingRoutesApi.move(body),
+    onSuccess: (routes, variables) => {
+      qc.setQueryData<MenuAssignmentWorkspaceDto>(['menu-assignment-workspace'], (workspace) =>
+        workspace
+          ? {
+            ...workspace,
+            printingRoutes: [
+              ...workspace.printingRoutes.filter(
+                (route) =>
+                  route.entityType !== variables.entityType || route.entityId !== variables.entityId,
+              ),
+              ...routes,
+            ],
+          }
+          : workspace,
+      );
+      qc.invalidateQueries({ queryKey: ['printing-routes', variables.entityType, variables.entityId] });
+    },
+    onError: () => qc.invalidateQueries({ queryKey: ['menu-assignment-workspace'] }),
+  });
+}
+
 export function useRemovePrintingRoute() {
   const qc = useQueryClient();
   return useMutation({
@@ -407,7 +502,10 @@ export function useCreateModifierGroup() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: ModifierGroupWriteRequest) => modifierGroupsApi.create(body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['modifier-groups'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['modifier-groups'] });
+      qc.invalidateQueries({ queryKey: ['menu-assignment-workspace'] });
+    },
   });
 }
 export function useUpdateModifierGroup() {
@@ -415,21 +513,30 @@ export function useUpdateModifierGroup() {
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: Partial<ModifierGroupWriteRequest> }) =>
       modifierGroupsApi.update(id, body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['modifier-groups'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['modifier-groups'] });
+      qc.invalidateQueries({ queryKey: ['menu-assignment-workspace'] });
+    },
   });
 }
 export function useDeleteModifierGroup() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => modifierGroupsApi.remove(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['modifier-groups'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['modifier-groups'] });
+      qc.invalidateQueries({ queryKey: ['menu-assignment-workspace'] });
+    },
   });
 }
 export function useCreateModifier(groupId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: ModifierWriteRequest) => modifiersApi.create(groupId, body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['modifier-groups'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['modifier-groups'] });
+      qc.invalidateQueries({ queryKey: ['menu-assignment-workspace'] });
+    },
   });
 }
 export function useUpdateModifier() {
@@ -437,14 +544,65 @@ export function useUpdateModifier() {
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: Partial<ModifierWriteRequest> }) =>
       modifiersApi.update(id, body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['modifier-groups'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['modifier-groups'] });
+      qc.invalidateQueries({ queryKey: ['menu-assignment-workspace'] });
+    },
   });
 }
 export function useDeleteModifier() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => modifiersApi.remove(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['modifier-groups'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['modifier-groups'] });
+      qc.invalidateQueries({ queryKey: ['menu-assignment-workspace'] });
+    },
+  });
+}
+
+export function useMoveModifierAssignment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ModifierAssignmentMoveRequest) => modifierAssignmentsApi.move(body),
+    onSuccess: (assignments, variables) => {
+      qc.setQueryData<MenuAssignmentWorkspaceDto>(['menu-assignment-workspace'], (workspace) =>
+        workspace
+          ? {
+            ...workspace,
+            modifierAssignments: [
+              ...workspace.modifierAssignments.filter(
+                (assignment) =>
+                  assignment.entityType !== variables.entityType ||
+                  assignment.entityId !== variables.entityId,
+              ),
+              ...assignments,
+            ],
+          }
+          : workspace,
+      );
+    },
+    onError: () => qc.invalidateQueries({ queryKey: ['menu-assignment-workspace'] }),
+  });
+}
+
+export function useRemoveMenuItemModifierGroupAssignments() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (groupId: string) => modifierAssignmentsApi.removeGroupFromMenuItems(groupId),
+    onSuccess: (_data, groupId) => {
+      qc.setQueryData<MenuAssignmentWorkspaceDto>(['menu-assignment-workspace'], (workspace) =>
+        workspace
+          ? {
+            ...workspace,
+            modifierAssignments: workspace.modifierAssignments.filter(
+              (assignment) => assignment.modifierGroupId !== groupId,
+            ),
+          }
+          : workspace,
+      );
+      qc.invalidateQueries({ queryKey: ['menu-assignment-workspace'] });
+    },
   });
 }
 

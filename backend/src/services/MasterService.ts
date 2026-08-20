@@ -27,11 +27,20 @@ import {
   type MasterListFilter,
 } from '../repositories/MasterRepository';
 import {
+  counterRouteRepository,
   itemGroupRepository,
   menuCategoryAssignmentRepository,
+  menuItemAssignmentRepository,
+  menuItemScheduleRepository,
+  menuItemVariantCatalogPriceRepository,
+  menuItemVariantRepository,
   menuRepository,
+  modifierAssignmentRepository,
+  printingRouteRepository,
 } from '../repositories/MenuMasterRepository';
+import { mediaAssignmentRepository } from '../repositories/MediaRepository';
 import { realtime } from '../realtime/RealtimeGateway';
+import { menuBoardRealtime } from '../realtime/menuBoardSocket';
 import { ConflictError, NotFoundError } from '../utils/errors';
 import { buildPage, resolvePaging } from '../utils/http';
 import { newId } from '../utils/ids';
@@ -456,6 +465,8 @@ export class MasterService {
         groupId: input.groupId ?? null,
         name: input.name,
         nameHi: input.nameHi ?? null,
+        description: input.description ?? null,
+        descriptionHi: input.descriptionHi ?? null,
         unit: input.unit,
         unitHi: input.unitHi ?? null,
         imagePath: input.imagePath ?? null,
@@ -504,6 +515,8 @@ export class MasterService {
         ...(input.groupId !== undefined ? { groupId: input.groupId } : {}),
         ...(input.name !== undefined ? { name: input.name } : {}),
         ...(input.nameHi !== undefined ? { nameHi: input.nameHi } : {}),
+        ...(input.description !== undefined ? { description: input.description } : {}),
+        ...(input.descriptionHi !== undefined ? { descriptionHi: input.descriptionHi } : {}),
         ...(input.unit !== undefined ? { unit: input.unit } : {}),
         ...(input.unitHi !== undefined ? { unitHi: input.unitHi } : {}),
         ...(input.imagePath !== undefined ? { imagePath: input.imagePath } : {}),
@@ -544,6 +557,26 @@ export class MasterService {
         );
       }
 
+      const assignments = await menuItemAssignmentRepository.listForFoodItem(connection, id, true);
+      const variants = await menuItemVariantRepository.listForFoodItem(connection, id, true);
+      const targets: { type: 'MENU_ITEM' | 'MENU_ITEM_ASSIGNMENT' | 'MENU_ITEM_VARIANT'; id: string }[] = [
+        { type: 'MENU_ITEM', id },
+        ...assignments.map((assignment) => ({ type: 'MENU_ITEM_ASSIGNMENT' as const, id: assignment.id })),
+        ...variants.map((variant) => ({ type: 'MENU_ITEM_VARIANT' as const, id: variant.id })),
+      ];
+      for (const target of targets) {
+        await counterRouteRepository.softDeleteForEntity(connection, target.type, target.id);
+        await printingRouteRepository.softDeleteForEntity(connection, target.type, target.id);
+        await modifierAssignmentRepository.softDeleteForEntity(connection, target.type, target.id);
+        await mediaAssignmentRepository.softDeleteForEntity(connection, target.type, target.id);
+      }
+      await menuItemScheduleRepository.deleteForFoodItem(connection, id);
+      await menuItemVariantCatalogPriceRepository.softDeleteForVariants(
+        connection,
+        variants.map((variant) => variant.id),
+      );
+      await menuItemAssignmentRepository.softDeleteForFoodItem(connection, id);
+      await menuItemVariantRepository.softDeleteForFoodItem(connection, id);
       await menuItemRepository.softDelete(connection, id);
       await auditService.record(connection, actor, {
         action: AuditAction.MASTER_DELETED,
@@ -553,6 +586,7 @@ export class MasterService {
       });
     });
     this.announce('menu_items', 0);
+    menuBoardRealtime.announceChange('menu-master:menu_items');
   }
 
   /**

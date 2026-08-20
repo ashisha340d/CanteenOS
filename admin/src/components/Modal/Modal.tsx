@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, type ReactNode } from 'react';
-import { GripVerticalIcon, XIcon } from 'lucide-react';
+import { GripVerticalIcon, Maximize2Icon, MinusIcon, SquareIcon, XIcon } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useDeviceProfile } from '@/hooks/useDeviceProfile';
@@ -50,7 +50,14 @@ export function Modal({
   description,
 }: ModalProps): JSX.Element | null {
   const { supportsPointerAffordances } = useDeviceProfile();
-  const { geometry, setGeometry } = useModalGeometry(id);
+  const {
+    geometry,
+    setGeometry,
+    maximized,
+    setMaximized,
+    minimized,
+    setMinimized,
+  } = useModalGeometry(id);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const lastEscapeRef = useRef<number>(0);
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
@@ -79,13 +86,14 @@ export function Modal({
 
   // A window restored from a previous session may no longer fit; pull it back on screen.
   useEffect(() => {
-    if (!open) return;
+    if (!open || minimized || maximized) return;
     setGeometry(clampToViewport(geometryRef.current));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, minimized, maximized]);
 
   const onDragStart = useCallback(
     (e: React.MouseEvent) => {
+      if (maximized || minimized) return;
       dragRef.current = {
         startX: e.clientX,
         startY: e.clientY,
@@ -110,11 +118,12 @@ export function Modal({
       window.addEventListener('mousemove', onMove);
       window.addEventListener('mouseup', onUp);
     },
-    [setGeometry],
+    [setGeometry, maximized, minimized],
   );
 
   const onResizeStart = useCallback(
     (e: React.MouseEvent) => {
+      if (maximized || minimized) return;
       e.stopPropagation();
       resizeRef.current = {
         startX: e.clientX,
@@ -142,7 +151,7 @@ export function Modal({
       window.addEventListener('mousemove', onMove);
       window.addEventListener('mouseup', onUp);
     },
-    [minWidth, minHeight, setGeometry],
+    [minWidth, minHeight, setGeometry, maximized, minimized],
   );
 
   /**
@@ -192,6 +201,31 @@ export function Modal({
 
   if (!open) return null;
 
+  if (minimized) {
+    const barWidth = Math.max(240, Math.min(geometry.width, 320));
+    const barX = Math.min(Math.max(0, geometry.x), Math.max(0, window.innerWidth - barWidth - 8));
+    const barY = Math.min(Math.max(0, geometry.y), Math.max(0, window.innerHeight - 48));
+    return (
+      <div
+        className="bg-card border-border fixed z-50 flex items-center gap-2 rounded-lg border px-3 py-2 shadow-lg"
+        style={{ left: barX, top: barY, width: barWidth }}
+      >
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">{title}</span>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => setMinimized(false)}
+          aria-label="Restore"
+        >
+          <Maximize2Icon className="size-4" />
+        </Button>
+        <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label="Close">
+          <XIcon className="size-4" />
+        </Button>
+      </div>
+    );
+  }
+
   const a11yDescription = description ?? `${title} dialog`;
 
   return (
@@ -226,7 +260,10 @@ export function Modal({
               over it, so the chrome stays quiet while the form is being filled in. */}
           <div
             onMouseDown={onDragStart}
-            className="group/bar flex shrink-0 cursor-move items-center gap-1 border-b px-4 py-3 select-none"
+            className={cn(
+              'group/bar flex shrink-0 items-center gap-1 border-b px-4 py-3 select-none',
+              maximized || minimized ? 'cursor-default' : 'cursor-move',
+            )}
           >
             {supportsPointerAffordances && (
               <GripVerticalIcon
@@ -237,6 +274,26 @@ export function Modal({
             <DialogTitle className="min-w-0 flex-1 truncate text-[0.9375rem] font-semibold tracking-[-0.014em]">
               {title}
             </DialogTitle>
+            {supportsPointerAffordances && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => setMaximized(!maximized)}
+                  aria-label={maximized ? 'Restore' : 'Maximize'}
+                >
+                  {maximized ? <SquareIcon className="size-4" /> : <Maximize2Icon className="size-4" />}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => setMinimized(true)}
+                  aria-label="Minimize"
+                >
+                  <MinusIcon className="size-4" />
+                </Button>
+              </>
+            )}
             <Button
               variant="ghost"
               size="icon-sm"
@@ -257,7 +314,7 @@ export function Modal({
           )}
         </div>
 
-        {supportsPointerAffordances && (
+        {supportsPointerAffordances && !maximized && (
           <div
             onMouseDown={onResizeStart}
             aria-hidden

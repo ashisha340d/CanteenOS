@@ -9,19 +9,30 @@ export type KdsDensity = 'compact' | 'default' | 'light';
 export interface KdsDisplaySettings {
   skin: KdsSkin;
   density: KdsDensity;
-  /** Card grid size multiplier, 0.8 – 1.5. */
+  /**
+   * Card grid size multiplier. Goes down to 0.5 — two steps below the old 0.8 floor, which was
+   * not small enough for a counter that wants twenty cards on the wall at once.
+   */
   cardScale: number;
   /** Queue tab type size, 0.8 – 2.4 — set from the [-A] [+A] buttons on the queue header. */
   queueScale: number;
+  /** The queue box, dragged by its corner. Null until somebody resizes it. */
+  queueWidth: number | null;
+  queueHeight: number | null;
   /** Auto out-of-station after this many idle minutes; 0 switches the detection off. */
   idleAwayMinutes: number;
 }
+
+export const CARD_SCALE_MIN = 0.5;
+export const CARD_SCALE_MAX = 1.5;
 
 export const DEFAULT_DISPLAY_SETTINGS: KdsDisplaySettings = {
   skin: 'dark',
   density: 'default',
   cardScale: 1,
   queueScale: 1.25,
+  queueWidth: null,
+  queueHeight: null,
   idleAwayMinutes: 5,
 };
 
@@ -33,7 +44,13 @@ const keyFor = (stationId: string): string => `menuboard.kds.display.${stationId
 
 function clampCardScale(value: unknown): number {
   const num = typeof value === 'number' && Number.isFinite(value) ? value : DEFAULT_DISPLAY_SETTINGS.cardScale;
-  return Math.min(1.5, Math.max(0.8, num));
+  return Math.min(CARD_SCALE_MAX, Math.max(CARD_SCALE_MIN, num));
+}
+
+function readSize(value: unknown, min: number): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= min
+    ? Math.round(value)
+    : null;
 }
 
 export function clampQueueScale(value: unknown): number {
@@ -57,6 +74,8 @@ export function readDisplaySettings(stationId: string): KdsDisplaySettings {
           : DEFAULT_DISPLAY_SETTINGS.density,
       cardScale: clampCardScale(parsed.cardScale),
       queueScale: clampQueueScale(parsed.queueScale),
+      queueWidth: readSize(parsed.queueWidth, 320),
+      queueHeight: readSize(parsed.queueHeight, 220),
       idleAwayMinutes:
         typeof parsed.idleAwayMinutes === 'number' && parsed.idleAwayMinutes >= 0
           ? Math.min(60, Math.round(parsed.idleAwayMinutes))

@@ -1,13 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   CreatePosOrderRequest,
+  PosAnalyticsQuery,
   PosCheckoutRequest,
   PosOrderListQuery,
   PosVoidRequest,
   UpdatePosOrderRequest,
   UpdatePosOrderStatusRequest,
 } from '@menuboard/shared';
-import { posApi, type PosDashboardQuery } from '../api/pos';
+import {
+  posAnalyticsApi,
+  posApi,
+  type PosDashboardQuery,
+  type PosTopItemsQuery,
+} from '../api/pos';
 
 /**
  * The dashboard is a live work queue, so it polls.
@@ -44,12 +50,49 @@ export function usePosOrder(id: string | null) {
   });
 }
 
+/**
+ * The sales widgets sit on the desktop for a whole shift, so they refresh on the same
+ * fifteen-second beat as the dashboard rather than only when the operator navigates. Any POS
+ * write made from this workstation also invalidates them immediately, so the figures move the
+ * moment the operator settles a ticket instead of up to fifteen seconds later.
+ */
+export function usePosSalesSummary(query: PosAnalyticsQuery, enabled = true) {
+  return useQuery({
+    queryKey: ['pos-analytics', 'sales', query],
+    queryFn: () => posAnalyticsApi.sales(query),
+    enabled,
+    refetchInterval: DASHBOARD_REFRESH_MS,
+    placeholderData: (previous) => previous,
+  });
+}
+
+export function usePosTopItems(query: PosTopItemsQuery, enabled = true) {
+  return useQuery({
+    queryKey: ['pos-analytics', 'top-items', query],
+    queryFn: () => posAnalyticsApi.topItems(query),
+    enabled,
+    refetchInterval: DASHBOARD_REFRESH_MS,
+    placeholderData: (previous) => previous,
+  });
+}
+
+export function usePosBusyHours(query: PosAnalyticsQuery, enabled = true) {
+  return useQuery({
+    queryKey: ['pos-analytics', 'busy-hours', query],
+    queryFn: () => posAnalyticsApi.busyHours(query),
+    enabled,
+    refetchInterval: DASHBOARD_REFRESH_MS,
+    placeholderData: (previous) => previous,
+  });
+}
+
 /** Every POS write moves the dashboard, so all of them invalidate it. */
 function useInvalidatePos() {
   const qc = useQueryClient();
   return (id?: string): void => {
     void qc.invalidateQueries({ queryKey: ['pos-dashboard'] });
     void qc.invalidateQueries({ queryKey: ['pos-orders'] });
+    void qc.invalidateQueries({ queryKey: ['pos-analytics'] });
     if (id !== undefined) void qc.invalidateQueries({ queryKey: ['pos-order', id] });
   };
 }

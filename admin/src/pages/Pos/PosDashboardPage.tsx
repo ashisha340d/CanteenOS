@@ -44,8 +44,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { BackButton } from '@/components/BackButton';
-import { PageHeader } from '@/components/ui/PageHeader';
 import { CardGridSkeleton, StatGridSkeleton } from '@/components/ui/Skeletons';
 import { Spinner } from '@/components/ui/spinner';
 import {
@@ -140,7 +138,7 @@ const NEW_SALE = {
   takeaway: { type: PosOrderType.TAKEAWAY, label: 'New takeaway', icon: <ShoppingBagIcon /> },
   dineIn: { type: PosOrderType.DINE_IN, label: 'New dine-in', icon: <ArmchairIcon /> },
   delivery: { type: PosOrderType.DELIVERY, label: 'New delivery', icon: <BikeIcon /> },
-  quickSale: { type: PosOrderType.QUICK_SALE, label: 'Quick sale', icon: <ZapIcon /> },
+  quickSale: { type: PosOrderType.QUICK_SALE, label: 'Sales', icon: <ZapIcon /> },
 } as const;
 
 /**
@@ -330,31 +328,20 @@ export function PosDashboardPage(): JSX.Element {
 
   const newSaleActions = (
     <IfCapable capability={Capability.POS_OPERATE}>
-      <Button onClick={() => startSale(NEW_SALE.takeaway.type)}>
-        {NEW_SALE.takeaway.icon}
-        {NEW_SALE.takeaway.label}
-      </Button>
-      <Button variant="outline" onClick={() => startSale(NEW_SALE.dineIn.type)}>
-        {NEW_SALE.dineIn.icon}
-        {NEW_SALE.dineIn.label}
-      </Button>
-      <Button variant="outline" onClick={() => startSale(NEW_SALE.delivery.type)}>
-        {NEW_SALE.delivery.icon}
-        {NEW_SALE.delivery.label}
-      </Button>
-      <Button variant="outline" onClick={() => startSale(NEW_SALE.quickSale.type)}>
+      {/* Two ways in, because those are the two the counter uses. The order *type* is still
+          chosen inside the sale — putting one button per type up here spent the width of the
+          row on a choice that is made again on the next screen anyway. */}
+      <Button onClick={() => startSale(NEW_SALE.quickSale.type)}>
         {NEW_SALE.quickSale.icon}
         {NEW_SALE.quickSale.label}
       </Button>
-      {/* Same weight and shape as its neighbours — it used to be the one solid `secondary`
-          button in the row, which read as the primary action rather than an alternative. */}
       <Button
         variant="outline"
         onClick={() => startMargSale(NEW_SALE.takeaway.type)}
-        aria-label="New takeaway in MARG keyboard entry"
+        aria-label="Start a sale in MARG keyboard entry"
       >
         <KeyboardIcon />
-        MARG entry
+        Marg Entry
       </Button>
       <Button
         variant="ghost"
@@ -370,11 +357,7 @@ export function PosDashboardPage(): JSX.Element {
   if (isLoading || !data) {
     return (
       <>
-        <PageHeader
-          leading={<BackButton to="/" label="Back" />}
-          title="Point of Sale"
-          actions={newSaleActions}
-        />
+        <div className="mb-3 flex justify-end">{newSaleActions}</div>
         <div className="flex flex-col gap-6">
           <StatGridSkeleton count={8} />
           <CardGridSkeleton count={8} />
@@ -451,33 +434,32 @@ export function PosDashboardPage(): JSX.Element {
 
   return (
     <>
-      <PageHeader
-        eyebrow="Counter"
-        leading={<BackButton to="/" label="Back" />}
-        title="Point of Sale"
-        meta={
-          isFetching ? (
+      {/* No page header. In a window the caption bar names this screen and closes it; at the
+          till the task bar is right there. Either way "Point of Sale" above the Point of Sale
+          is a row of pixels spent on nothing — what is left is the live badge and the
+          buttons. */}
+      <div className="mb-3 flex flex-wrap items-center justify-end gap-3">
+        {isFetching ? (
+          <span
+            role="status"
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-sm border px-1.5 py-0.5 whitespace-nowrap',
+              'text-[0.7188rem] leading-none font-semibold tracking-[0.01em]',
+              TONE_CHIP_CLASS.success,
+            )}
+          >
             <span
-              role="status"
+              aria-hidden
               className={cn(
-                'inline-flex items-center gap-1.5 rounded-sm border px-1.5 py-0.5 whitespace-nowrap',
-                'text-[0.7188rem] leading-none font-semibold tracking-[0.01em]',
-                TONE_CHIP_CLASS.success,
+                'size-[5px] shrink-0 rounded-full motion-safe:animate-pulse',
+                TONE_DOT_CLASS.success,
               )}
-            >
-              <span
-                aria-hidden
-                className={cn(
-                  'size-[5px] shrink-0 rounded-full motion-safe:animate-pulse',
-                  TONE_DOT_CLASS.success,
-                )}
-              />
-              Live
-            </span>
-          ) : null
-        }
-        actions={newSaleActions}
-      />
+            />
+            Live
+          </span>
+        ) : null}
+        {newSaleActions}
+      </div>
 
       <div className="flex flex-col gap-6">
         <PosOverviewPanel

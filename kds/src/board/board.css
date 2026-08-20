@@ -33,6 +33,13 @@
   --kds-ack-strong: #3b82f6;
   --kds-scrim: rgba(6, 8, 11, 0.6);
   --kds-menu-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  /* Card urgency tints: blue while it is due soon, pink once late, brighter pink on the flash. */
+  --kds-warn-card: #12233f;
+  --kds-warn-card-head: #16305a;
+  --kds-crit-card: #3b1029;
+  --kds-crit-card-head: #4d1435;
+  --kds-crit-card-flash: #7a1743;
+  --kds-crit-border: #f472b6;
 
   display: flex;
   flex-direction: column;
@@ -74,6 +81,12 @@
   --kds-ack-strong: #2563eb;
   --kds-scrim: rgba(15, 23, 42, 0.35);
   --kds-menu-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+  --kds-warn-card: #dbeafe;
+  --kds-warn-card-head: #bfdbfe;
+  --kds-crit-card: #fce7f3;
+  --kds-crit-card-head: #fbcfe8;
+  --kds-crit-card-flash: #f9a8d4;
+  --kds-crit-border: #db2777;
 }
 
 /* Text size: compact packs tighter, light gives the wall screen airier type. */
@@ -85,23 +98,28 @@
 
 /* ------------------------------------------------------------------ top bar */
 
+/* One short bar carries everything: identity, tabs, counts, controls. */
 .kds-topbar {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 10px 18px;
+  gap: 10px;
+  padding: 5px 12px;
   background: var(--kds-panel);
   border-bottom: 1px solid var(--kds-border);
   flex-shrink: 0;
   flex-wrap: wrap;
+  min-height: 42px;
 }
 
 .kds-topbar__station {
   min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
 }
 
 .kds-topbar__station h1 {
-  font-size: 19px;
+  font-size: 15px;
   font-weight: 800;
   letter-spacing: -0.01em;
   margin: 0;
@@ -109,9 +127,68 @@
 }
 
 .kds-topbar__station p {
-  margin: 1px 0 0;
-  font-size: 11px;
+  margin: 0;
+  font-size: 10.5px;
   color: var(--kds-soft);
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------ tabs in the bar */
+
+.kds-tabs {
+  display: flex;
+  gap: 3px;
+  padding: 2px;
+  border-radius: 10px;
+  background: var(--kds-inset);
+  border: 1px solid var(--kds-border);
+  flex-shrink: 0;
+}
+
+.kds-tabs__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  font-size: 12.5px;
+  font-weight: 700;
+  font-family: inherit;
+  color: var(--kds-muted);
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.kds-tabs__tab:hover {
+  color: var(--kds-ink-2);
+}
+
+.kds-tabs__tab--active {
+  color: var(--kds-ink);
+  background: var(--kds-panel-3);
+  box-shadow: inset 0 0 0 1px var(--kds-border);
+}
+
+.kds-tabs__badge {
+  min-width: 18px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--kds-ack-strong);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.kds-tabs__tab--active .kds-tabs__badge {
+  background: var(--kds-late-border);
+}
+
+/* The Completed tab catches the card that flew to it. */
+.kds-tabs__tab--pulse {
+  animation: kds-tab-catch 0.62s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .kds-chips {
@@ -231,18 +308,29 @@
 
 /* ---------------------------------------------------------------- queue grid */
 
-/* A narrow, centred reading column — everything inside scales from --kds-queue-fs. */
+/* A narrow, centred reading column — everything inside scales from --kds-queue-fs, and the
+   whole box can be dragged to size from its corner. */
 .kds-queue {
   --q: var(--kds-queue-fs, 1);
 
+  position: relative;
   display: flex;
   flex-direction: column;
   min-height: 0;
   width: min(720px, 100%);
   margin: 0 auto;
   background: var(--kds-rail);
-  border-left: 1px solid var(--kds-border-soft);
-  border-right: 1px solid var(--kds-border-soft);
+  border: 1px solid var(--kds-border-soft);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* The queue tab centres its box rather than stretching it to the wall. */
+.kds-board__body--queue {
+  align-content: start;
+  justify-items: center;
+  padding: 12px;
+  overflow: auto;
 }
 
 .kds-queue__head {
@@ -303,7 +391,7 @@
   flex: 1;
   overflow-y: auto;
   display: grid;
-  grid-template-columns: calc(46px * var(--q)) 1fr calc(72px * var(--q));
+  grid-template-columns: calc(46px * var(--q)) 1fr calc(72px * var(--q)) calc(78px * var(--q));
   align-content: start;
 }
 
@@ -362,6 +450,42 @@
   font-size: calc(14px * var(--q));
 }
 
+/* "Bचा है" — what is left in hand. A dash means uncounted, which is not the same as none. */
+.kds-queue__cell--hand {
+  justify-content: flex-end;
+  font-size: calc(16px * var(--q));
+  font-weight: 800;
+  color: var(--kds-ok);
+  font-variant-numeric: tabular-nums;
+}
+
+.kds-queue__cell--hand-short {
+  color: var(--kds-warn);
+}
+
+.kds-queue__cell--hand-empty {
+  color: var(--kds-late);
+}
+
+/* Drag the corner to size the box; both dimensions, saved per station. */
+.kds-queue__resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 22px;
+  height: 22px;
+  cursor: nwse-resize;
+  touch-action: none;
+  background:
+    linear-gradient(135deg, transparent 55%, var(--kds-muted) 55%, var(--kds-muted) 62%, transparent 62%),
+    linear-gradient(135deg, transparent 72%, var(--kds-muted) 72%, var(--kds-muted) 79%, transparent 79%);
+  opacity: 0.5;
+}
+
+.kds-queue__resize:hover {
+  opacity: 1;
+}
+
 /* --------------------------------------------------------------- order cards */
 
 .kds-cards {
@@ -382,6 +506,59 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  /* Capped, with the line list scrolling inside: a twenty-item ticket must not push every
+     other card off the wall. Scales with the card-size setting. */
+  max-height: calc(var(--kds-card-min, 320px) * 1.35);
+}
+
+/* ------------------------------------------------------------- urgency states
+   The whole card changes colour, not only its outline — an edge is invisible from across a
+   kitchen. Blue as the dish approaches its time, pink once it is late, and a flashing
+   pink-on-red once the overdue alarm has started repeating. */
+
+.kds-card--warning {
+  background: var(--kds-warn-card);
+  border-color: var(--kds-ack-strong);
+}
+
+.kds-card--warning .kds-card__head {
+  background: var(--kds-warn-card-head);
+}
+
+.kds-card--critical {
+  background: var(--kds-crit-card);
+  border-color: var(--kds-crit-border);
+}
+
+.kds-card--critical .kds-card__head {
+  background: var(--kds-crit-card-head);
+}
+
+.kds-card--alarm {
+  background: var(--kds-crit-card);
+  border-color: var(--kds-late-border);
+  animation: kds-card-alarm 1s steps(1, end) infinite;
+}
+
+.kds-card--alarm .kds-card__head {
+  background: var(--kds-crit-card-head);
+}
+
+@keyframes kds-card-alarm {
+
+  0%,
+  49% {
+    background: var(--kds-crit-card);
+    border-color: var(--kds-late-border);
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.35);
+  }
+
+  50%,
+  100% {
+    background: var(--kds-crit-card-flash);
+    border-color: #fecdd3;
+    box-shadow: 0 0 22px 5px rgba(244, 63, 94, 0.45);
+  }
 }
 
 .kds-card--new {
@@ -405,11 +582,6 @@
   }
 }
 
-.kds-card--late {
-  border-color: #ef4444;
-  animation: kds-late-pulse 1.6s ease-in-out infinite;
-}
-
 @keyframes kds-late-pulse {
 
   0%,
@@ -422,19 +594,10 @@
   }
 }
 
-.kds-card--acknowledged {
-  border-color: var(--kds-ack-strong);
-}
-
 /* Checkout: the card leaves the wall at once and a clone flies to the Completed tab
    (CounterBoard.flyToCompleted); the survivors close the gap through useFlipGrid. The flying
    clone sets its own will-change — promoting every card on the wall would cost more than it
    buys on a screen holding thirty of them. */
-
-/* The Completed tab catches the arriving card. */
-.kds-bottomnav__tab--pulse {
-  animation: kds-tab-catch 0.62s cubic-bezier(0.22, 1, 0.36, 1);
-}
 
 @keyframes kds-tab-catch {
   0% {
@@ -513,9 +676,13 @@
   color: var(--kds-late);
 }
 
+/* The one scrolling part of a card: the head, footer and Serve-all stay put. */
 .kds-card__lines {
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .kds-line {
@@ -1012,62 +1179,8 @@
   flex-shrink: 0;
 }
 
-/* --------------------------------------------------------------- celebration */
-
-.kds-celebrate {
-  position: fixed;
-  inset: 0;
-  z-index: 80;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  background: rgba(10, 12, 15, 0.9);
-  animation: kds-celebrate-in 300ms ease-out;
-}
-
-@keyframes kds-celebrate-in {
-  from {
-    opacity: 0;
-    transform: scale(1.04);
-  }
-
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-.kds-celebrate__phrase {
-  font-size: clamp(38px, 7vw, 84px);
-  font-weight: 900;
-  letter-spacing: -0.02em;
-  background: linear-gradient(90deg, var(--kds-qty), #948dff, var(--kds-ok));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  animation: kds-phrase 2.4s ease-in-out infinite alternate;
-  text-align: center;
-  padding: 0 24px;
-}
-
-@keyframes kds-phrase {
-  from {
-    transform: scale(1);
-    filter: brightness(1);
-  }
-
-  to {
-    transform: scale(1.03);
-    filter: brightness(1.2);
-  }
-}
-
-.kds-celebrate__sub {
-  font-size: 16px;
-  color: var(--kds-soft);
-}
+/* The celebration lives in celebration.css — it is a self-contained piece of theatre,
+   and none of it is reused by the working screen underneath. */
 
 /* ------------------------------------------------------------------------- CDS
    The customer's screen. Always dark and always large — it is read across a counter,
@@ -1401,59 +1514,6 @@
   .cds__pay-qr {
     animation: none;
   }
-}
-
-/* ---------------------------------------------------------------- bottom nav */
-
-.kds-bottomnav {
-  display: flex;
-  flex-shrink: 0;
-  background: var(--kds-panel);
-  border-top: 1px solid var(--kds-border);
-}
-
-.kds-bottomnav__tab {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  padding: 9px 6px 10px;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--kds-muted);
-  background: transparent;
-  border: none;
-  border-top: 3px solid transparent;
-  cursor: pointer;
-  position: relative;
-}
-
-.kds-bottomnav__tab:hover {
-  color: var(--kds-ink-2);
-}
-
-.kds-bottomnav__tab--active {
-  color: var(--kds-ink);
-  border-top-color: var(--kds-ack-strong);
-  background: var(--kds-panel-3);
-}
-
-.kds-bottomnav__badge {
-  position: absolute;
-  top: 6px;
-  margin-left: 44px;
-  min-width: 19px;
-  padding: 1px 5px;
-  border-radius: 999px;
-  background: var(--kds-late-border);
-  color: #fff;
-  font-size: 10.5px;
-  font-weight: 900;
-  font-variant-numeric: tabular-nums;
 }
 
 /* ------------------------------------------------------------- settings modal */
@@ -1965,12 +2025,88 @@
 @media (prefers-reduced-motion: reduce) {
 
   .kds-card--new,
-  .kds-card--late,
+  .kds-card--alarm,
   .kds-line--reverted,
-  .kds-celebrate,
-  .kds-celebrate__phrase,
   .kds-drawer,
   .kds-settings__panel {
     animation: none;
   }
 }
+/* ------------------------------------------------------------------- language
+   The Hindi/English switch. Both flags stay on screen — the counter person picks
+   between two visible things rather than toggling a state they have to remember —
+   and the live one is the lit one. The flags are inline SVG, not emoji: Chrome on
+   Windows has no flag glyphs and would render 🇮🇳 as the bare letters "IN". */
+
+.kds-lang {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  background: var(--kds-btn);
+  border: 1px solid var(--kds-btn-border);
+  border-radius: 10px;
+}
+
+.kds-lang__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 12px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--kds-soft);
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.kds-lang__btn:hover {
+  color: var(--kds-ink-2);
+  background: var(--kds-btn-hover);
+}
+
+.kds-lang__btn--on {
+  color: var(--kds-ink);
+  background: var(--kds-panel-2);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 22%);
+}
+
+/* Desaturate the flag nobody has chosen, so the live language reads at a glance from
+   across the counter rather than needing the label to be read. */
+.kds-lang__btn:not(.kds-lang__btn--on) .kds-flag {
+  filter: saturate(0.25);
+  opacity: 0.75;
+}
+
+.kds-flag {
+  width: 24px;
+  height: 16px;
+  flex: none;
+  border-radius: 2.5px;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 18%);
+}
+
+/* In the top bar the words go and the flags carry it — that strip is order-card space. */
+.kds-lang--compact {
+  padding: 2px;
+  gap: 2px;
+}
+
+.kds-lang--compact .kds-lang__btn {
+  padding: 5px 7px;
+  font-size: 12px;
+}
+
+.kds-lang--compact .kds-lang__btn span {
+  display: none;
+}
+
+.kds-lang--compact .kds-flag {
+  width: 26px;
+  height: 17px;
+}
+

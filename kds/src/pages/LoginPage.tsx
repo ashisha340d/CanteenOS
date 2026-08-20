@@ -4,6 +4,8 @@ import { ArrowLeft, Delete, Loader2 } from 'lucide-react';
 import { ERROR_CODES } from '@menuboard/shared';
 import { loginWithPassword, loginWithPin } from '../api/auth';
 import { readErrorCode, readErrorMessage } from '../api/client';
+import { useT } from '../i18n';
+import { LanguageSwitch } from '../components/LanguageSwitch';
 
 interface Props {
   onLoggedIn: () => void;
@@ -17,6 +19,7 @@ const KEYPAD_ROWS: string[][] = [
 ];
 
 export function LoginPage({ onLoggedIn }: Props): JSX.Element {
+  const t = useT();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [pin, setPin] = useState('');
@@ -27,7 +30,7 @@ export function LoginPage({ onLoggedIn }: Props): JSX.Element {
   const passwordLogin = useMutation({
     mutationFn: () => loginWithPassword(identifier.trim(), password),
     onSuccess: onLoggedIn,
-    onError: (err) => setError(readErrorMessage(err, 'Could not sign in. Check the connection.')),
+    onError: (err) => setError(readErrorMessage(err, t.signInFailed)),
   });
 
   const pinLogin = useMutation({
@@ -38,15 +41,13 @@ export function LoginPage({ onLoggedIn }: Props): JSX.Element {
       setPin('');
       if (code === ERROR_CODES.RATE_LIMITED) {
         // Locked out of MPIN for a while — the password step is the only way in.
-        setError(readErrorMessage(err, 'Too many failed attempts. Sign in with your password.'));
+        setError(readErrorMessage(err, t.mpinLocked));
         setStep('credentials');
         setPasswordMode(true);
         return;
       }
       // Wrong PIN, or no PIN configured for this account at all.
-      setError(
-        readErrorMessage(err, 'MPIN not accepted. Try again or sign in with your password.'),
-      );
+      setError(readErrorMessage(err, t.mpinRejected));
     },
   });
 
@@ -73,7 +74,7 @@ export function LoginPage({ onLoggedIn }: Props): JSX.Element {
     return (
       <div className="flex min-h-full flex-col items-center justify-center gap-8 bg-canvas px-6">
         <div className="text-center">
-          <p className="text-lg text-ink-soft">Signing in as</p>
+          <p className="text-lg text-ink-soft">{t.signingInAs}</p>
           <h1 className="text-2xl">{identifier}</h1>
         </div>
 
@@ -107,7 +108,7 @@ export function LoginPage({ onLoggedIn }: Props): JSX.Element {
               setError(null);
             }}
             className="flex h-24 w-24 items-center justify-center rounded-lg bg-surface text-ink-soft active:bg-surface-raised"
-            aria-label="Back"
+            aria-label={t.back}
           >
             <ArrowLeft className="size-8" />
           </button>
@@ -122,7 +123,7 @@ export function LoginPage({ onLoggedIn }: Props): JSX.Element {
             type="button"
             onClick={() => setPin(pin.slice(0, -1))}
             className="flex h-24 w-24 items-center justify-center rounded-lg bg-surface text-ink-soft active:bg-surface-raised"
-            aria-label="Delete digit"
+            aria-label={t.deleteDigit}
           >
             <Delete className="size-8" />
           </button>
@@ -140,7 +141,7 @@ export function LoginPage({ onLoggedIn }: Props): JSX.Element {
           }}
           className="text-base text-ink-soft underline"
         >
-          Use password instead
+          {t.usePassword}
         </button>
       </div>
     );
@@ -149,9 +150,12 @@ export function LoginPage({ onLoggedIn }: Props): JSX.Element {
   return (
     <div className="flex min-h-full flex-col items-center justify-center gap-8 bg-canvas px-6">
       <div className="text-center">
-        <h1 className="text-3xl">Service KDS</h1>
-        <p className="mt-2 text-lg text-ink-soft">Staff sign-in</p>
+        <h1 className="text-3xl">{t.appName}</h1>
+        <p className="mt-2 text-lg text-ink-soft">{t.staffSignIn}</p>
       </div>
+
+      {/* Before sign-in, deliberately: this is the first screen a new counter person meets. */}
+      <LanguageSwitch />
 
       <form
         className="flex w-full max-w-md flex-col gap-5"
@@ -161,7 +165,7 @@ export function LoginPage({ onLoggedIn }: Props): JSX.Element {
         }}
       >
         <label className="flex flex-col gap-2">
-          <span className="text-base text-ink-soft">Username</span>
+          <span className="text-base text-ink-soft">{t.username}</span>
           <input
             value={identifier}
             onChange={(event) => setIdentifier(event.target.value)}
@@ -172,7 +176,7 @@ export function LoginPage({ onLoggedIn }: Props): JSX.Element {
 
         {passwordMode && (
           <label className="flex flex-col gap-2">
-            <span className="text-base text-ink-soft">Password</span>
+            <span className="text-base text-ink-soft">{t.password}</span>
             <input
               type="password"
               value={password}
@@ -191,7 +195,7 @@ export function LoginPage({ onLoggedIn }: Props): JSX.Element {
           className="flex items-center justify-center gap-3 rounded-lg bg-accent py-5 text-xl text-on-accent disabled:opacity-50"
         >
           {busy && <Loader2 className="size-6 animate-spin" />}
-          {passwordMode ? 'Sign in' : 'Continue'}
+          {passwordMode ? t.signIn : t.continue}
         </button>
 
         <button
@@ -202,7 +206,7 @@ export function LoginPage({ onLoggedIn }: Props): JSX.Element {
           }}
           className="text-base text-ink-soft underline"
         >
-          {passwordMode ? 'Use MPIN instead' : 'Use password instead'}
+          {passwordMode ? t.useMpin : t.usePassword}
         </button>
       </form>
     </div>

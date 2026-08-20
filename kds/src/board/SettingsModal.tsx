@@ -1,5 +1,13 @@
 import { LockKeyhole, X } from 'lucide-react';
-import type { DisplaySettingsApi, KdsDensity, KdsSkin } from '../config/displaySettings';
+import {
+  CARD_SCALE_MAX,
+  CARD_SCALE_MIN,
+  type DisplaySettingsApi,
+  type KdsDensity,
+  type KdsSkin,
+} from '../config/displaySettings';
+import { useT } from '../i18n';
+import { LanguageSwitch } from '../components/LanguageSwitch';
 
 interface Props {
   display: DisplaySettingsApi;
@@ -10,18 +18,6 @@ interface Props {
   onSignOut: () => void;
   onClose: () => void;
 }
-
-const SKINS: { id: KdsSkin; label: string }[] = [
-  { id: 'light', label: 'Light' },
-  { id: 'dark', label: 'Dark' },
-  { id: 'system', label: 'System' },
-];
-
-const DENSITIES: { id: KdsDensity; label: string }[] = [
-  { id: 'compact', label: 'Compact' },
-  { id: 'default', label: 'Default' },
-  { id: 'light', label: 'Light' },
-];
 
 const IDLE_CHOICES = [0, 2, 5, 10, 15];
 
@@ -35,28 +31,48 @@ export function SettingsModal({
   onSignOut,
   onClose,
 }: Props): JSX.Element {
+  const t = useT();
   const { settings, update } = display;
+
+  /* Built here rather than at module scope: the labels come from the dictionary, and the
+     dictionary is only known once the screen's language is. */
+  const skins: { id: KdsSkin; label: string }[] = [
+    { id: 'light', label: t.skinLight },
+    { id: 'dark', label: t.skinDark },
+    { id: 'system', label: t.skinSystem },
+  ];
+  const densities: { id: KdsDensity; label: string }[] = [
+    { id: 'compact', label: t.densityCompact },
+    { id: 'default', label: t.densityDefault },
+    { id: 'light', label: t.densityLight },
+  ];
 
   return (
     <div className="kds-settings__backdrop" onClick={onClose}>
       <div
         className="kds-settings__panel"
         role="dialog"
-        aria-label="Display settings"
+        aria-label={t.displaySettings}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="kds-settings__head">
-          <h2>Display settings</h2>
-          <button type="button" className="kds-topbar__btn" onClick={onClose} aria-label="Close settings">
+          <h2>{t.displaySettings}</h2>
+          <button type="button" className="kds-topbar__btn" onClick={onClose} aria-label={t.close}>
             <X className="size-4" />
           </button>
         </div>
 
         <div className="kds-settings__body">
+          {/* First, because it is the setting that changes every other word on this panel. */}
           <div>
-            <span className="kds-settings__label">Background</span>
-            <div className="kds-settings__options" role="radiogroup" aria-label="Background skin">
-              {SKINS.map((skin) => (
+            <span className="kds-settings__label">{t.language}</span>
+            <LanguageSwitch />
+          </div>
+
+          <div>
+            <span className="kds-settings__label">{t.background}</span>
+            <div className="kds-settings__options" role="radiogroup" aria-label={t.background}>
+              {skins.map((skin) => (
                 <button
                   key={skin.id}
                   type="button"
@@ -72,9 +88,9 @@ export function SettingsModal({
           </div>
 
           <div>
-            <span className="kds-settings__label">Text font</span>
-            <div className="kds-settings__options" role="radiogroup" aria-label="Text size">
-              {DENSITIES.map((density) => (
+            <span className="kds-settings__label">{t.textSize}</span>
+            <div className="kds-settings__options" role="radiogroup" aria-label={t.textSize}>
+              {densities.map((density) => (
                 <button
                   key={density.id}
                   type="button"
@@ -90,23 +106,23 @@ export function SettingsModal({
           </div>
 
           <div>
-            <span className="kds-settings__label">Card size</span>
+            <span className="kds-settings__label">{t.cardSize}</span>
             <div className="kds-settings__slider">
               <input
                 type="range"
-                min={0.8}
-                max={1.5}
+                min={CARD_SCALE_MIN}
+                max={CARD_SCALE_MAX}
                 step={0.05}
                 value={settings.cardScale}
                 onChange={(event) => update({ cardScale: Number(event.target.value) })}
-                aria-label="Card size"
+                aria-label={t.cardSize}
               />
               <output>{Math.round(settings.cardScale * 100)}%</output>
             </div>
           </div>
 
           <div>
-            <span className="kds-settings__label">Out-of-station detection</span>
+            <span className="kds-settings__label">{t.outOfStationDetection}</span>
             <div className="kds-settings__options">
               {IDLE_CHOICES.map((minutes) => (
                 <button
@@ -115,7 +131,7 @@ export function SettingsModal({
                   className={`kds-settings__option ${settings.idleAwayMinutes === minutes ? 'kds-settings__option--active' : ''}`}
                   onClick={() => update({ idleAwayMinutes: minutes })}
                 >
-                  {minutes === 0 ? 'Off' : `${minutes} min`}
+                  {minutes === 0 ? t.off : t.minutesShort(minutes)}
                 </button>
               ))}
             </div>
@@ -126,7 +142,7 @@ export function SettingsModal({
                 aria-pressed={outOfStation}
                 onClick={onToggleOutOfStation}
               >
-                {outOfStation ? 'Back at station' : 'Step away now'}
+                {outOfStation ? t.backAtStation : t.stepAwayNow}
               </button>
             </div>
           </div>
@@ -135,14 +151,10 @@ export function SettingsModal({
 
           <div className="kds-settings__row">
             <button type="button" className="kds-topbar__btn" onClick={onLock}>
-              <LockKeyhole className="size-4" /> Lock screen
+              <LockKeyhole className="size-4" /> {t.lockScreen}
             </button>
-            <button type="button" className="kds-topbar__btn" onClick={onChangeStation}>
-              Change station
-            </button>
-            <button type="button" className="kds-topbar__btn" onClick={onSignOut}>
-              Sign out
-            </button>
+            <button type="button" className="kds-topbar__btn" onClick={onChangeStation}>{t.changeStation}</button>
+            <button type="button" className="kds-topbar__btn" onClick={onSignOut}>{t.signOut}</button>
           </div>
         </div>
       </div>

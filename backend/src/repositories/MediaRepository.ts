@@ -329,6 +329,19 @@ export class MediaAssignmentRepository {
     );
     return result.affectedRows > 0;
   }
+
+  async softDeleteForEntity(db: Db, entityType: MediaEntityType, entityId: string): Promise<number> {
+    const syncSeq = await allocateSyncSeq(db);
+    const now = toDbDateTime();
+    const result = await mutate(
+      db,
+      `UPDATE media_assignments SET deleted_at = ?, status = 'INACTIVE', updated_at = ?,
+              revision = revision + 1, sync_seq = ?
+        WHERE entity_type = ? AND entity_id = ? AND deleted_at IS NULL`,
+      [now, now, syncSeq, entityType, entityId],
+    );
+    return result.affectedRows;
+  }
 }
 
 export const mediaAssetRepository = new MediaAssetRepository();

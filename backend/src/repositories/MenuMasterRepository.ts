@@ -86,6 +86,25 @@ async function softDelete(db: Db, table: string, id: string): Promise<boolean> {
   return result.affectedRows > 0;
 }
 
+async function softDeleteWhere(
+  db: Db,
+  table: string,
+  where: string,
+  params: unknown[],
+): Promise<number> {
+  const syncSeq = await allocateSyncSeq(db);
+  const now = toDbDateTime();
+  const result = await mutate(
+    db,
+    `UPDATE ${table}
+        SET deleted_at = ?, status = 'INACTIVE', updated_at = ?,
+            revision = revision + 1, sync_seq = ?
+      WHERE ${where} AND deleted_at IS NULL`,
+    [now, now, syncSeq, ...params],
+  );
+  return result.affectedRows;
+}
+
 function buildWhere(
   filter: ListFilter,
   extra: { conditions: string[]; params: unknown[] } = { conditions: [], params: [] },
@@ -384,7 +403,13 @@ export class MenuCategoryAssignmentRepository {
         (id, menu_id, category_id, display_name, display_name_hi, description, description_hi,
          status, sort_order, pos_visible, board_visible, created_by, created_at, updated_at,
          revision, sync_seq)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+       ON DUPLICATE KEY UPDATE deleted_at = NULL, display_name = VALUES(display_name),
+         display_name_hi = VALUES(display_name_hi), description = VALUES(description),
+         description_hi = VALUES(description_hi), status = VALUES(status), sort_order = VALUES(sort_order),
+         pos_visible = VALUES(pos_visible), board_visible = VALUES(board_visible),
+         updated_at = VALUES(updated_at),
+         revision = revision + 1, sync_seq = VALUES(sync_seq)`,
       [
         input.id,
         input.menuId,
@@ -403,7 +428,7 @@ export class MenuCategoryAssignmentRepository {
         syncSeq,
       ],
     );
-    const row = await this.findById(db, input.id);
+    const row = await this.findByMenuAndCategory(db, input.menuId, input.categoryId);
     if (row === null) throw new Error('Inserted menu category assignment could not be read back');
     return row;
   }
@@ -485,7 +510,8 @@ const MIA_COLUMNS = `
   mia.takeaway_available, mia.delivery_available, mia.allow_decimal_quantity,
   mia.created_by, mia.created_at,
   mia.updated_at, mia.deleted_at, mia.revision, mia.sync_seq,
-  mi.name AS food_item_name, mi.name_hi AS food_item_name_hi, mi.unit AS food_item_unit,
+  mi.name AS food_item_name, mi.name_hi AS food_item_name_hi,
+  mi.description AS food_item_description, mi.unit AS food_item_unit,
   mi.image_path AS food_item_image_path, mi.base_price AS food_item_base_price,
   (SELECT COUNT(*) FROM menu_item_variants v
     WHERE v.food_item_id = mia.food_item_id AND v.deleted_at IS NULL) AS variant_count`;
@@ -511,12 +537,13 @@ export class MenuItemAssignmentRepository {
    * Every menu that offers this dish. A counter running out is a fact about the food, so the
    * caller that hides it has to reach each menu's own assignment row, not just one.
    */
-  async listForFoodItem(db: Db, foodItemId: string) {
+  async listForFoodItem(db: Db, foodItemId: string, includeInactive = false) {
     return selectRows<MenuItemAssignmentRow>(
       db,
       `SELECT ${MIA_COLUMNS} FROM menu_item_assignments mia
          JOIN menu_items mi ON mi.id = mia.food_item_id
-        WHERE mia.food_item_id = ? AND mia.status = 'ACTIVE' AND mia.deleted_at IS NULL`,
+        WHERE mia.food_item_id = ? AND mia.deleted_at IS NULL
+          ${includeInactive ? '' : "AND mia.status = 'ACTIVE'"}`,
       [foodItemId],
     );
   }
@@ -618,7 +645,20 @@ export class MenuItemAssignmentRepository {
          pos_visible, board_visible, qr_visible, web_visible, app_visible, dine_in_available,
          takeaway_available, delivery_available, allow_decimal_quantity, created_by, created_at, updated_at,
          revision, sync_seq)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+       ON DUPLICATE KEY UPDATE deleted_at = NULL,
+         category_assignment_id = VALUES(category_assignment_id), display_name = VALUES(display_name),
+         display_name_hi = VALUES(display_name_hi), description = VALUES(description),
+         description_hi = VALUES(description_hi), preparation_method = VALUES(preparation_method),
+         preparation_method_hi = VALUES(preparation_method_hi),
+         preparation_time_minutes = VALUES(preparation_time_minutes), unit = VALUES(unit),
+         status = VALUES(status), availability = VALUES(availability), sort_order = VALUES(sort_order),
+         pos_visible = VALUES(pos_visible), board_visible = VALUES(board_visible),
+         qr_visible = VALUES(qr_visible), web_visible = VALUES(web_visible), app_visible = VALUES(app_visible),
+         dine_in_available = VALUES(dine_in_available), takeaway_available = VALUES(takeaway_available),
+         delivery_available = VALUES(delivery_available),
+         allow_decimal_quantity = VALUES(allow_decimal_quantity),
+         updated_at = VALUES(updated_at), revision = revision + 1, sync_seq = VALUES(sync_seq)`,
       [
         input.id,
         input.menuId,
@@ -650,7 +690,7 @@ export class MenuItemAssignmentRepository {
         syncSeq,
       ],
     );
-    const row = await this.findById(db, input.id);
+    const row = await this.findByMenuAndFoodItem(db, input.menuId, input.foodItemId);
     if (row === null) throw new Error('Inserted menu item assignment could not be read back');
     return row;
   }
@@ -731,13 +771,22 @@ export class MenuItemAssignmentRepository {
     return softDelete(db, 'menu_item_assignments', id);
   }
 
+  async softDeleteForFoodItem(db: Db, foodItemId: string): Promise<number> {
+    return softDeleteWhere(db, 'menu_item_assignments', 'food_item_id = ?', [foodItemId]);
+  }
+
   /** True once an order has been placed for this food item under this specific menu. */
   async countOrderReferences(db: Db, assignmentId: string): Promise<number> {
     const row = await selectOne<CountRow>(
       db,
-      `SELECT COUNT(*) AS total FROM order_items oi
-         JOIN menu_item_assignments a ON a.id = ?
-        WHERE oi.menu_id = a.menu_id AND oi.menu_item_id = a.food_item_id`,
+      `SELECT
+         (SELECT COUNT(*) FROM order_items oi
+           WHERE oi.menu_id = a.menu_id AND oi.menu_item_id = a.food_item_id) +
+         (SELECT COUNT(*) FROM pos_order_items poi
+            JOIN pos_orders po ON po.id = poi.pos_order_id
+           WHERE po.menu_id = a.menu_id AND poi.menu_item_id = a.food_item_id) AS total
+         FROM menu_item_assignments a
+        WHERE a.id = ?`,
       [assignmentId],
     );
     return row === null ? 0 : Number(row.total);
@@ -783,6 +832,15 @@ export class MenuItemVariantRepository {
       db,
       `SELECT ${VARIANT_COLUMNS} FROM menu_item_variants WHERE id = ? AND deleted_at IS NULL`,
       [id],
+    );
+  }
+
+  async findByCode(db: Db, foodItemId: string, variantCode: string) {
+    return selectOne<MenuItemVariantRow>(
+      db,
+      `SELECT ${VARIANT_COLUMNS} FROM menu_item_variants
+        WHERE food_item_id = ? AND variant_code = ? AND deleted_at IS NULL`,
+      [foodItemId, variantCode],
     );
   }
 
@@ -835,7 +893,18 @@ export class MenuItemVariantRepository {
          availability, sort_order,
          preparation_method, preparation_method_hi, preparation_time_minutes, is_default,
          allow_decimal_quantity, created_by, created_at, updated_at, revision, sync_seq)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+       ON DUPLICATE KEY UPDATE deleted_at = NULL, name = VALUES(name), name_hi = VALUES(name_hi),
+         description = VALUES(description), description_hi = VALUES(description_hi),
+         portion_name = VALUES(portion_name), portion_name_hi = VALUES(portion_name_hi),
+         quantity = VALUES(quantity), unit = VALUES(unit), price = VALUES(price),
+         tax_profile_id = VALUES(tax_profile_id), status = VALUES(status),
+         availability = VALUES(availability), sort_order = VALUES(sort_order),
+         preparation_method = VALUES(preparation_method),
+         preparation_method_hi = VALUES(preparation_method_hi),
+         preparation_time_minutes = VALUES(preparation_time_minutes), is_default = VALUES(is_default),
+         allow_decimal_quantity = VALUES(allow_decimal_quantity),
+         updated_at = VALUES(updated_at), revision = revision + 1, sync_seq = VALUES(sync_seq)`,
       [
         input.id,
         input.foodItemId,
@@ -864,7 +933,9 @@ export class MenuItemVariantRepository {
         syncSeq,
       ],
     );
-    const row = await this.findById(db, input.id);
+    const row = input.variantCode
+      ? await this.findByCode(db, input.foodItemId, input.variantCode)
+      : await this.findById(db, input.id);
     if (row === null) throw new Error('Inserted menu item variant could not be read back');
     return row;
   }
@@ -938,11 +1009,17 @@ export class MenuItemVariantRepository {
     return softDelete(db, 'menu_item_variants', id);
   }
 
+  async softDeleteForFoodItem(db: Db, foodItemId: string): Promise<number> {
+    return softDeleteWhere(db, 'menu_item_variants', 'food_item_id = ?', [foodItemId]);
+  }
+
   async countOrderReferences(db: Db, variantId: string): Promise<number> {
     const row = await selectOne<CountRow>(
       db,
-      'SELECT COUNT(*) AS total FROM order_items WHERE variant_id = ?',
-      [variantId],
+      `SELECT
+         (SELECT COUNT(*) FROM order_items WHERE variant_id = ?) +
+         (SELECT COUNT(*) FROM pos_order_items WHERE variant_id = ?) AS total`,
+      [variantId, variantId],
     );
     return row === null ? 0 : Number(row.total);
   }
@@ -1092,9 +1169,25 @@ export class CounterRouteRepository {
     return selectOne<CounterRouteRow>(
       db,
       `SELECT ${COUNTER_ROUTE_COLUMNS} FROM counter_routes cr
-         JOIN counters c ON c.id = cr.counter_id
+         JOIN counters c ON c.id = cr.counter_id AND c.deleted_at IS NULL
         WHERE cr.id = ? AND cr.deleted_at IS NULL`,
       [id],
+    );
+  }
+
+  async findForTarget(
+    db: Db,
+    entityType: RoutableEntityType,
+    entityId: string,
+    counterId: string,
+  ) {
+    return selectOne<CounterRouteRow>(
+      db,
+      `SELECT ${COUNTER_ROUTE_COLUMNS} FROM counter_routes cr
+         JOIN counters c ON c.id = cr.counter_id AND c.deleted_at IS NULL
+        WHERE cr.entity_type = ? AND cr.entity_id = ? AND cr.counter_id = ?
+          AND cr.deleted_at IS NULL`,
+      [entityType, entityId, counterId],
     );
   }
 
@@ -1102,10 +1195,42 @@ export class CounterRouteRepository {
     return selectRows<CounterRouteRow>(
       db,
       `SELECT ${COUNTER_ROUTE_COLUMNS} FROM counter_routes cr
-         JOIN counters c ON c.id = cr.counter_id
+         JOIN counters c ON c.id = cr.counter_id AND c.deleted_at IS NULL
         WHERE cr.entity_type = ? AND cr.entity_id = ? AND cr.deleted_at IS NULL
-        ORDER BY c.name ASC`,
+          AND cr.status = 'ACTIVE'
+        ORDER BY c.sort_order ASC, c.name ASC`,
       [entityType, entityId],
+    );
+  }
+
+  async listForEntities(db: Db, entityType: RoutableEntityType, entityIds: readonly string[]) {
+    if (entityIds.length === 0) return [];
+    const placeholders = entityIds.map(() => '?').join(', ');
+    return selectRows<CounterRouteRow>(
+      db,
+      `SELECT ${COUNTER_ROUTE_COLUMNS} FROM counter_routes cr
+         JOIN counters c ON c.id = cr.counter_id AND c.deleted_at IS NULL
+        WHERE cr.entity_type = ? AND cr.entity_id IN (${placeholders})
+          AND cr.deleted_at IS NULL AND cr.status = 'ACTIVE'
+        ORDER BY c.sort_order ASC, c.name ASC`,
+      [entityType, ...entityIds],
+    );
+  }
+
+  async listForEntityType(db: Db, entityType: RoutableEntityType) {
+    const targetTable = entityType === 'MENU_ITEM'
+      ? 'menu_items'
+      : entityType === 'MENU_ITEM_ASSIGNMENT'
+        ? 'menu_item_assignments'
+        : 'menu_item_variants';
+    return selectRows<CounterRouteRow>(
+      db,
+      `SELECT ${COUNTER_ROUTE_COLUMNS} FROM counter_routes cr
+         JOIN counters c ON c.id = cr.counter_id AND c.deleted_at IS NULL
+         JOIN ${targetTable} target ON target.id = cr.entity_id AND target.deleted_at IS NULL
+        WHERE cr.entity_type = ? AND cr.deleted_at IS NULL AND cr.status = 'ACTIVE'
+        ORDER BY c.sort_order ASC, c.name ASC`,
+      [entityType],
     );
   }
 
@@ -1120,22 +1245,34 @@ export class CounterRouteRepository {
       createdBy: string | null;
     },
   ): Promise<CounterRouteRow> {
+    const existing = await this.findForTarget(db, input.entityType, input.entityId, input.counterId);
+    if (existing?.status === input.status) return existing;
     const syncSeq = await allocateSyncSeq(db);
     const now = toDbDateTime();
     await mutate(
       db,
       `INSERT INTO counter_routes (id, entity_type, entity_id, counter_id, status, created_by,
          created_at, updated_at, revision, sync_seq)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+       ON DUPLICATE KEY UPDATE deleted_at = NULL, status = VALUES(status),
+         updated_at = VALUES(updated_at), revision = revision + 1, sync_seq = VALUES(sync_seq)`,
       [input.id, input.entityType, input.entityId, input.counterId, input.status, input.createdBy, now, now, syncSeq],
     );
-    const row = await this.findById(db, input.id);
+    const row = await this.findForTarget(db, input.entityType, input.entityId, input.counterId);
     if (row === null) throw new Error('Inserted counter route could not be read back');
     return row;
   }
 
   async softDelete(db: Db, id: string): Promise<boolean> {
     return softDelete(db, 'counter_routes', id);
+  }
+
+  async softDeleteForCounter(db: Db, counterId: string): Promise<number> {
+    return softDeleteWhere(db, 'counter_routes', 'counter_id = ?', [counterId]);
+  }
+
+  async softDeleteForEntity(db: Db, entityType: RoutableEntityType, entityId: string): Promise<number> {
+    return softDeleteWhere(db, 'counter_routes', 'entity_type = ? AND entity_id = ?', [entityType, entityId]);
   }
 }
 
@@ -1267,9 +1404,25 @@ export class PrintingRouteRepository {
     return selectOne<PrintingRouteRow>(
       db,
       `SELECT ${PRINTING_ROUTE_COLUMNS} FROM printing_routes pr
-         JOIN printing_groups pg ON pg.id = pr.printing_group_id
+         JOIN printing_groups pg ON pg.id = pr.printing_group_id AND pg.deleted_at IS NULL
         WHERE pr.id = ? AND pr.deleted_at IS NULL`,
       [id],
+    );
+  }
+
+  async findForTarget(
+    db: Db,
+    entityType: RoutableEntityType,
+    entityId: string,
+    printingGroupId: string,
+  ) {
+    return selectOne<PrintingRouteRow>(
+      db,
+      `SELECT ${PRINTING_ROUTE_COLUMNS} FROM printing_routes pr
+         JOIN printing_groups pg ON pg.id = pr.printing_group_id AND pg.deleted_at IS NULL
+        WHERE pr.entity_type = ? AND pr.entity_id = ? AND pr.printing_group_id = ?
+          AND pr.deleted_at IS NULL`,
+      [entityType, entityId, printingGroupId],
     );
   }
 
@@ -1277,10 +1430,42 @@ export class PrintingRouteRepository {
     return selectRows<PrintingRouteRow>(
       db,
       `SELECT ${PRINTING_ROUTE_COLUMNS} FROM printing_routes pr
-         JOIN printing_groups pg ON pg.id = pr.printing_group_id
+         JOIN printing_groups pg ON pg.id = pr.printing_group_id AND pg.deleted_at IS NULL
         WHERE pr.entity_type = ? AND pr.entity_id = ? AND pr.deleted_at IS NULL
-        ORDER BY pr.sort_order ASC, pg.name ASC`,
+          AND pr.status = 'ACTIVE'
+        ORDER BY pr.sort_order ASC, pg.sort_order ASC, pg.name ASC`,
       [entityType, entityId],
+    );
+  }
+
+  async listForEntities(db: Db, entityType: RoutableEntityType, entityIds: readonly string[]) {
+    if (entityIds.length === 0) return [];
+    const placeholders = entityIds.map(() => '?').join(', ');
+    return selectRows<PrintingRouteRow>(
+      db,
+      `SELECT ${PRINTING_ROUTE_COLUMNS} FROM printing_routes pr
+         JOIN printing_groups pg ON pg.id = pr.printing_group_id AND pg.deleted_at IS NULL
+        WHERE pr.entity_type = ? AND pr.entity_id IN (${placeholders})
+          AND pr.deleted_at IS NULL AND pr.status = 'ACTIVE'
+        ORDER BY pr.sort_order ASC, pg.sort_order ASC, pg.name ASC`,
+      [entityType, ...entityIds],
+    );
+  }
+
+  async listForEntityType(db: Db, entityType: RoutableEntityType) {
+    const targetTable = entityType === 'MENU_ITEM'
+      ? 'menu_items'
+      : entityType === 'MENU_ITEM_ASSIGNMENT'
+        ? 'menu_item_assignments'
+        : 'menu_item_variants';
+    return selectRows<PrintingRouteRow>(
+      db,
+      `SELECT ${PRINTING_ROUTE_COLUMNS} FROM printing_routes pr
+         JOIN printing_groups pg ON pg.id = pr.printing_group_id AND pg.deleted_at IS NULL
+         JOIN ${targetTable} target ON target.id = pr.entity_id AND target.deleted_at IS NULL
+        WHERE pr.entity_type = ? AND pr.deleted_at IS NULL AND pr.status = 'ACTIVE'
+        ORDER BY pr.sort_order ASC, pg.sort_order ASC, pg.name ASC`,
+      [entityType],
     );
   }
 
@@ -1296,6 +1481,13 @@ export class PrintingRouteRepository {
       createdBy: string | null;
     },
   ): Promise<PrintingRouteRow> {
+    const existing = await this.findForTarget(
+      db,
+      input.entityType,
+      input.entityId,
+      input.printingGroupId,
+    );
+    if (existing?.status === input.status) return existing;
     const syncSeq = await allocateSyncSeq(db);
     const now = toDbDateTime();
     await mutate(
@@ -1303,7 +1495,10 @@ export class PrintingRouteRepository {
       `INSERT INTO printing_routes
         (id, entity_type, entity_id, printing_group_id, sort_order, status, created_by,
          created_at, updated_at, revision, sync_seq)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+       ON DUPLICATE KEY UPDATE deleted_at = NULL, sort_order = VALUES(sort_order),
+         status = VALUES(status), updated_at = VALUES(updated_at),
+         revision = revision + 1, sync_seq = VALUES(sync_seq)`,
       [
         input.id,
         input.entityType,
@@ -1317,13 +1512,26 @@ export class PrintingRouteRepository {
         syncSeq,
       ],
     );
-    const row = await this.findById(db, input.id);
+    const row = await this.findForTarget(
+      db,
+      input.entityType,
+      input.entityId,
+      input.printingGroupId,
+    );
     if (row === null) throw new Error('Inserted printing route could not be read back');
     return row;
   }
 
   async softDelete(db: Db, id: string): Promise<boolean> {
     return softDelete(db, 'printing_routes', id);
+  }
+
+  async softDeleteForPrintingGroup(db: Db, printingGroupId: string): Promise<number> {
+    return softDeleteWhere(db, 'printing_routes', 'printing_group_id = ?', [printingGroupId]);
+  }
+
+  async softDeleteForEntity(db: Db, entityType: RoutableEntityType, entityId: string): Promise<number> {
+    return softDeleteWhere(db, 'printing_routes', 'entity_type = ? AND entity_id = ?', [entityType, entityId]);
   }
 }
 
@@ -1536,6 +1744,10 @@ export class ModifierRepository {
   async softDelete(db: Db, id: string): Promise<boolean> {
     return softDelete(db, 'modifiers', id);
   }
+
+  async softDeleteForGroup(db: Db, modifierGroupId: string): Promise<number> {
+    return softDeleteWhere(db, 'modifiers', 'modifier_group_id = ?', [modifierGroupId]);
+  }
 }
 
 const MODIFIER_ASSIGNMENT_COLUMNS = `
@@ -1548,9 +1760,25 @@ export class ModifierAssignmentRepository {
     return selectOne<ModifierAssignmentRow>(
       db,
       `SELECT ${MODIFIER_ASSIGNMENT_COLUMNS} FROM modifier_assignments ma
-         JOIN modifier_groups mg ON mg.id = ma.modifier_group_id
+         JOIN modifier_groups mg ON mg.id = ma.modifier_group_id AND mg.deleted_at IS NULL
         WHERE ma.id = ? AND ma.deleted_at IS NULL`,
       [id],
+    );
+  }
+
+  async findForTarget(
+    db: Db,
+    entityType: RoutableEntityType,
+    entityId: string,
+    modifierGroupId: string,
+  ) {
+    return selectOne<ModifierAssignmentRow>(
+      db,
+      `SELECT ${MODIFIER_ASSIGNMENT_COLUMNS} FROM modifier_assignments ma
+         JOIN modifier_groups mg ON mg.id = ma.modifier_group_id AND mg.deleted_at IS NULL
+        WHERE ma.entity_type = ? AND ma.entity_id = ? AND ma.modifier_group_id = ?
+          AND ma.deleted_at IS NULL`,
+      [entityType, entityId, modifierGroupId],
     );
   }
 
@@ -1558,10 +1786,42 @@ export class ModifierAssignmentRepository {
     return selectRows<ModifierAssignmentRow>(
       db,
       `SELECT ${MODIFIER_ASSIGNMENT_COLUMNS} FROM modifier_assignments ma
-         JOIN modifier_groups mg ON mg.id = ma.modifier_group_id
+         JOIN modifier_groups mg ON mg.id = ma.modifier_group_id AND mg.deleted_at IS NULL
         WHERE ma.entity_type = ? AND ma.entity_id = ? AND ma.deleted_at IS NULL
-        ORDER BY ma.sort_order ASC, mg.name ASC`,
+          AND ma.status = 'ACTIVE'
+        ORDER BY ma.sort_order ASC, mg.sort_order ASC, mg.name ASC`,
       [entityType, entityId],
+    );
+  }
+
+  async listForEntities(db: Db, entityType: RoutableEntityType, entityIds: readonly string[]) {
+    if (entityIds.length === 0) return [];
+    const placeholders = entityIds.map(() => '?').join(', ');
+    return selectRows<ModifierAssignmentRow>(
+      db,
+      `SELECT ${MODIFIER_ASSIGNMENT_COLUMNS} FROM modifier_assignments ma
+         JOIN modifier_groups mg ON mg.id = ma.modifier_group_id AND mg.deleted_at IS NULL
+        WHERE ma.entity_type = ? AND ma.entity_id IN (${placeholders})
+          AND ma.deleted_at IS NULL AND ma.status = 'ACTIVE'
+        ORDER BY ma.sort_order ASC, mg.sort_order ASC, mg.name ASC`,
+      [entityType, ...entityIds],
+    );
+  }
+
+  async listForEntityType(db: Db, entityType: RoutableEntityType) {
+    const targetTable = entityType === 'MENU_ITEM'
+      ? 'menu_items'
+      : entityType === 'MENU_ITEM_ASSIGNMENT'
+        ? 'menu_item_assignments'
+        : 'menu_item_variants';
+    return selectRows<ModifierAssignmentRow>(
+      db,
+      `SELECT ${MODIFIER_ASSIGNMENT_COLUMNS} FROM modifier_assignments ma
+         JOIN modifier_groups mg ON mg.id = ma.modifier_group_id AND mg.deleted_at IS NULL
+         JOIN ${targetTable} target ON target.id = ma.entity_id AND target.deleted_at IS NULL
+        WHERE ma.entity_type = ? AND ma.deleted_at IS NULL AND ma.status = 'ACTIVE'
+        ORDER BY ma.sort_order ASC, mg.sort_order ASC, mg.name ASC`,
+      [entityType],
     );
   }
 
@@ -1578,6 +1838,13 @@ export class ModifierAssignmentRepository {
       createdBy: string | null;
     },
   ): Promise<ModifierAssignmentRow> {
+    const existing = await this.findForTarget(
+      db,
+      input.entityType,
+      input.entityId,
+      input.modifierGroupId,
+    );
+    if (existing?.status === input.status) return existing;
     const syncSeq = await allocateSyncSeq(db);
     const now = toDbDateTime();
     await mutate(
@@ -1585,7 +1852,10 @@ export class ModifierAssignmentRepository {
       `INSERT INTO modifier_assignments
         (id, entity_type, entity_id, modifier_group_id, is_required, sort_order, status,
          created_by, created_at, updated_at, revision, sync_seq)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+       ON DUPLICATE KEY UPDATE deleted_at = NULL, is_required = VALUES(is_required),
+         sort_order = VALUES(sort_order), status = VALUES(status),
+         updated_at = VALUES(updated_at), revision = revision + 1, sync_seq = VALUES(sync_seq)`,
       [
         input.id,
         input.entityType,
@@ -1600,13 +1870,31 @@ export class ModifierAssignmentRepository {
         syncSeq,
       ],
     );
-    const row = await this.findById(db, input.id);
+    const row = await this.findForTarget(
+      db,
+      input.entityType,
+      input.entityId,
+      input.modifierGroupId,
+    );
     if (row === null) throw new Error('Inserted modifier assignment could not be read back');
     return row;
   }
 
   async softDelete(db: Db, id: string): Promise<boolean> {
     return softDelete(db, 'modifier_assignments', id);
+  }
+
+  async softDeleteForModifierGroup(db: Db, modifierGroupId: string, entityType?: RoutableEntityType) {
+    return softDeleteWhere(
+      db,
+      'modifier_assignments',
+      `modifier_group_id = ?${entityType ? ' AND entity_type = ?' : ''}`,
+      entityType ? [modifierGroupId, entityType] : [modifierGroupId],
+    );
+  }
+
+  async softDeleteForEntity(db: Db, entityType: RoutableEntityType, entityId: string): Promise<number> {
+    return softDeleteWhere(db, 'modifier_assignments', 'entity_type = ? AND entity_id = ?', [entityType, entityId]);
   }
 }
 
@@ -1922,6 +2210,11 @@ export class MenuItemScheduleRepository {
     return new Set(rows.map((row) => row.food_item_id));
   }
 
+  async deleteForFoodItem(db: Db, foodItemId: string): Promise<number> {
+    const result = await mutate(db, 'DELETE FROM menu_item_schedules WHERE food_item_id = ?', [foodItemId]);
+    return result.affectedRows;
+  }
+
   async replaceForFoodItem(
     db: Db,
     foodItemId: string,
@@ -2017,10 +2310,13 @@ export class MenuItemVariantCatalogPriceRepository {
       db,
       `INSERT INTO menu_item_variant_catalog_prices
         (id, variant_id, menu_id, price, status, created_by, created_at, updated_at, revision, sync_seq)
-       VALUES (?, ?, ?, ?, 'ACTIVE', ?, ?, ?, 1, ?)`,
+       VALUES (?, ?, ?, ?, 'ACTIVE', ?, ?, ?, 1, ?)
+       ON DUPLICATE KEY UPDATE deleted_at = NULL, price = VALUES(price), status = 'ACTIVE',
+         updated_at = VALUES(updated_at),
+         revision = revision + 1, sync_seq = VALUES(sync_seq)`,
       [input.id, input.variantId, input.menuId, input.price, input.createdBy, now, now, syncSeq],
     );
-    const row = await this.findById(db, input.id);
+    const row = await this.findByVariantAndMenu(db, input.variantId, input.menuId);
     if (row === null) throw new Error('Inserted variant catalog price could not be read back');
     return row;
   }
@@ -2029,6 +2325,17 @@ export class MenuItemVariantCatalogPriceRepository {
     const existing = await this.findByVariantAndMenu(db, variantId, menuId);
     if (existing === null) return false;
     return softDelete(db, 'menu_item_variant_catalog_prices', existing.id);
+  }
+
+  async softDeleteForVariants(db: Db, variantIds: readonly string[]): Promise<number> {
+    if (variantIds.length === 0) return 0;
+    const placeholders = variantIds.map(() => '?').join(', ');
+    return softDeleteWhere(
+      db,
+      'menu_item_variant_catalog_prices',
+      `variant_id IN (${placeholders})`,
+      [...variantIds],
+    );
   }
 }
 

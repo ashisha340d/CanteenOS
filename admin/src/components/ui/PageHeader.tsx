@@ -1,11 +1,17 @@
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
+import { useInWindow } from '@/services/WindowHost';
 
 interface PageHeaderProps {
   title: string;
-  /** One line of orienting context. Omit rather than pad it with filler. */
+  /**
+   * @deprecated No longer painted. Descriptive blurbs cost three or four lines at the top of
+   * every screen to restate what the module already says on its own — and in a window, above
+   * a form the operator opened on purpose, nobody is reading them. The prop is still accepted
+   * so the call sites need not all be edited at once; it simply renders nothing.
+   */
   subtitle?: string;
-  /** Small caps label above the title — usually the section the page belongs to. */
+  /** @deprecated No longer painted. Same reasoning as `subtitle`. */
   eyebrow?: string;
   /** Live count, status pill, or anything that qualifies the title. */
   meta?: ReactNode;
@@ -16,41 +22,39 @@ interface PageHeaderProps {
 }
 
 /**
- * The single title treatment for every page. Large type carries the hierarchy so pages do
- * not each invent their own heading size, and actions always land in the same place.
+ * The single title treatment for every page — deliberately almost nothing.
  *
- * On mobile the actions drop below the title and stretch, because a row of small buttons
- * pinned to the right edge of a narrow screen is neither readable nor tappable.
+ * Inside a window the title is dropped entirely: the caption bar three pixels above it already
+ * says "Entities", and printing it twice in a row is the clutter, not the information. What is
+ * left is the row that actually does something — the count, and the buttons.
  */
 export function PageHeader({
   title,
-  subtitle,
-  eyebrow,
   meta,
   actions,
   leading,
   className,
 }: PageHeaderProps): JSX.Element {
+  const inWindow = useInWindow();
+
+  // Nothing to draw: no title (the caption has it) and nothing to put beside it.
+  if (inWindow && !meta && !actions && !leading) return <></>;
+
   return (
-    <header className={cn('page-header mb-6', className)}>
+    <header className={cn('page-header mb-3', className)}>
       {leading}
-      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end sm:gap-4">
-        <div className="min-w-0">
-          {eyebrow && (
-            <p className="mb-1 text-xs font-medium tracking-[0.06em] text-muted-foreground uppercase">
-              {eyebrow}
-            </p>
-          )}
-          <div className="flex min-w-0 items-center gap-3">
-            <h1 className="font-heading min-w-0 truncate text-2xl font-bold tracking-tight sm:text-3xl">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        {inWindow ? (
+          // The caption names the module; only a qualifier like a live count earns space here.
+          meta ?? <span />
+        ) : (
+          <div className="flex min-w-0 items-center gap-2.5">
+            <h1 className="font-heading min-w-0 truncate text-lg font-semibold tracking-tight">
               {title}
             </h1>
             {meta}
           </div>
-          {subtitle && (
-            <p className="text-muted-foreground mt-1.5 max-w-[68ch] text-sm">{subtitle}</p>
-          )}
-        </div>
+        )}
         {actions && (
           /* On a narrow screen these stretch *and* grow to a thumb-sized target — the default
              control height is tuned for a dense desktop grid and is too small to hit reliably. */

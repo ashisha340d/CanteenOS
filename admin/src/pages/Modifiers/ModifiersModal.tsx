@@ -169,6 +169,7 @@ export function ModifiersModal({
                     <Button
                       variant="ghost"
                       size="icon-sm"
+                      disabled={update.isPending}
                       onClick={() => saveRow(modifier.id)}
                       aria-label={`Save ${modifier.name}`}
                     >
@@ -178,6 +179,7 @@ export function ModifiersModal({
                       variant="ghost"
                       size="icon-sm"
                       className="hover:text-destructive"
+                      disabled={update.isPending || del.isPending}
                       onClick={() => setDeleting(modifier)}
                       aria-label={`Delete ${modifier.name}`}
                     >
@@ -189,7 +191,7 @@ export function ModifiersModal({
             })}
           </div>
 
-          <Button variant="outline" size="sm" className="self-start" onClick={addModifier}>
+          <Button variant="outline" size="sm" className="self-start" disabled={create.isPending} onClick={addModifier}>
             <PlusIcon data-icon="inline-start" />
             Add modifier
           </Button>

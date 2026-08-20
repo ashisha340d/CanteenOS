@@ -22,6 +22,13 @@ export function useLaunchApp(): (app: DesktopApp | string) => void {
       const app = typeof target === 'string' ? findApp(target) : target;
       if (!app) return;
 
+      // A separate application gets a separate window — named, so a second launch reuses the
+      // one already open rather than piling up display tabs.
+      if (app.externalUrl !== undefined) {
+        window.open(app.externalUrl, `canteenos-${app.id}`, 'noopener,noreferrer')?.focus();
+        return;
+      }
+
       const w = Math.max(420, Math.min(MAX_W, viewport.width - 80));
       const h = Math.max(300, Math.min(MAX_H, viewport.height - 60));
       const cascade = (windows.length % CASCADE_WRAP) * CASCADE_STEP;

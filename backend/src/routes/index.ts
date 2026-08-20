@@ -12,7 +12,10 @@ import { orderRoutes } from './order.routes';
 import { entityRoutes } from './entity.routes';
 import { equipmentRoutes } from './equipment.routes';
 import { maintenanceRoutes } from './maintenance.routes';
+import { cleaningRoutes } from './cleaning.routes';
 import { posRoutes } from './pos.routes';
+import { purchaseMasterRoutes } from './purchaseMaster.routes';
+import { counterChatRoutes } from './counterChat.routes';
 import { kdsRoutes } from './kds.routes';
 import { attachmentRoutes, publicAttachmentRoutes } from './attachment.routes';
 import { notificationRoutes } from './notification.routes';
@@ -68,6 +71,15 @@ export function buildApiRouter(): Router {
   // POS_READ/POS_OPERATE capabilities rather than minting its own.
   router.use('/kds', kdsRoutes());
 
+  // The office↔counter chat that runs alongside those displays. Same POS_READ gate.
+  router.use('/counter-chat', counterChatRoutes());
+
+  // Purchase & inventory master data: units, stores, the product master and its per-location
+  // stock policy, the supplier↔product mapping, and the purchase profile on a VENDOR entity.
+  // Its own PRODUCT_*/UOM_*/INVENTORY_* capabilities — buying is a narrower power than editing
+  // the menu, and a storekeeper needs to read this master without holding either.
+  router.use('/purchase', purchaseMasterRoutes());
+
   router.use('/attachments', attachmentRoutes());
   router.use('/notifications', notificationRoutes());
   router.use('/recipes', recipeRoutes());
@@ -105,6 +117,11 @@ export function buildApiRouter(): Router {
   // down the roster than any other module — reporting a fault is an Employee's job.
   router.use('/', equipmentRoutes());
   router.use('/', maintenanceRoutes());
+
+  // Cleaning & Hygiene Management. Reaches further down the roster than any other module:
+  // seeing, doing and reporting cleaning work are all Employee-level, because whoever is
+  // standing in front of the mess is the only person who can say so.
+  router.use('/', cleaningRoutes());
 
   // Dashboard, permissions, reports, billing, audit, settings — Admin Portal only.
   router.use('/admin', adminRoutes());

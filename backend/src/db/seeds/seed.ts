@@ -12,6 +12,7 @@ import { allocateSyncSeq } from '../syncSeq';
 import { mutate } from '../types';
 import { toDbDateTime } from '../../utils/time';
 import { seedRealMenu } from './seedRealMenu';
+import { seedCleaning } from './seedCleaning';
 
 /**
  * Idempotent seed. Safe to run repeatedly: every insert is guarded by an existence check, so a
@@ -131,6 +132,12 @@ export async function seed(): Promise<void> {
     // Real menu (Public Menu / Counter 1), ported from the printed menu card — see
     // seedRealMenu.ts. No demo/placeholder categories or items are seeded.
     await seedRealMenu(connection, superAdminId);
+
+    /* ---------------------------------------------------------- cleaning */
+
+    // The one row the Cleaning module cannot start without: the procedure and rule that carry
+    // work somebody reported which no configured rule covers. See seedCleaning.ts.
+    await seedCleaning(connection, superAdminId);
   });
 
   const pool = getPool();
@@ -148,7 +155,10 @@ export async function seed(): Promise<void> {
        (SELECT COUNT(*) FROM recipes WHERE deleted_at IS NULL)             AS recipes,
        (SELECT COUNT(*) FROM recipe_steps WHERE deleted_at IS NULL)        AS recipe_steps,
        (SELECT COUNT(*) FROM orders WHERE deleted_at IS NULL)              AS orders,
-       (SELECT COUNT(*) FROM thread_messages WHERE deleted_at IS NULL)     AS thread_messages`,
+       (SELECT COUNT(*) FROM thread_messages WHERE deleted_at IS NULL)     AS thread_messages,
+       (SELECT COUNT(*) FROM cleanable_asset_types WHERE deleted_at IS NULL) AS cleanable_asset_types,
+       (SELECT COUNT(*) FROM cleaning_procedures WHERE deleted_at IS NULL)  AS cleaning_procedures,
+       (SELECT COUNT(*) FROM cleaning_rules WHERE deleted_at IS NULL)       AS cleaning_rules`,
   );
 
   logger.info('Seed complete', counts ?? {});

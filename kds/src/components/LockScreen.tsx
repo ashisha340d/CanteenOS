@@ -5,6 +5,7 @@ import { ERROR_CODES } from '@menuboard/shared';
 import { loginWithPin } from '../api/auth';
 import { readErrorCode, readErrorMessage } from '../api/client';
 import { readSessionUser } from '../api/session';
+import { useT } from '../i18n';
 
 interface Props {
   onUnlock: () => void;
@@ -24,6 +25,7 @@ const KEYPAD_ROWS: string[][] = [
  * MPIN also rotates the tokens, which is harmless.
  */
 export function LockScreen({ onUnlock, onSignOut }: Props): JSX.Element {
+  const t = useT();
   const user = readSessionUser();
   const [pin, setPin] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -34,10 +36,10 @@ export function LockScreen({ onUnlock, onSignOut }: Props): JSX.Element {
     onError: (err) => {
       setPin('');
       if (readErrorCode(err) === ERROR_CODES.RATE_LIMITED) {
-        setError(readErrorMessage(err, 'Too many failed attempts. Sign out and sign in again.'));
+        setError(readErrorMessage(err, t.tooManyAttempts));
         return;
       }
-      setError(readErrorMessage(err, 'MPIN not accepted. Try again.'));
+      setError(readErrorMessage(err, t.mpinNotAccepted));
     },
   });
 
@@ -55,14 +57,12 @@ export function LockScreen({ onUnlock, onSignOut }: Props): JSX.Element {
         <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-surface">
           <LockKeyhole className="size-8 text-ink-soft" />
         </div>
-        <h1 className="text-2xl">{user?.name ?? 'Screen locked'}</h1>
-        <p className="mt-1 text-lg text-ink-soft">Tap your MPIN to unlock the board</p>
+        <h1 className="text-2xl">{user?.name ?? t.screenLocked}</h1>
+        <p className="mt-1 text-lg text-ink-soft">{t.tapMpinToUnlock}</p>
       </div>
 
       {user === null ? (
-        <p className="max-w-md text-center text-base text-danger">
-          No signed-in user is remembered on this display. Sign out and sign in again.
-        </p>
+        <p className="max-w-md text-center text-base text-danger">{t.noUserRemembered}</p>
       ) : (
         <>
           <div className="flex gap-4">
@@ -99,7 +99,7 @@ export function LockScreen({ onUnlock, onSignOut }: Props): JSX.Element {
               type="button"
               onClick={() => setPin(pin.slice(0, -1))}
               className="flex h-24 w-24 items-center justify-center rounded-lg bg-surface text-ink-soft active:bg-surface-raised"
-              aria-label="Delete digit"
+              aria-label={t.deleteDigit}
             >
               <Delete className="size-8" />
             </button>
@@ -110,7 +110,7 @@ export function LockScreen({ onUnlock, onSignOut }: Props): JSX.Element {
       )}
 
       <button type="button" onClick={onSignOut} className="text-base text-ink-soft underline">
-        Sign out instead
+        {t.signOutInstead}
       </button>
     </div>
   );

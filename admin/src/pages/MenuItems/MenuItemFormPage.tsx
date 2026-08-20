@@ -147,8 +147,16 @@ export function MenuItemFormPage(): JSX.Element {
   const [descriptionEn, setDescriptionEn] = useState('');
   const [descriptionHi, setDescriptionHi] = useState('');
   const [unit, setUnit] = useState(editingItem?.unit ?? '');
-  const [prepDefaultMinutes, setPrepDefaultMinutes] = useState('15');
-  const [prepKdsMinutes, setPrepKdsMinutes] = useState('');
+  /**
+   * How long this dish takes, in minutes — one number with two consumers: it is saved on the
+   * item as its KDS deadline, and it seeds the preparation time of any new portion added below.
+   *
+   * It used to be two fields. "Time for Prep" was never written anywhere — it only seeded new
+   * variants — so a prep time typed into the Menu Master File was silently thrown away on save,
+   * while a second box beside it labelled "KDS prep deadline" was the one that actually stored
+   * anything. Nobody can be expected to know that.
+   */
+  const [prepMinutes, setPrepMinutes] = useState('15');
   const [categoryId, setCategoryId] = useState(editingItem?.categoryId ?? '');
   const [categoryLabel, setCategoryLabel] = useState(editingItem?.categoryName ?? '');
   const [groupId, setGroupId] = useState<string | null>(editingItem?.groupId ?? null);
@@ -166,6 +174,8 @@ export function MenuItemFormPage(): JSX.Element {
   if (isEditing && editingItem && !hydrated) {
     setName(editingItem.name);
     setNameHi(editingItem.nameHi ?? '');
+    setDescriptionEn(editingItem.description ?? '');
+    setDescriptionHi(editingItem.descriptionHi ?? '');
     setUnit(editingItem.unit);
     setCategoryId(editingItem.categoryId);
     setCategoryLabel(editingItem.categoryName ?? '');
@@ -173,7 +183,7 @@ export function MenuItemFormPage(): JSX.Element {
     setGroupLabel(editingItem.groupName ?? '');
     setStatus(editingItem.status);
     setTaxProfileId(editingItem.taxProfileId);
-    setPrepKdsMinutes(
+    setPrepMinutes(
       editingItem.prepSeconds === null || editingItem.prepSeconds === undefined
         ? ''
         : String(editingItem.prepSeconds / 60),
@@ -217,10 +227,12 @@ export function MenuItemFormPage(): JSX.Element {
   }
 
   function buildBody(): MenuItemWriteRequest {
-    const prepMinutes = Number(prepKdsMinutes);
+    const minutes = Number(prepMinutes);
     return {
       name,
       nameHi: nameHi || null,
+      description: descriptionEn || null,
+      descriptionHi: descriptionHi || null,
       categoryId,
       groupId,
       unit,
@@ -228,9 +240,9 @@ export function MenuItemFormPage(): JSX.Element {
       status,
       taxProfileId,
       prepSeconds:
-        prepKdsMinutes === '' || !Number.isFinite(prepMinutes) || prepMinutes <= 0
+        prepMinutes === '' || !Number.isFinite(minutes) || minutes <= 0
           ? null
-          : Math.round(prepMinutes * 60),
+          : Math.round(minutes * 60),
       sortOrder: editingItem?.sortOrder ?? 0,
     };
   }
@@ -447,15 +459,9 @@ export function MenuItemFormPage(): JSX.Element {
                 />
                 <NumberField
                   label="Time for Prep (mins)"
-                  helperText="Default for new variants"
-                  value={prepDefaultMinutes}
-                  onChange={(e) => setPrepDefaultMinutes(e.target.value)}
-                />
-                <NumberField
-                  label="KDS prep deadline (mins)"
-                  helperText="The line's deadline on the kitchen board; blank uses the station default"
-                  value={prepKdsMinutes}
-                  onChange={(e) => setPrepKdsMinutes(e.target.value)}
+                  helperText="The line's deadline on the kitchen board, and the default for new portions. Blank uses the station default."
+                  value={prepMinutes}
+                  onChange={(e) => setPrepMinutes(e.target.value)}
                 />
               </FieldRow>
 
@@ -481,7 +487,7 @@ export function MenuItemFormPage(): JSX.Element {
 
           <PricingVariantsSection
             foodItemId={foodItemId}
-            prepDefaultMinutes={prepDefaultMinutes}
+            prepDefaultMinutes={prepMinutes}
             itemTaxProfileId={taxProfileId}
           />
 
@@ -675,15 +681,14 @@ function TimingAvailabilitySection({ foodItemId }: { foodItemId: string | undefi
 
   const [alwaysAvailable, setAlwaysAvailable] = useState(true);
   const [slots, setSlots] = useState<Record<string, boolean>>(allSlotsAvailable());
-  const [seeded, setSeeded] = useState(false);
 
-  if (schedule && !seeded) {
+  useEffect(() => {
+    if (!schedule) return;
     setAlwaysAvailable(schedule.alwaysAvailable);
     const next = allSlotsAvailable();
     for (const s of schedule.slots) next[slotKey(s.dayOfWeek, s.shift)] = s.isAvailable;
     setSlots(next);
-    setSeeded(true);
-  }
+  }, [schedule]);
 
   async function persist(nextAlwaysAvailable: boolean, nextSlots: Record<string, boolean>): Promise<void> {
     if (!foodItemId) return;
@@ -700,11 +705,13 @@ function TimingAvailabilitySection({ foodItemId }: { foodItemId: string | undefi
   }
 
   function toggleAlways(next: boolean): void {
+    if (setSchedule.isPending) return;
     setAlwaysAvailable(next);
     void persist(next, slots);
   }
 
   function toggleSlot(day: number, shift: ScheduleShift): void {
+    if (setSchedule.isPending) return;
     const key = slotKey(day, shift);
     const next = { ...slots, [key]: !slots[key] };
     setSlots(next);
@@ -720,7 +727,7 @@ function TimingAvailabilitySection({ foodItemId }: { foodItemId: string | undefi
           label="Always Available"
           checked={alwaysAvailable}
           onCheckedChange={toggleAlways}
-          disabled={!foodItemId}
+          disabled={!foodItemId || setSchedule.isPending}
         />
       </div>
       {!foodItemId ? (
@@ -750,7 +757,7 @@ function TimingAvailabilitySection({ foodItemId }: { foodItemId: string | undefi
                         <Checkbox
                           aria-label={`${s.label} on ${d.label}`}
                           checked={alwaysAvailable ? true : (slots[slotKey(d.key, s.key)] ?? true)}
-                          disabled={alwaysAvailable}
+                          disabled={alwaysAvailable || setSchedule.isPending}
                           onCheckedChange={() => toggleSlot(d.key, s.key)}
                         />
                       </div>

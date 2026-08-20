@@ -1,3 +1,9 @@
+/**
+ * Cleaning & Hygiene request schemas live in their own module and are re-exported here, so
+ * every route keeps importing schemas from one place.
+ */
+export * from './cleaningSchemas';
+
 import { z } from 'zod';
 import {
   AlertSoundSlot,
@@ -340,6 +346,8 @@ export const createMenuItemSchema = z
     groupId: uuid.nullable().optional(),
     name: text(LIMITS.MENU_ITEM_NAME_MAX, 'Item name'),
     nameHi: optionalText(LIMITS.MENU_ITEM_NAME_MAX),
+    description: optionalText(LIMITS.MENU_DESCRIPTION_MAX),
+    descriptionHi: optionalText(LIMITS.MENU_DESCRIPTION_MAX),
     unit: text(LIMITS.UNIT_MAX, 'Unit'),
     unitHi: optionalText(LIMITS.UNIT_MAX),
     imagePath: optionalText(500),
@@ -543,23 +551,58 @@ export const assignCounterRouteSchema = routableEntityRefSchema.extend({
   status: enumOf(MasterStatus).optional(),
 });
 
+export const moveCounterRouteSchema = routableEntityRefSchema
+  .extend({
+    sourceRouteId: uuid.optional(),
+    targetCounterId: uuid.optional(),
+  })
+  .refine((value) => value.sourceRouteId !== undefined || value.targetCounterId !== undefined, {
+    message: 'A source assignment or target counter is required',
+  });
+
 export const assignPrintingRouteSchema = routableEntityRefSchema.extend({
   printingGroupId: uuid,
   sortOrder: z.coerce.number().int().min(0).max(100_000).optional(),
   status: enumOf(MasterStatus).optional(),
 });
 
-export const createModifierGroupSchema = z
-  .object({
-    ...masterBase,
-    name: text(LIMITS.MODIFIER_GROUP_NAME_MAX, 'Modifier group name'),
-    selectionType: z.enum(['SINGLE', 'MULTIPLE']).optional(),
-    minSelect: z.coerce.number().int().min(0).max(50).optional(),
-    maxSelect: z.coerce.number().int().min(0).max(50).nullable().optional(),
+export const movePrintingRouteSchema = routableEntityRefSchema
+  .extend({
+    sourceRouteId: uuid.optional(),
+    targetPrintingGroupId: uuid.optional(),
   })
-  .strict();
+  .refine((value) => value.sourceRouteId !== undefined || value.targetPrintingGroupId !== undefined, {
+    message: 'A source assignment or target kitchen is required',
+  });
 
-export const updateModifierGroupSchema = createModifierGroupSchema.partial().strict();
+const modifierGroupFields = {
+  ...masterBase,
+  name: text(LIMITS.MODIFIER_GROUP_NAME_MAX, 'Modifier group name'),
+  selectionType: z.enum(['SINGLE', 'MULTIPLE']).optional(),
+  minSelect: z.coerce.number().int().min(0).max(50).optional(),
+  maxSelect: z.coerce.number().int().min(0).max(50).nullable().optional(),
+};
+
+const validModifierSelectionRange = (value: { minSelect?: number; maxSelect?: number | null }) =>
+  value.maxSelect === undefined || value.maxSelect === null ||
+  value.minSelect === undefined || value.minSelect <= value.maxSelect;
+
+export const createModifierGroupSchema = z
+  .object(modifierGroupFields)
+  .strict()
+  .refine(validModifierSelectionRange, {
+    path: ['maxSelect'],
+    message: 'Maximum selections must be greater than or equal to minimum selections',
+  });
+
+export const updateModifierGroupSchema = z
+  .object(modifierGroupFields)
+  .partial()
+  .strict()
+  .refine(validModifierSelectionRange, {
+    path: ['maxSelect'],
+    message: 'Maximum selections must be greater than or equal to minimum selections',
+  });
 
 export const createModifierSchema = z
   .object({
@@ -580,6 +623,16 @@ export const assignModifierGroupSchema = routableEntityRefSchema.extend({
   sortOrder: z.coerce.number().int().min(0).max(100_000).optional(),
   status: enumOf(MasterStatus).optional(),
 });
+
+export const moveModifierAssignmentSchema = routableEntityRefSchema
+  .extend({
+    sourceAssignmentId: uuid.optional(),
+    targetModifierGroupId: uuid.optional(),
+  })
+  .refine(
+    (value) => value.sourceAssignmentId !== undefined || value.targetModifierGroupId !== undefined,
+    { message: 'A source assignment or target modifier group is required' },
+  );
 
 export const createScheduleSchema = z
   .object({
@@ -1559,6 +1612,18 @@ export const posDashboardQuerySchema = z
   })
   .strict();
 
+export const posAnalyticsQuerySchema = z
+  .object({ dateFrom: isoDate, dateTo: isoDate })
+  .strict();
+
+export const posTopItemsQuerySchema = z
+  .object({
+    dateFrom: isoDate,
+    dateTo: isoDate,
+    limit: z.coerce.number().int().min(1).max(25).optional(),
+  })
+  .strict();
+
 export const posOrderIdParam = z.object({ posOrderId: uuid }).strict();
 
 /**
@@ -1586,6 +1651,21 @@ export const kdsCounterIdParam = z.object({ counterId: uuid }).strict();
 export const kdsPrintingGroupIdParam = z.object({ printingGroupId: uuid }).strict();
 export const kdsLineIdParam = z.object({ lineId: uuid }).strict();
 export const kdsOrderIdParam = z.object({ orderId: uuid }).strict();
+
+/**
+ * An admin↔counter message. `orderId` is optional and nullable: tagging an order is a choice,
+ * and the server re-checks that the order actually belongs to this counter before it snapshots
+ * the number — a client-supplied id is never trusted to name the right board.
+ */
+export const counterMessageSchema = z
+  .object({
+    body: z.string().trim().min(1).max(LIMITS.COUNTER_MESSAGE_MAX),
+    orderId: uuid.nullish(),
+  })
+  .strict();
+
+/** One message inside a counter's thread — the on-demand translate route. */
+export const counterMessageParam = z.object({ counterId: uuid, messageId: uuid }).strict();
 
 /** Which counter's lines a "serve all" bumps — the kitchen flow is counter-scoped. */
 export const kdsServeAllSchema = z.object({ counterId: uuid }).strict();

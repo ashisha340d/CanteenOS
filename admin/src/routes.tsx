@@ -157,6 +157,24 @@ const CDSPage = lazy(() =>
 const CleaningPage = lazy(() =>
   import('./pages/Cleaning/CleaningPage').then((m) => ({ default: m.CleaningPage })),
 );
+const PurchaseMastersPage = lazy(() =>
+  import('./pages/Purchase/PurchaseMastersPage').then((m) => ({ default: m.PurchaseMastersPage })),
+);
+const PurchaseMargEntryPage = lazy(() =>
+  import('./pages/Purchase/PurchaseMargEntryPage').then((m) => ({ default: m.PurchaseMargEntryPage })),
+);
+const PurchaseRegisterPage = lazy(() =>
+  import('./pages/Purchase/PurchaseRegisterPage').then((m) => ({ default: m.PurchaseRegisterPage })),
+);
+const VendorAccountingPage = lazy(() =>
+  import('./pages/Purchase/VendorAccountingPage').then((m) => ({ default: m.VendorAccountingPage })),
+);
+const PurchaseDocumentsPage = lazy(() =>
+  import('./pages/Purchase/PurchaseDocumentsPage').then((m) => ({
+    default: m.PurchaseDocumentsPage,
+  })),
+);
+const StockPage = lazy(() => import('./pages/Stock/StockPage').then((m) => ({ default: m.StockPage })));
 
 /** Blocking full-window state, used only while the session itself is being resolved. */
 function LoadingScreen(): JSX.Element {
@@ -174,7 +192,7 @@ function LoadingScreen(): JSX.Element {
  * chrome, and on the small screen a till usually runs on, the sidebar is real space.
  */
 function FullBleedPage({ children }: { children: ReactNode }): JSX.Element {
-  return <div className="min-h-dvh w-full overflow-x-hidden">{children}</div>;
+  return <div className="min-h-full w-full overflow-x-hidden">{children}</div>;
 }
 
 export function AppRoutes(): JSX.Element {
@@ -209,40 +227,65 @@ export function AppRoutes(): JSX.Element {
       <Routes>
         <Route path="/login" element={<Navigate to="/" replace />} />
 
-        {/* The till runs full-bleed, outside AppShell: a counter screen has no use for the
-            sidebar, breadcrumbs or command palette, and the sidebar's width is real space on
-            what is usually a small screen at the register. */}
-        <Route
-          path="/pos"
-          element={
-            <RequireCapability capability={Capability.POS_READ}>
-              <FullBleedPage>
-                <PosDashboardPage />
-              </FullBleedPage>
-            </RequireCapability>
-          }
-        />
-        <Route
-          path="/pos/entry"
-          element={
-            <RequireCapability capability={Capability.POS_OPERATE}>
-              <FullBleedPage>
-                <PosEntryPage />
-              </FullBleedPage>
-            </RequireCapability>
-          }
-        />
-        <Route
-          path="/pos/marg"
-          element={
-            <RequireCapability capability={Capability.POS_OPERATE}>
-              <FullBleedPage>
-                <PosMargEntryPage />
-              </FullBleedPage>
-            </RequireCapability>
-          }
-        />
         <Route element={<AppShell />}>
+          {/* The till runs full-bleed: a counter screen has no use for a page header, and the
+              register is usually a small screen where every row counts. It stays inside
+              AppShell all the same, so the task bar, the desktop button and counter messaging
+              are present at the till exactly as they are everywhere else. */}
+          <Route
+            path="/pos"
+            element={
+              <RequireCapability capability={Capability.POS_READ}>
+                <FullBleedPage>
+                  <PosDashboardPage />
+                </FullBleedPage>
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/pos/entry"
+            element={
+              <RequireCapability capability={Capability.POS_OPERATE}>
+                <FullBleedPage>
+                  <PosEntryPage />
+                </FullBleedPage>
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/pos/marg"
+            element={
+              <RequireCapability capability={Capability.POS_OPERATE}>
+                <FullBleedPage>
+                  <PosMargEntryPage />
+                </FullBleedPage>
+              </RequireCapability>
+            }
+          />
+          {/* Purchase entry and the register are full-bleed for the same reason the till is:
+              they are MARG-shaped screens driven entirely by F-keys, and a sidebar next to a
+              nineteen-column day book is a column of the day book. Both open on PURCHASE_READ;
+              the entry screen renders read-only without PURCHASE_ENTRY_CREATE. */}
+          <Route
+            path="/purchase/entry"
+            element={
+              <RequireCapability capability={Capability.PURCHASE_READ}>
+                <FullBleedPage>
+                  <PurchaseMargEntryPage />
+                </FullBleedPage>
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/purchase/register"
+            element={
+              <RequireCapability capability={Capability.PURCHASE_READ}>
+                <FullBleedPage>
+                  <PurchaseRegisterPage />
+                </FullBleedPage>
+              </RequireCapability>
+            }
+          />
           <Route path="/" element={<DashboardPage />} />
           <Route
             path="/menu-master"
@@ -300,6 +343,38 @@ export function AppRoutes(): JSX.Element {
             element={
               <RequireCapability capability={Capability.RECIPE_READ}>
                 <SopFormulationPage />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/purchase/masters"
+            element={
+              <RequireCapability capability={Capability.PRODUCT_READ}>
+                <PurchaseMastersPage />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/purchase/payables"
+            element={
+              <RequireCapability capability={Capability.PAYABLE_READ}>
+                <VendorAccountingPage />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/purchase/documents"
+            element={
+              <RequireCapability capability={Capability.PURCHASE_READ}>
+                <PurchaseDocumentsPage />
+              </RequireCapability>
+            }
+          />
+          <Route
+            path="/stock"
+            element={
+              <RequireCapability capability={Capability.INVENTORY_READ}>
+                <StockPage />
               </RequireCapability>
             }
           />

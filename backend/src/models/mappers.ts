@@ -1,4 +1,5 @@
 export * from './equipmentMappers';
+export * from './cleaningMappers';
 
 import type {
   AcknowledgementDto,
@@ -43,10 +44,16 @@ import type {
   RecipeStepDto,
   GstSyncRunDto,
   HsnSacCodeDto,
+  InventoryLocationDto,
+  ProductDto,
+  ProductLocationDto,
   SettingDto,
   ShoppingListDto,
+  SupplierProductDto,
   TaskDto,
   TaxProfileDto,
+  UomDto,
+  VendorSummaryDto,
   TeamMemberActivityDto,
   ShoppingListItemDto,
   StationDto,
@@ -76,6 +83,7 @@ import type {
   EntityRow,
   IngredientCategoryRow,
   IngredientRow,
+  InventoryLocationRow,
   ItemGroupRow,
   MediaAssetRow,
   MediaAssignmentRow,
@@ -99,6 +107,8 @@ import type {
   PosPaymentRow,
   PrintingGroupRow,
   PrintingRouteRow,
+  ProductLocationRow,
+  ProductRow,
   RecipeIngredientRow,
   RecipeRow,
   RecipeStepRow,
@@ -106,11 +116,14 @@ import type {
   ShoppingListItemRow,
   ShoppingListRow,
   StationRow,
+  SupplierProductRow,
   ThreadMessageRow,
   TaskRow,
   TaxProfileRow,
   TeamActivityRow,
+  UomRow,
   UserRow,
+  VendorRow,
   YoutubeImportRow,
   GstSyncRunRow,
   HsnSacCodeRow,
@@ -240,6 +253,8 @@ export function mapMenuItem(row: MenuItemRow, userId?: string): MenuItemDto {
     ...(row.group_name !== undefined ? { groupName: row.group_name } : {}),
     name: row.name,
     nameHi: row.name_hi,
+    description: row.description,
+    descriptionHi: row.description_hi,
     unit: row.unit,
     unitHi: row.unit_hi,
     imagePath: row.image_path,
@@ -1187,5 +1202,196 @@ export function mapPosPayment(row: PosPaymentRow): PosPaymentDto {
     isReversal: row.is_reversal === 1,
     receivedBy: row.received_by,
     receivedAt: fromDbDateTimeRequired(row.received_at),
+  };
+}
+
+/* ------------------------------------------- purchase & inventory masters (004) */
+
+export function mapUom(row: UomRow): UomDto {
+  return {
+    id: row.id,
+    code: row.code,
+    name: row.name,
+    dimension: row.dimension,
+    isBase: row.is_base === 1,
+    factorToBase: Number(row.factor_to_base),
+    decimalPlaces: Number(row.decimal_places),
+    status: row.status,
+    sortOrder: Number(row.sort_order),
+    createdBy: row.created_by,
+    createdAt: fromDbDateTimeRequired(row.created_at),
+    updatedAt: fromDbDateTimeRequired(row.updated_at),
+  };
+}
+
+export function mapInventoryLocation(row: InventoryLocationRow): InventoryLocationDto {
+  return {
+    id: row.id,
+    code: row.code,
+    name: row.name,
+    nameHi: row.name_hi,
+    kind: row.kind,
+    parentId: row.parent_id,
+    counterId: row.counter_id,
+    stationId: row.station_id,
+    department: row.department,
+    isDefaultReceiving: row.is_default_receiving === 1,
+    allowsNegativeStock: row.allows_negative_stock === 1,
+    status: row.status,
+    sortOrder: Number(row.sort_order),
+    notes: row.notes,
+    createdBy: row.created_by,
+    createdAt: fromDbDateTimeRequired(row.created_at),
+    updatedAt: fromDbDateTimeRequired(row.updated_at),
+    deletedAt: fromDbDateTime(row.deleted_at),
+    revision: Number(row.revision),
+    ...(row.parent_name !== undefined ? { parentName: row.parent_name } : {}),
+  };
+}
+
+export function mapProduct(row: ProductRow): ProductDto {
+  return {
+    id: row.id,
+    categoryId: row.category_id,
+    name: row.name,
+    nameHi: row.name_hi,
+    unit: row.unit,
+    status: row.status,
+    sortOrder: Number(row.sort_order),
+    createdBy: row.created_by,
+
+    code: row.code,
+    barcode: row.barcode,
+    brand: row.brand,
+    description: row.description,
+    kind: row.kind,
+
+    hsnSacId: row.hsn_sac_id,
+    taxProfileId: row.tax_profile_id,
+
+    stockUomId: row.stock_uom_id,
+    purchaseUomId: row.purchase_uom_id,
+    purchaseConversionFactor: Number(row.purchase_conversion_factor),
+    packSize: row.pack_size,
+
+    isBatchTracked: row.is_batch_tracked === 1,
+    isExpiryTracked: row.is_expiry_tracked === 1,
+    shelfLifeDays: row.shelf_life_days === null ? null : Number(row.shelf_life_days),
+    batchIssuePolicy: row.batch_issue_policy,
+
+    valuationMethod: row.valuation_method,
+    standardCost: row.standard_cost === null ? null : Number(row.standard_cost),
+    movingAverageCost: Number(row.moving_average_cost),
+    lastPurchaseRate: row.last_purchase_rate === null ? null : Number(row.last_purchase_rate),
+    lastPurchasedAt: fromDbDateTime(row.last_purchased_at),
+
+    defaultLocationId: row.default_location_id,
+    preferredSupplierId: row.preferred_supplier_id,
+    minStock: row.min_stock === null ? null : Number(row.min_stock),
+    reorderLevel: row.reorder_level === null ? null : Number(row.reorder_level),
+    maxStock: row.max_stock === null ? null : Number(row.max_stock),
+    leadTimeDays: row.lead_time_days === null ? null : Number(row.lead_time_days),
+    isPurchasable: row.is_purchasable === 1,
+    isStocked: row.is_stocked === 1,
+
+    ...(row.category_name !== undefined ? { categoryName: row.category_name } : {}),
+    ...(row.stock_uom_code !== undefined ? { stockUomCode: row.stock_uom_code } : {}),
+    ...(row.purchase_uom_code !== undefined ? { purchaseUomCode: row.purchase_uom_code } : {}),
+    ...(row.tax_profile_name !== undefined ? { taxProfileName: row.tax_profile_name } : {}),
+    ...(row.tax_rate !== undefined
+      ? { taxRate: row.tax_rate === null ? null : Number(row.tax_rate) }
+      : {}),
+    ...(row.hsn_sac_code !== undefined ? { hsnSacCode: row.hsn_sac_code } : {}),
+    ...(row.hsn_sac_code_type !== undefined ? { hsnSacCodeType: row.hsn_sac_code_type } : {}),
+    ...(row.default_location_name !== undefined
+      ? { defaultLocationName: row.default_location_name }
+      : {}),
+    ...(row.preferred_supplier_name !== undefined
+      ? { preferredSupplierName: row.preferred_supplier_name }
+      : {}),
+    ...(row.stock_on_hand !== undefined ? { stockOnHand: Number(row.stock_on_hand) } : {}),
+    ...syncMeta(row),
+  };
+}
+
+export function mapProductLocation(row: ProductLocationRow): ProductLocationDto {
+  return {
+    id: row.id,
+    productId: row.product_id,
+    locationId: row.location_id,
+    minStock: row.min_stock === null ? null : Number(row.min_stock),
+    reorderLevel: row.reorder_level === null ? null : Number(row.reorder_level),
+    maxStock: row.max_stock === null ? null : Number(row.max_stock),
+    isDefaultDestination: row.is_default_destination === 1,
+    bin: row.bin,
+    status: row.status,
+    createdBy: row.created_by,
+    createdAt: fromDbDateTimeRequired(row.created_at),
+    updatedAt: fromDbDateTimeRequired(row.updated_at),
+    ...(row.product_name !== undefined ? { productName: row.product_name } : {}),
+    ...(row.location_name !== undefined ? { locationName: row.location_name } : {}),
+    ...(row.location_kind !== undefined ? { locationKind: row.location_kind } : {}),
+  };
+}
+
+export function mapSupplierProduct(row: SupplierProductRow): SupplierProductDto {
+  return {
+    id: row.id,
+    supplierId: row.supplier_id,
+    productId: row.product_id,
+    supplierSku: row.supplier_sku,
+    supplierProductName: row.supplier_product_name,
+    barcode: row.barcode,
+    purchaseUomId: row.purchase_uom_id,
+    conversionFactor: Number(row.conversion_factor),
+    packSize: row.pack_size,
+    lastRate: row.last_rate === null ? null : Number(row.last_rate),
+    lastPurchasedAt: fromDbDateTime(row.last_purchased_at),
+    leadTimeDays: row.lead_time_days === null ? null : Number(row.lead_time_days),
+    isPreferred: row.is_preferred === 1,
+    status: row.status,
+    notes: row.notes,
+    createdBy: row.created_by,
+    createdAt: fromDbDateTimeRequired(row.created_at),
+    updatedAt: fromDbDateTimeRequired(row.updated_at),
+    ...(row.supplier_name !== undefined ? { supplierName: row.supplier_name } : {}),
+    ...(row.product_name !== undefined ? { productName: row.product_name } : {}),
+    ...(row.product_unit !== undefined ? { productUnit: row.product_unit } : {}),
+    ...(row.purchase_uom_code !== undefined ? { purchaseUomCode: row.purchase_uom_code } : {}),
+  };
+}
+
+/**
+ * A VENDOR entity as the purchase screens read it.
+ *
+ * `outstanding` is deliberately absent rather than zero: unpaid invoice value does not exist
+ * until the payables slice lands, and a zero would read as "this supplier is settled up".
+ */
+export function mapVendorSummary(row: VendorRow): VendorSummaryDto {
+  return {
+    id: row.id,
+    code: row.code,
+    name: row.name,
+    phone: row.phone,
+    email: row.email,
+    address: row.address,
+    city: row.city,
+    stateCode: row.state_code,
+    gstin: row.gstin,
+    pan: row.pan,
+    creditLimit: Number(row.credit_limit),
+    accountBalance: Number(row.account_balance),
+    status: row.status,
+    profile: {
+      entityId: row.id,
+      paymentTerms: row.vendor_payment_terms,
+      creditDays: Number(row.vendor_credit_days),
+      bankName: row.vendor_bank_name,
+      bankAccount: row.vendor_bank_account,
+      bankIfsc: row.vendor_bank_ifsc,
+      openingBalance: Number(row.vendor_opening_balance),
+      isApproved: row.vendor_is_approved === 1,
+      defaultLocationId: row.vendor_default_location_id,
+    },
   };
 }

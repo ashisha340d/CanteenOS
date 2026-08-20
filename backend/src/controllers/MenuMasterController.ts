@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import type {
   AvailabilityStatus,
+  CounterRouteMoveRequest,
   CounterRouteWriteRequest,
   CounterWriteRequest,
   ItemGroupWriteRequest,
@@ -11,10 +12,12 @@ import type {
   MenuItemVariantWriteRequest,
   MenuScheduleWriteRequest,
   MenuWriteRequest,
+  ModifierAssignmentMoveRequest,
   ModifierAssignmentWriteRequest,
   ModifierGroupWriteRequest,
   ModifierWriteRequest,
   PrintingGroupWriteRequest,
+  PrintingRouteMoveRequest,
   PrintingRouteWriteRequest,
   RoutableEntityType,
 } from '@menuboard/shared';
@@ -30,6 +33,10 @@ import { actorFrom } from './context';
  * session holds — see master.routes.ts for the identical reasoning applied here.
  */
 export const MenuMasterController = {
+  async getMenuAssignmentWorkspace(req: Request, res: Response): Promise<void> {
+    ok(res, await menuMasterService.getMenuAssignmentWorkspace(actorFrom(req).userId));
+  },
+
   /* ---------------------------------------------------------------------------- menus */
 
   async listMenus(req: Request, res: Response): Promise<void> {
@@ -235,6 +242,13 @@ export const MenuMasterController = {
     );
   },
 
+  async moveCounterRoute(req: Request, res: Response): Promise<void> {
+    ok(
+      res,
+      await menuMasterService.moveCounterRoute(req.body as CounterRouteMoveRequest, actorFrom(req)),
+    );
+  },
+
   async removeCounterRoute(req: Request, res: Response): Promise<void> {
     await menuMasterService.removeCounterRoute(req.params.id as string, actorFrom(req));
     noContent(res);
@@ -354,6 +368,13 @@ export const MenuMasterController = {
     );
   },
 
+  async movePrintingRoute(req: Request, res: Response): Promise<void> {
+    ok(
+      res,
+      await menuMasterService.movePrintingRoute(req.body as PrintingRouteMoveRequest, actorFrom(req)),
+    );
+  },
+
   async removePrintingRoute(req: Request, res: Response): Promise<void> {
     await menuMasterService.removePrintingRoute(req.params.id as string, actorFrom(req));
     noContent(res);
@@ -431,6 +452,24 @@ export const MenuMasterController = {
         actorFrom(req),
       ),
     );
+  },
+
+  async moveModifierAssignment(req: Request, res: Response): Promise<void> {
+    ok(
+      res,
+      await menuMasterService.moveModifierAssignment(
+        req.body as ModifierAssignmentMoveRequest,
+        actorFrom(req),
+      ),
+    );
+  },
+
+  async removeMenuItemModifierGroupAssignments(req: Request, res: Response): Promise<void> {
+    await menuMasterService.removeMenuItemModifierGroupAssignments(
+      req.params.groupId as string,
+      actorFrom(req),
+    );
+    noContent(res);
   },
 
   async removeModifierAssignment(req: Request, res: Response): Promise<void> {

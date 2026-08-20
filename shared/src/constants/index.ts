@@ -80,6 +80,13 @@ export const LIMITS = {
   VENUE_MAX: 200,
   ORDER_ITEM_NOTES_MAX: 1000,
   THREAD_BODY_MAX: 4000,
+  /**
+   * An admin↔counter message. Half the board thread's ceiling: this is read off a wall screen
+   * mid-service, so anything approaching an essay is the wrong medium anyway.
+   */
+  COUNTER_MESSAGE_MAX: 2000,
+  /** How many messages a counter's thread hands back at once. A shift's worth, comfortably. */
+  COUNTER_MESSAGE_PAGE_MAX: 200,
   USER_NAME_MAX: 150,
   USERNAME_MAX: 100,
   PASSWORD_MIN: 6,
@@ -236,8 +243,55 @@ export const LIMITS = {
   ATTACHMENTS_PER_OWNER_MAX: 30,
   MENTIONS_MAX: 50,
 
+  /* ------------------------------------------ product, unit & location masters ------- */
+
+  PRODUCT_NAME_MAX: 180,
+  PRODUCT_CODE_MAX: 40,
+  PRODUCT_BARCODE_MAX: 64,
+  PRODUCT_BRAND_MAX: 120,
+  PRODUCT_DESCRIPTION_MAX: 1000,
+  PRODUCT_PACK_SIZE_MAX: 60,
+  UOM_CODE_MAX: 16,
+  UOM_NAME_MAX: 60,
+  INVENTORY_LOCATION_NAME_MAX: 120,
+  INVENTORY_LOCATION_CODE_MAX: 40,
+  SUPPLIER_SKU_MAX: 60,
+  SUPPLIER_PRODUCT_NAME_MAX: 200,
+
+  /**
+   * A conversion factor of zero would make a purchase unit meaningless and silently zero the
+   * stock quantity, so it is excluded at the bottom rather than merely discouraged.
+   */
+  CONVERSION_FACTOR_MIN: 0.000001,
+  CONVERSION_FACTOR_MAX: 1_000_000,
+
+  /* ------------------------------------------------ purchase & stock documents ------- */
+
+  PURCHASE_DOCUMENT_NUMBER_MAX: 30,
+  /** The supplier's own bill number as printed on their invoice — their format, not ours. */
+  SUPPLIER_INVOICE_NUMBER_MAX: 60,
+  PURCHASE_NOTES_MAX: 1000,
+  PURCHASE_REFERENCE_MAX: 120,
+  PURCHASE_LINE_NOTES_MAX: 500,
+  PURCHASE_REASON_MAX: 500,
+  PURCHASE_TERMS_MAX: 200,
+  BATCH_NUMBER_MAX: 60,
+  DELIVERY_NOTE_MAX: 60,
+  REJECTION_NOTES_MAX: 300,
+  /**
+   * A single purchase can be large — the brief describes 300-line supplier bills — but an
+   * unbounded document would let one request lock a great many stock rows at once.
+   */
+  PURCHASE_LINES_MAX: 500,
+  /** How many locations one received line may be split across. */
+  RECEIPT_DESTINATION_SPLIT_MAX: 10,
+  PAYMENT_ALLOCATIONS_MAX: 200,
+  CREDIT_DAYS_MAX: 365,
+
   PAGE_SIZE_DEFAULT: 25,
   PAGE_SIZE_MAX: 100,
+  /** Purchase registers and ledgers are read in bulk; they get a wider ceiling than masters. */
+  LEDGER_PAGE_SIZE_MAX: 500,
 
   SYNC_PULL_LIMIT_DEFAULT: 500,
   SYNC_PULL_LIMIT_MAX: 2000,
@@ -296,6 +350,60 @@ export const POS_ORDER_NUMBER = {
   PREFIX: 'POS',
   PATTERN: /^POS-\d{8}-\d{4,6}$/,
   SEQUENCE_PAD: 4,
+} as const;
+
+/**
+ * Purchase, stock and vendor-accounting document numbers.
+ *
+ * Same reasoning as `POS_ORDER_NUMBER`, and deliberately the same shape: every one of these
+ * documents is raised by a signed-in user against a live database, so the sequence can be
+ * server-allocated and read as a countable series — `GRN-20260811-0001` is the first goods
+ * receipt of that day. The counter resets per document type per business date.
+ *
+ * One shared pad and pattern rather than a dozen near-identical constants, because the
+ * allocator is one function and a divergent pad would only ever be a mistake.
+ */
+export const PURCHASE_DOCUMENT_NUMBER = {
+  SEQUENCE_PAD: 4,
+  PATTERN: /^[A-Z]{2,4}-\d{8}-\d{4,6}$/,
+  PREFIX: {
+    PURCHASE_REQUIREMENT: 'PR',
+    PURCHASE_ORDER: 'PO',
+    PURCHASE_ENTRY: 'PE',
+    GOODS_RECEIPT: 'GRN',
+    PURCHASE_INVOICE: 'PI',
+    PURCHASE_RETURN: 'PRTN',
+    DEBIT_MEMO: 'DM',
+    CREDIT_MEMO: 'CM',
+    VENDOR_PAYMENT: 'PAY',
+    STOCK_TRANSFER: 'STR',
+    STOCK_ADJUSTMENT: 'ADJ',
+    STOCK_COUNT: 'CNT',
+  },
+} as const;
+
+export type PurchaseDocumentPrefix =
+  (typeof PURCHASE_DOCUMENT_NUMBER.PREFIX)[keyof typeof PURCHASE_DOCUMENT_NUMBER.PREFIX];
+
+/**
+ * Thresholds that decide when a purchase is routine and when it is an exception.
+ *
+ * These are defaults. Each one is overridable through the `settings` table so a site can
+ * tighten or loosen it without a deploy; the constants are what a fresh database starts from.
+ */
+export const PURCHASE_TOLERANCE = {
+  /** Rate above the last purchase rate by more than this (%) is flagged as a price anomaly. */
+  RATE_VARIANCE_PERCENT: 10,
+  /** Received quantity over the ordered quantity by more than this (%) is an excess receipt. */
+  QUANTITY_OVER_RECEIPT_PERCENT: 5,
+  /** Absolute rupee gap allowed between the supplier's stated total and our recomputation. */
+  INVOICE_TOTAL_TOLERANCE: 1,
+  /** Tax computed vs tax billed may differ by at most this much before it is an exception. */
+  TAX_TOLERANCE: 1,
+  /** Goods expiring within this many days are flagged at receipt rather than silently taken. */
+  NEAR_EXPIRY_DAYS: 30,
+  /** Below this OCR confidence a field must be confirmed by a human before it is trusted. */
+  OCR_CONFIDENCE_FLOOR: 0.75,
 } as const;
 
 /**
@@ -395,6 +503,17 @@ export const ERROR_CODES = {
   ADMIN_ROLE_REQUIRED: 'ADMIN_ROLE_REQUIRED',
   /** The official GST dataset could not be fetched or was not a valid HSN/SAC workbook. */
   GST_SOURCE_UNAVAILABLE: 'GST_SOURCE_UNAVAILABLE',
+  /** This supplier + invoice number has already been posted. Never create the liability twice. */
+  DUPLICATE_SUPPLIER_INVOICE: 'DUPLICATE_SUPPLIER_INVOICE',
+  /**
+   * The purchase carries exceptions that block posting, or overridable ones the caller did not
+   * confirm. The response lists them so the UI can offer a resolution path instead of a dead end.
+   */
+  PURCHASE_EXCEPTIONS_UNRESOLVED: 'PURCHASE_EXCEPTIONS_UNRESOLVED',
+  /** The movement would drive a location's balance below zero. */
+  INSUFFICIENT_STOCK: 'INSUFFICIENT_STOCK',
+  /** The document is posted; posted transactions are corrected by reversal, never by edit. */
+  DOCUMENT_IMMUTABLE: 'DOCUMENT_IMMUTABLE',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
 } as const;
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];

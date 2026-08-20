@@ -8,6 +8,7 @@ import { readErrorMessage } from '../api/client';
 import { getAccessToken } from '../api/session';
 import type { StationSelection } from '../config/station';
 import { connectSocket, disconnectSocket, onSocketEvent, subscribeCds } from '../socket';
+import { useT } from '../i18n';
 import '../board/board.css';
 
 /** `cds:bill` arrives on every change to the ticket; the timer is the missed-event net. */
@@ -24,6 +25,7 @@ interface Props {
 
 /** The customer's own bill view. No controls, no staff chrome — just what they are paying for. */
 export function CdsPage({ station, onChangeStation, onSignOut }: Props): JSX.Element {
+  const t = useT();
   const queryClient = useQueryClient();
   const [live, setLive] = useState<CdsLiveDto | null>(null);
   const [liveAt, setLiveAt] = useState(0);
@@ -74,7 +76,7 @@ export function CdsPage({ station, onChangeStation, onSignOut }: Props): JSX.Ele
       <header className="cds__head">
         <div>
           <h1>{station.name}</h1>
-          <p>{settled ? 'Thank you for your order' : 'Welcome!'}</p>
+          <p>{settled ? t.thankYou : t.welcome}</p>
         </div>
         {/* Staff controls stay out of the customer's way behind one quiet button. */}
         <div className="cds__chrome">
@@ -82,17 +84,17 @@ export function CdsPage({ station, onChangeStation, onSignOut }: Props): JSX.Ele
             type="button"
             className="cds__chrome-toggle"
             onClick={() => setChromeOpen((open) => !open)}
-            aria-label="Display options"
+            aria-label={t.displaySettings}
           >
             <Settings className="size-4" />
           </button>
           {chromeOpen && (
             <div className="cds__chrome-menu">
               <button type="button" onClick={onChangeStation}>
-                <RefreshCw className="size-4" /> Change station
+                <RefreshCw className="size-4" /> {t.changeStation}
               </button>
               <button type="button" onClick={onSignOut}>
-                <LogOut className="size-4" /> Sign out
+                <LogOut className="size-4" /> {t.signOut}
               </button>
             </div>
           )}
@@ -110,7 +112,7 @@ export function CdsPage({ station, onChangeStation, onSignOut }: Props): JSX.Ele
         <SettledScreen orderNumber={data.orderNumber} amount={data.totalAmount} />
       ) : showLive ? (
         <BillBody
-          heading={live.orderNumber !== null ? `Order ${live.orderNumber}` : 'Your order'}
+          heading={live.orderNumber !== null ? t.billNo(live.orderNumber) : t.yourOrder}
           lines={live.lines.map((line) => ({
             itemName: line.itemName,
             variantName: line.variantName,
@@ -120,26 +122,26 @@ export function CdsPage({ station, onChangeStation, onSignOut }: Props): JSX.Ele
           subtotalAmount={live.subtotalAmount}
           discountAmount={live.discountAmount}
           totalAmount={live.totalAmount}
-          totalLabel="Running total"
+          totalLabel={t.runningTotal}
         />
       ) : data !== null ? (
         <BillBody
-          heading={`Bill #${data.orderNumber}`}
+          heading={t.billNo(data.orderNumber)}
           lines={data.lines}
           subtotalAmount={data.subtotalAmount}
           discountAmount={data.discountAmount}
           taxAmount={data.taxAmount}
           totalAmount={data.totalAmount}
-          totalLabel="To pay"
+          totalLabel={t.toPay}
         />
       ) : (
         <div className="cds__idle">
           {bill.error !== null ? (
-            <p>{readErrorMessage(bill.error, 'Could not load the bill.')}</p>
+            <p>{readErrorMessage(bill.error, t.billLoadFailed)}</p>
           ) : (
             <>
-              <h2>Radhey Radhey</h2>
-              <p>Please step up to the counter.</p>
+              <h2>{t.betweenBills}</h2>
+              <p>{t.stepUpToCounter}</p>
             </>
           )}
         </div>
@@ -166,11 +168,12 @@ function BillBody({
   totalAmount: number;
   totalLabel: string;
 }): JSX.Element {
+  const t = useT();
   return (
     <div className="cds__body">
       <div className="cds__lines">
         <p className="cds__heading">{heading}</p>
-        {lines.length === 0 && <p className="cds__empty">Items appear here as they are rung up.</p>}
+        {lines.length === 0 && <p className="cds__empty">{t.itemsAppearHere}</p>}
         {lines.map((line, index) => (
           <div key={index} className="cds-line">
             <span className="cds-line__qty">{line.quantity}×</span>
@@ -186,18 +189,18 @@ function BillBody({
       <aside className="cds__side">
         <dl className="cds__summary">
           <div>
-            <dt>Subtotal</dt>
+            <dt>{t.subtotal}</dt>
             <dd>{MONEY.format(subtotalAmount)}</dd>
           </div>
           {discountAmount !== 0 && (
             <div>
-              <dt>Discount</dt>
+              <dt>{t.discount}</dt>
               <dd>−{MONEY.format(discountAmount)}</dd>
             </div>
           )}
           {taxAmount !== undefined && taxAmount !== 0 && (
             <div>
-              <dt>Tax</dt>
+              <dt>{t.tax}</dt>
               <dd>{MONEY.format(taxAmount)}</dd>
             </div>
           )}
@@ -223,6 +226,7 @@ function PayScreen({
   upiLink: string;
   lineCount: number;
 }): JSX.Element {
+  const t = useT();
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -237,16 +241,16 @@ function PayScreen({
 
   return (
     <div className="cds__pay">
-      <p className="cds__pay-eyebrow">Scan to pay · UPI</p>
+      <p className="cds__pay-eyebrow">{t.scanToPay}</p>
       <div className="cds__pay-qr">
         <canvas ref={canvasRef} />
       </div>
       <div className="cds__pay-amount">
-        <p>Amount</p>
+        <p>{t.amount}</p>
         <strong>{MONEY.format(amount)}</strong>
       </div>
       <p className="cds__pay-note">
-        Bill #{orderNumber} · {lineCount} item{lineCount === 1 ? '' : 's'} · any UPI app
+        {t.billNo(orderNumber)} · {t.itemsCount(lineCount)} · {t.anyUpiApp}
       </p>
     </div>
   );
@@ -254,12 +258,15 @@ function PayScreen({
 
 /** Settled by cash, card or account — no QR, just confirmation and the amount. */
 function SettledScreen({ orderNumber, amount }: { orderNumber: string; amount: number }): JSX.Element {
+  const t = useT();
   return (
     <div className="cds__settled">
       <CheckCircle2 className="cds__settled-tick" />
-      <p className="cds__pay-eyebrow">Bill settled</p>
+      <p className="cds__pay-eyebrow">{t.billSettled}</p>
       <strong>{MONEY.format(amount)}</strong>
-      <p className="cds__pay-note">Bill #{orderNumber} · thank you, please collect your receipt</p>
+      <p className="cds__pay-note">
+        {t.billNo(orderNumber)} · {t.collectReceipt}
+      </p>
     </div>
   );
 }

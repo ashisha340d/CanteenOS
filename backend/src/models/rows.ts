@@ -1,6 +1,7 @@
 import type { RowDataPacket } from 'mysql2/promise';
 
 export * from './equipmentRows';
+export * from './cleaningRows';
 
 import type {
   AlertSoundSlot,
@@ -8,6 +9,7 @@ import type {
   AttachmentKind,
   AttachmentOwnerType,
   AvailabilityStatus,
+  BatchIssuePolicy,
   BillingStatus,
   BoardRole,
   BoardStatus,
@@ -16,6 +18,7 @@ import type {
   GstSyncStatus,
   GstTaxability,
   HsnSacCodeType,
+  InventoryLocationKind,
   ItcEligibility,
   MasterStatus,
   MediaEntityType,
@@ -34,6 +37,7 @@ import type {
   PosOrderType,
   PosPaymentMethod,
   PosPaymentStatus,
+  ProductKind,
   RecipeDifficulty,
   RecipeIngredientScaling,
   RoutableEntityType,
@@ -44,8 +48,10 @@ import type {
   TaskPriority,
   TaskSource,
   TaskStatus,
+  UomDimension,
   UserRole,
   UserStatus,
+  ValuationMethod,
   YoutubeImportStatus,
 } from '@menuboard/shared';
 
@@ -147,6 +153,8 @@ export interface MenuItemRow extends RowDataPacket, SyncColumns {
   group_id: string | null;
   name: string;
   name_hi: string | null;
+  description: string | null;
+  description_hi: string | null;
   unit: string;
   unit_hi: string | null;
   image_path: string | null;
@@ -228,6 +236,7 @@ export interface MenuItemAssignmentRow extends RowDataPacket, SyncColumns {
   created_by: string | null;
   food_item_name?: string;
   food_item_name_hi?: string | null;
+  food_item_description?: string | null;
   food_item_unit?: string;
   food_item_image_path?: string | null;
   food_item_base_price?: string | null;
@@ -1040,4 +1049,187 @@ export interface PasswordResetRow extends RowDataPacket {
   used_at: string | null;
   expires_at: string;
   created_at: string;
+}
+
+/* ------------------------------------------- purchase & inventory masters (004) */
+
+export interface UomRow extends RowDataPacket {
+  id: string;
+  code: string;
+  name: string;
+  dimension: UomDimension;
+  is_base: number;
+  /** DECIMAL(18,6) — arrives as a string. */
+  factor_to_base: string;
+  decimal_places: number;
+  status: MasterStatus;
+  sort_order: number;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export interface InventoryLocationRow extends RowDataPacket {
+  id: string;
+  code: string;
+  name: string;
+  name_hi: string | null;
+  kind: InventoryLocationKind;
+  parent_id: string | null;
+  counter_id: string | null;
+  station_id: string | null;
+  department: string | null;
+  is_default_receiving: number;
+  allows_negative_stock: number;
+  status: MasterStatus;
+  sort_order: number;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  revision: number;
+  /** Resolved by the SELECT's join to the parent location, not a column. */
+  parent_name?: string | null;
+}
+
+export interface ProductRow extends RowDataPacket, SyncColumns {
+  id: string;
+  category_id: string | null;
+  name: string;
+  name_hi: string | null;
+  unit: string;
+  status: MasterStatus;
+  sort_order: number;
+  created_by: string | null;
+
+  code: string | null;
+  barcode: string | null;
+  brand: string | null;
+  description: string | null;
+  kind: ProductKind;
+
+  hsn_sac_id: string | null;
+  tax_profile_id: string | null;
+
+  stock_uom_id: string | null;
+  purchase_uom_id: string | null;
+  /** DECIMAL(18,6) — arrives as a string. */
+  purchase_conversion_factor: string;
+  pack_size: string | null;
+
+  is_batch_tracked: number;
+  is_expiry_tracked: number;
+  shelf_life_days: number | null;
+  batch_issue_policy: BatchIssuePolicy;
+
+  valuation_method: ValuationMethod;
+  /** DECIMAL(14,4) — arrives as a string. */
+  standard_cost: string | null;
+  moving_average_cost: string;
+  last_purchase_rate: string | null;
+  last_purchased_at: string | null;
+
+  default_location_id: string | null;
+  preferred_supplier_id: string | null;
+  /** DECIMAL(14,3) — arrives as a string. */
+  min_stock: string | null;
+  reorder_level: string | null;
+  max_stock: string | null;
+  lead_time_days: number | null;
+  is_purchasable: number;
+  is_stocked: number;
+
+  /** Resolved by the SELECT's joins, not columns. */
+  category_name?: string | null;
+  stock_uom_code?: string | null;
+  purchase_uom_code?: string | null;
+  tax_profile_name?: string | null;
+  tax_rate?: string | null;
+  hsn_sac_code?: string | null;
+  hsn_sac_code_type?: HsnSacCodeType | null;
+  default_location_name?: string | null;
+  preferred_supplier_name?: string | null;
+  stock_on_hand?: string | number;
+}
+
+export interface ProductLocationRow extends RowDataPacket {
+  id: string;
+  product_id: string;
+  location_id: string;
+  /** DECIMAL(14,3) — arrives as a string. */
+  min_stock: string | null;
+  reorder_level: string | null;
+  max_stock: string | null;
+  is_default_destination: number;
+  bin: string | null;
+  status: MasterStatus;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  /** Resolved by the SELECT's joins, not columns. */
+  product_name?: string;
+  location_name?: string;
+  location_kind?: InventoryLocationKind;
+}
+
+export interface SupplierProductRow extends RowDataPacket {
+  id: string;
+  supplier_id: string;
+  product_id: string;
+  supplier_sku: string | null;
+  supplier_product_name: string | null;
+  barcode: string | null;
+  purchase_uom_id: string | null;
+  /** DECIMAL(18,6) — arrives as a string. */
+  conversion_factor: string;
+  pack_size: string | null;
+  /** DECIMAL(14,4) — arrives as a string. */
+  last_rate: string | null;
+  last_purchased_at: string | null;
+  lead_time_days: number | null;
+  is_preferred: number;
+  status: MasterStatus;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  /** Resolved by the SELECT's joins, not columns. */
+  supplier_name?: string;
+  product_name?: string;
+  product_unit?: string;
+  purchase_uom_code?: string | null;
+}
+
+/**
+ * A VENDOR row of the entity master, read through the purchase lens: the shared entity
+ * columns the purchase screens need plus the `vendor_*` profile added by migration 004.
+ */
+export interface VendorRow extends RowDataPacket {
+  id: string;
+  code: string;
+  type: EntityType;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  city: string | null;
+  state_code: string | null;
+  gstin: string | null;
+  pan: string | null;
+  /** DECIMAL(14,2) — arrives as a string. */
+  credit_limit: string;
+  account_balance: string;
+  status: MasterStatus;
+  vendor_payment_terms: string | null;
+  vendor_credit_days: number;
+  vendor_bank_name: string | null;
+  vendor_bank_account: string | null;
+  vendor_bank_ifsc: string | null;
+  vendor_opening_balance: string;
+  vendor_is_approved: number;
+  vendor_default_location_id: string | null;
 }

@@ -3,7 +3,8 @@
  *
  * Exercises the whole Phase 2 surface: auth and refresh rotation, RBAC, the Android capability
  * boundary, order creation with items, thread, acknowledgement, sync push/pull, media upload and
- * signed download, reports and billing generation.
+ * signed download, reports and billing generation — plus the equipment/maintenance and
+ * cleaning/hygiene modules.
  *
  * Run with: node scripts/smoke.mjs
  */
@@ -884,6 +885,150 @@ async function main() {
     },
   });
   check('password without a digit rejected', weakPassword.status === 400, weakPassword.body);
+
+  /* ------------------------------------------- cleaning & hygiene (§3e) */
+
+  section('Cleaning & Hygiene');
+
+  const cleaningSetup = await call('GET', '/cleaning/setup', { token: admin });
+  check(
+    'cleaning setup returns the masters a form needs',
+    cleaningSetup.status === 200 &&
+      Array.isArray(cleaningSetup.body.data.areas) &&
+      cleaningSetup.body.data.assetTypes.length > 0,
+    cleaningSetup.body,
+  );
+
+  const cleaningArea = cleaningSetup.body?.data?.areas?.[0];
+  check('at least one area exists to clean', cleaningArea !== undefined);
+
+  if (cleaningArea !== undefined) {
+    // Reporting by area alone must work: that is the whole point of the module reaching every
+    // user, and it exercises the general-asset resolution and the ad-hoc fallback together.
+    const report = await call('POST', '/cleaning/reports', {
+      token: admin,
+      body: {
+        areaId: cleaningArea.id,
+        eventType: 'SPILL_REPORTED',
+        note: `Smoke test spill ${Date.now()}`,
+      },
+    });
+    check('a report naming only an area raises work', report.status === 201, report.body);
+
+    const raised = report.body?.data?.tasks ?? [];
+    check('the report produced at least one cleaning task', raised.length > 0, report.body?.data);
+    check(
+      'the reporter is told what happened',
+      typeof report.body?.data?.message === 'string' && report.body.data.message.length > 0,
+    );
+
+    const cleaningTask = raised[0];
+    if (cleaningTask !== undefined) {
+      check(
+        'a spill is escalated above the rule default',
+        cleaningTask.priority === 'HIGH' || cleaningTask.priority === 'CRITICAL',
+        cleaningTask.priority,
+      );
+      check(
+        'the task carries a snapshotted step sheet',
+        (cleaningTask.stepCount ?? 0) > 0,
+        cleaningTask.stepCount,
+      );
+
+      const started = await call('POST', `/cleaning/tasks/${cleaningTask.id}/start`, {
+        token: admin,
+        body: {},
+      });
+      check('a cleaning task can be started', started.status === 200, started.body);
+
+      // Completion must be refused while a mandatory step is pending — the difference between
+      // a hygiene record and a tick box.
+      const premature = await call('POST', `/cleaning/tasks/${cleaningTask.id}/complete`, {
+        token: admin,
+        body: {},
+      });
+      check(
+        'completion is refused while a required step is pending',
+        premature.status === 400,
+        premature.body,
+      );
+
+      const detail = await call('GET', `/cleaning/tasks/${cleaningTask.id}`, { token: admin });
+      const steps = detail.body?.data?.steps ?? [];
+      const completed = await call('POST', `/cleaning/tasks/${cleaningTask.id}/complete`, {
+        token: admin,
+        body: {
+          note: 'Smoke test',
+          steps: steps.map((step) => ({
+            stepId: step.stepId,
+            status: step.requiresPhoto ? 'SKIPPED' : 'DONE',
+            ...(step.requiresPhoto ? { skipReason: 'Smoke test has no camera' } : {}),
+          })),
+        },
+      });
+      check('a cleaning task completes once its steps are settled', completed.status === 200, completed.body);
+
+      // Nobody signs off their own work: the same account that completed it must be refused.
+      const selfVerify = await call('POST', `/cleaning/tasks/${cleaningTask.id}/verify`, {
+        token: admin,
+        body: { outcome: 'PASS' },
+      });
+      check(
+        'nobody may verify a clean they carried out themselves',
+        selfVerify.status === 403 || completed.body?.data?.status === 'CLOSED',
+        selfVerify.body,
+      );
+    }
+  }
+
+  const cleaningRules = await call('GET', '/cleaning/rules', { token: admin });
+  check('cleaning rules are listed', cleaningRules.status === 200, cleaningRules.body);
+  check(
+    'the reported clean-up carrier rule is present',
+    (cleaningRules.body?.data ?? []).some((rule) => rule.code === 'CLN-REPORTED'),
+    'run `npm run seed:cleaning` if this fails',
+  );
+
+  const sweep = await call('POST', '/cleaning/sweep', { token: admin });
+  check('the cleaning sweep runs', sweep.status === 200, sweep.body);
+  const sweepAgain = await call('POST', '/cleaning/sweep', { token: admin });
+  check(
+    'the sweep is idempotent — a second run raises nothing',
+    sweepAgain.status === 200 && sweepAgain.body.data.tasksCreated === 0,
+    sweepAgain.body,
+  );
+
+  const compliance = await call('GET', '/cleaning/compliance', { token: admin });
+  check(
+    'the hygiene record totals agree with its cuts',
+    compliance.status === 200 &&
+      compliance.body.data.byArea.reduce((sum, row) => sum + row.due, 0) ===
+        compliance.body.data.totals.due,
+    compliance.body?.data?.totals,
+  );
+
+  const androidCleaning = await call('GET', '/cleaning/mine', {
+    token: androidToken,
+    clientType: 'ANDROID',
+  });
+  check('the phone can read its own cleaning list', androidCleaning.status === 200, androidCleaning.body);
+
+  const androidConfig = await call('POST', '/cleaning/rules', {
+    token: androidToken,
+    clientType: 'ANDROID',
+    body: {
+      code: 'SMOKE-DENY',
+      taskName: 'Should be refused',
+      scope: 'ASSET_TYPE_GLOBAL',
+      procedureId: randomUUID(),
+      frequencyKind: 'DAILY',
+    },
+  });
+  check(
+    'a non-manager cannot write cleaning rules',
+    androidConfig.status === 403,
+    androidConfig.body,
+  );
 
   /* -------------------------------------------------------- summary */
 

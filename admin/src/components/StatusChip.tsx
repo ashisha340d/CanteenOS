@@ -12,8 +12,11 @@ const TONE_MAP: Record<string, StatusToneName> = {
   QUEUED: 'progress',
   SCHEDULED: 'progress',
   UNPAID: 'progress',
+  SUBMITTED: 'progress',
   /* moving */
   ACKNOWLEDGED: 'info',
+  COUNTING: 'info',
+  APPROVED: 'info',
   WORK_IN_PROGRESS: 'info',
   GENERATED: 'info',
   DOWNLOADING: 'info',
@@ -28,6 +31,7 @@ const TONE_MAP: Record<string, StatusToneName> = {
   FINALIZED: 'success',
   READY: 'success',
   PAID: 'success',
+  POSTED: 'success',
   /* stopped */
   CANCELLED: 'danger',
   SUSPENDED: 'danger',

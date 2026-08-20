@@ -10,6 +10,8 @@ import {
   PosPaymentMethod,
   PosPaymentStatus,
   type CreatePosOrderRequest,
+  type PosAnalyticsQuery,
+  type PosBusyHourDto,
   type PosCheckoutRequest,
   type PosCounterLoadDto,
   type PosDashboardDto,
@@ -18,6 +20,8 @@ import {
   type PosOrderDto,
   type PosOrderItemInput,
   type PosOrderListQuery,
+  type PosSalesSummaryDto,
+  type PosTopItemDto,
   type PosVoidRequest,
   type UpdatePosOrderRequest,
   type UpdatePosOrderStatusRequest,
@@ -32,8 +36,10 @@ import {
   posRepository,
   type InsertPosOrderItemInput,
   type InsertPosPaymentInput,
+  type PosAnalyticsRange,
   type PosOrderListFilter,
   type PosOrderTotals,
+  type PosSalesTotalsRow,
 } from '../repositories/PosRepository';
 import { settingsRepository } from '../repositories/SettingsRepository';
 import {
@@ -47,10 +53,17 @@ import {
 import { buildPage, resolvePaging } from '../utils/http';
 import { newId } from '../utils/ids';
 import { logger } from '../utils/logger';
-import { toDbDateTime, todayIsoDate } from '../utils/time';
+import { addDays, fromDbDate, toDbDateTime, todayIsoDate } from '../utils/time';
 import { AuditAction, auditService, type AuditActor } from './AuditService';
 import { kdsService } from './KdsService';
-import { money, resolvePrice, taxTreatmentFrom, type TaxTreatment } from './posPricing';
+import {
+  applyTax,
+  isInterStateSupply,
+  money,
+  resolvePrice,
+  taxTreatmentFrom,
+  type TaxTreatment,
+} from './posPricing';
 
 /**
  * The till.
@@ -72,6 +85,10 @@ export interface PosScope {
   stationId?: string;
   counterId?: string;
 }
+
+/** How many best sellers the Top Selling Items widget asks for unless it says otherwise. */
+const DEFAULT_TOP_ITEMS = 5;
+const MAX_TOP_ITEMS = 25;
 
 interface ResolvedLine extends InsertPosOrderItemInput { }
 
@@ -239,6 +256,97 @@ export class PosService {
     // than pagination; the tile is a work queue, not an archive.
     const { rows } = await posRepository.list(db, { ...filter, limit: 100, offset: 0 });
     return rows.map(mapPosOrder);
+  }
+
+  /* ------------------------------------------------------------- analytics */
+
+  /**
+   * Takings over a business-date range, against the equally long range before it.
+   *
+   * The comparison window is derived rather than requested, so "down on the previous period"
+   * always means the same thing however wide a range the reader picked.
+   */
+  async salesSummary(query: PosAnalyticsQuery): Promise<PosSalesSummaryDto> {
+    const range = assertAnalyticsRange(query);
+    const pool = getPool();
+
+    const [totalsRow, dayRows, itemTotalsRow, previousTotalsRow] = await Promise.all([
+      posRepository.salesTotals(pool, range),
+      posRepository.salesByDay(pool, range),
+      posRepository.itemTotals(pool, range),
+      posRepository.salesTotals(pool, precedingRange(range)),
+    ]);
+
+    const current = readSalesTotals(totalsRow);
+    const previous = readSalesTotals(previousTotalsRow);
+
+    return {
+      dateFrom: range.dateFrom,
+      dateTo: range.dateTo,
+      netSales: current.netSales,
+      grossSales: current.grossSales,
+      refundedAmount: current.refundedAmount,
+      transactionCount: current.transactionCount,
+      averageTicket: averageTicket(current.netSales, current.transactionCount),
+      itemsSold: itemTotalsRow === null ? 0 : Number(itemTotalsRow.items_sold),
+      discountAmount: itemTotalsRow === null ? 0 : money(Number(itemTotalsRow.discount_amount)),
+      taxAmount: itemTotalsRow === null ? 0 : money(Number(itemTotalsRow.tax_amount)),
+      previous: {
+        netSales: previous.netSales,
+        transactionCount: previous.transactionCount,
+        averageTicket: averageTicket(previous.netSales, previous.transactionCount),
+      },
+      series: dayRows.map((row) => ({
+        businessDate: fromDbDate(row.business_date) as string,
+        netSales: money(Number(row.net_sales)),
+        transactionCount: Number(row.transaction_count),
+      })),
+    };
+  }
+
+  /**
+   * The best sellers of the range.
+   *
+   * `share` is taken over the rows returned, not over the range's whole item revenue, so the
+   * proportions add up to the list the reader is actually looking at.
+   */
+  async topItems(query: PosAnalyticsQuery & { limit?: number }): Promise<PosTopItemDto[]> {
+    const range = assertAnalyticsRange(query);
+    const limit = Math.min(Math.max(query.limit ?? DEFAULT_TOP_ITEMS, 1), MAX_TOP_ITEMS);
+    const rows = await posRepository.topItems(getPool(), range, limit);
+
+    const items = rows.map((row) => ({
+      menuItemId: row.menu_item_id,
+      itemName: row.item_name,
+      variantName: row.variant_name,
+      quantity: Number(row.quantity),
+      netAmount: money(Number(row.net_amount)),
+    }));
+    const total = money(items.reduce((sum, item) => sum + item.netAmount, 0));
+
+    return items.map((item) => ({
+      ...item,
+      share: total === 0 ? 0 : item.netAmount / total,
+    }));
+  }
+
+  /**
+   * Trade by hour of the day. All twenty-four are returned: the hours nothing happened in are
+   * the shape of the graph as much as the peaks are, and a caller should not have to infer them.
+   */
+  async busyHours(query: PosAnalyticsQuery): Promise<PosBusyHourDto[]> {
+    const range = assertAnalyticsRange(query);
+    const rows = await posRepository.busyHours(getPool(), range);
+    const byHour = new Map(rows.map((row) => [Number(row.hour), row] as const));
+
+    return Array.from({ length: 24 }, (_unused, hour) => {
+      const row = byHour.get(hour);
+      return {
+        hour,
+        transactionCount: row === undefined ? 0 : Number(row.transaction_count),
+        netSales: row === undefined ? 0 : money(Number(row.net_sales)),
+      };
+    });
   }
 
   /* -------------------------------------------------------------- creation */
@@ -872,19 +980,7 @@ export class PosService {
     );
 
     const net = money(grossAmount - discountAmount);
-    const combinedRate = treatment.rate + treatment.cessRate;
-    const taxableAmount = treatment.priceIsInclusive
-      ? money(net / (1 + combinedRate / 100))
-      : net;
-    const taxAmount = money(treatment.priceIsInclusive ? net - taxableAmount : (net * combinedRate) / 100);
-
-    // Split the computed tax by the profile's own rate shares, so the parts always add back
-    // to the whole even when the headline rate has been rounded.
-    const cess = money((taxableAmount * treatment.cessRate) / 100);
-    const gstPortion = money(taxAmount - cess);
-    const cgstAmount = treatment.interState ? 0 : money(gstPortion / 2);
-    const sgstAmount = treatment.interState ? 0 : money(gstPortion - cgstAmount);
-    const igstAmount = treatment.interState ? gstPortion : 0;
+    const tax = applyTax(net, treatment);
 
     return {
       id: item.id ?? newId(),
@@ -901,15 +997,15 @@ export class PosService {
       discountType,
       discountValue,
       discountAmount,
-      taxableAmount,
+      taxableAmount: tax.taxableAmount,
       taxProfileId: treatment.taxProfileId,
       taxRate: treatment.rate,
-      cgstAmount,
-      sgstAmount,
-      igstAmount,
-      cessAmount: cess,
-      taxAmount,
-      lineTotal: money(taxableAmount + taxAmount),
+      cgstAmount: tax.cgstAmount,
+      sgstAmount: tax.sgstAmount,
+      igstAmount: tax.igstAmount,
+      cessAmount: tax.cessAmount,
+      taxAmount: tax.taxAmount,
+      lineTotal: tax.lineTotal,
       notes: item.notes ?? null,
       sortOrder: item.sortOrder ?? index,
     };
@@ -966,8 +1062,43 @@ export class PosService {
     if (entityStateCode === null || entityStateCode === '') return false;
     const homeState = await settingsRepository.getValue<string>(db, 'pos.home_state_code', '');
     if (homeState === '') return false;
-    return homeState !== entityStateCode;
+    return isInterStateSupply(homeState, entityStateCode);
   }
+}
+
+/** Both ends of an analytics range are inclusive, so an inverted one answers nothing. */
+function assertAnalyticsRange(query: PosAnalyticsQuery): PosAnalyticsRange {
+  if (query.dateFrom > query.dateTo) {
+    throw new ValidationError('The reporting period is inverted', [
+      { path: 'dateTo', message: 'The end date must not be before the start date' },
+    ]);
+  }
+  return { dateFrom: query.dateFrom, dateTo: query.dateTo };
+}
+
+/** The equally long window ending the day before the one asked for. */
+function precedingRange(range: PosAnalyticsRange): PosAnalyticsRange {
+  const from = new Date(`${range.dateFrom}T00:00:00.000Z`);
+  const to = new Date(`${range.dateTo}T00:00:00.000Z`);
+  const days = Math.round((to.getTime() - from.getTime()) / 86_400_000) + 1;
+  const previousTo = addDays(from, -1);
+  return {
+    dateFrom: addDays(previousTo, -(days - 1)).toISOString().slice(0, 10),
+    dateTo: previousTo.toISOString().slice(0, 10),
+  };
+}
+
+function readSalesTotals(row: PosSalesTotalsRow | null) {
+  return {
+    netSales: row === null ? 0 : money(Number(row.net_sales)),
+    grossSales: row === null ? 0 : money(Number(row.gross_sales)),
+    refundedAmount: row === null ? 0 : money(Number(row.refunded_amount)),
+    transactionCount: row === null ? 0 : Number(row.transaction_count),
+  };
+}
+
+function averageTicket(netSales: number, transactionCount: number): number {
+  return transactionCount === 0 ? 0 : money(netSales / transactionCount);
 }
 
 /** `POS-YYYYMMDD-NNNN`, zero-padded so the day's bills sort lexically. */

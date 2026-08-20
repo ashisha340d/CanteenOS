@@ -458,3 +458,119 @@ export const SKILL_LEVEL_ORDER: readonly SkillLevel[] = [
 export function skillLevelMeets(held: SkillLevel, required: SkillLevel): boolean {
   return SKILL_LEVEL_ORDER.indexOf(held) >= SKILL_LEVEL_ORDER.indexOf(required);
 }
+
+/** What a chemical is for. Drives the icon, the filter and nothing else — the dosage is data. */
+export const CleaningChemicalKind = {
+  DETERGENT: 'DETERGENT',
+  SANITISER: 'SANITISER',
+  DISINFECTANT: 'DISINFECTANT',
+  DEGREASER: 'DEGREASER',
+  DESCALER: 'DESCALER',
+  BLEACH: 'BLEACH',
+  SOAP: 'SOAP',
+  ALCOHOL: 'ALCOHOL',
+  OTHER: 'OTHER',
+} as const;
+export type CleaningChemicalKind =
+  (typeof CleaningChemicalKind)[keyof typeof CleaningChemicalKind];
+
+export const CLEANING_CHEMICAL_KIND_LABELS: Readonly<Record<CleaningChemicalKind, string>> = {
+  DETERGENT: 'Detergent',
+  SANITISER: 'Sanitiser',
+  DISINFECTANT: 'Disinfectant',
+  DEGREASER: 'Degreaser',
+  DESCALER: 'Descaler',
+  BLEACH: 'Bleach',
+  SOAP: 'Soap',
+  ALCOHOL: 'Alcohol',
+  OTHER: 'Other',
+};
+
+/** The physical implement. Colour-coding lives on the tool row, not in this set. */
+export const CleaningToolKind = {
+  BRUSH: 'BRUSH',
+  MOP: 'MOP',
+  CLOTH: 'CLOTH',
+  SCRAPER: 'SCRAPER',
+  SPONGE: 'SPONGE',
+  SQUEEGEE: 'SQUEEGEE',
+  BUCKET: 'BUCKET',
+  SPRAYER: 'SPRAYER',
+  VACUUM: 'VACUUM',
+  PRESSURE_WASHER: 'PRESSURE_WASHER',
+  OTHER: 'OTHER',
+} as const;
+export type CleaningToolKind = (typeof CleaningToolKind)[keyof typeof CleaningToolKind];
+
+export const CLEANING_TOOL_KIND_LABELS: Readonly<Record<CleaningToolKind, string>> = {
+  BRUSH: 'Brush',
+  MOP: 'Mop',
+  CLOTH: 'Cloth',
+  SCRAPER: 'Scraper',
+  SPONGE: 'Sponge',
+  SQUEEGEE: 'Squeegee',
+  BUCKET: 'Bucket',
+  SPRAYER: 'Sprayer',
+  VACUUM: 'Vacuum',
+  PRESSURE_WASHER: 'Pressure washer',
+  OTHER: 'Other',
+};
+
+/**
+ * What a photo on a task is showing. `BEFORE`/`AFTER` are the pair a hygiene auditor asks
+ * for; `STEP` binds the photo to the procedure step that demanded it.
+ */
+export const CleaningEvidenceKind = {
+  BEFORE: 'BEFORE',
+  AFTER: 'AFTER',
+  STEP: 'STEP',
+  VERIFICATION: 'VERIFICATION',
+  CORRECTIVE_ACTION: 'CORRECTIVE_ACTION',
+  OTHER: 'OTHER',
+} as const;
+export type CleaningEvidenceKind =
+  (typeof CleaningEvidenceKind)[keyof typeof CleaningEvidenceKind];
+
+export const CLEANING_EVIDENCE_KIND_LABELS: Readonly<Record<CleaningEvidenceKind, string>> = {
+  BEFORE: 'Before',
+  AFTER: 'After',
+  STEP: 'Step',
+  VERIFICATION: 'Verification',
+  CORRECTIVE_ACTION: 'Corrective action',
+  OTHER: 'Other',
+};
+
+/**
+ * The events a person may raise from the floor as a cleaning *report*, as opposed to the
+ * machine-published ones. This is the closed set behind "anybody can say what needs cleaning":
+ * the reporter picks one of these, names the place, and the engine does the rest.
+ */
+export const CLEANING_REPORTABLE_EVENTS: readonly CleaningTriggerEvent[] = [
+  CleaningTriggerEvent.SPILL_REPORTED,
+  CleaningTriggerEvent.CONTAMINATION_REPORTED,
+  CleaningTriggerEvent.MANUAL_TRIGGER,
+];
+
+export const CLEANING_ASSIGNMENT_STRATEGY_LABELS: Readonly<
+  Record<CleaningAssignmentStrategy, string>
+> = {
+  PRIMARY_RESPONSIBLE_FIRST: 'Whoever is responsible for the area',
+  LEAST_LOADED: 'Whoever has the fewest open tasks',
+  ROUND_ROBIN: 'Whoever went longest without one',
+};
+
+export const CLEANING_ASSIGNMENT_REASON_LABELS: Readonly<
+  Record<CleaningAssignmentReason, string>
+> = {
+  AUTOMATIC: 'Assigned automatically',
+  MANUAL: 'Assigned by hand',
+  REASSIGNED: 'Reassigned',
+  ESCALATED: 'Escalated',
+  NO_ELIGIBLE_EMPLOYEE: 'Nobody eligible was on shift',
+};
+
+export const SKILL_LEVEL_LABELS: Readonly<Record<SkillLevel, string>> = {
+  BASIC: 'Basic',
+  COMPETENT: 'Competent',
+  EXPERT: 'Expert',
+};

@@ -13,6 +13,7 @@ import {
   type KdsMetricsDto,
   type KdsOrderDto,
   type KdsQueueDto,
+  type KdsQueueSummaryRow,
   type KdsRecentActionDto,
   type KdsStationKind,
   type KdsStationMenuDto,
@@ -85,8 +86,34 @@ export class KdsService {
   /* --------------------------------------------------------------- reading */
 
   async counterQueue(counterId: string): Promise<KdsQueueDto> {
-    const rows = await kdsRepository.listCounterQueue(getPool(), counterId);
-    return buildQueue({ counterId }, rows);
+    const pool = getPool();
+    const rows = await kdsRepository.listCounterQueue(pool, counterId);
+    const queue = buildQueue({ counterId }, rows);
+
+    // What is still owed is only half the question at a counter; what is left to make it with
+    // is the other half, so the queue view carries the counted stock beside each line.
+    const businessDate = todayIsoDate();
+    const shift = await menuShiftSchedulerService.currentShift();
+    const stock = await kdsRepository.listStock(pool, counterId, businessDate, shift);
+    if (stock.length > 0) {
+      const issued = await kdsRepository.issuedQtyForStock(
+        pool,
+        counterId,
+        businessDate,
+        stock.map((row) => ({ menuItemId: row.menu_item_id, registeredAt: row.registered_at })),
+      );
+      const byItem = new Map(stock.map((row) => [row.menu_item_id, row]));
+      for (const row of queue.summary) {
+        if (row.menuItemId === null) continue;
+        const counted = byItem.get(row.menuItemId);
+        if (counted === undefined) continue;
+        row.remainingQty = Math.max(
+          0,
+          Number(counted.opening_qty) - (issued.get(row.menuItemId) ?? 0),
+        );
+      }
+    }
+    return queue;
   }
 
   async kitchenQueue(printingGroupId: string): Promise<KdsQueueDto> {
@@ -103,6 +130,7 @@ export class KdsService {
       orderId: row.order_id,
       orderNumber: row.order_number,
       itemName: row.item_name,
+      itemNameHi: row.item_name_hi,
       variantName: row.variant_name,
       quantity: Number(row.quantity),
       servedAt: fromDbDateTimeRequired(row.served_at),
@@ -355,6 +383,10 @@ export class KdsService {
         categoryName: row.category_name,
         masterName: row.name,
         displayName: customName !== '' ? customName : row.name,
+        /* A station rename wins outright and is not mirrored into Hindi: the counter typed
+           that name for this screen, so a Hindi board shows what the counter wrote rather
+           than reverting to the master Hindi name it deliberately overrode. */
+        displayNameHi: customName !== '' ? null : row.name_hi,
         hasCustomName: customName !== '',
         isFinished,
         availability: row.availability,
@@ -977,7 +1009,7 @@ function buildQueue(
 ): KdsQueueDto {
   const orders: KdsOrderDto[] = [];
   const byOrder = new Map<string, KdsOrderDto>();
-  const summary = new Map<string, number>();
+  const summary = new Map<string, KdsQueueSummaryRow>();
 
   for (const row of rows) {
     let order = byOrder.get(row.order_id);
@@ -1003,6 +1035,7 @@ function buildQueue(
     order.lines.push({
       id: row.line_id,
       itemName: row.item_name,
+      itemNameHi: row.item_name_hi,
       variantName: row.variant_name,
       customItemName: row.custom_item_name,
       quantity: Number(row.quantity),
@@ -1018,16 +1051,22 @@ function buildQueue(
     });
 
     if (row.kds_status !== 'SERVED') {
-      summary.set(row.item_name, (summary.get(row.item_name) ?? 0) + Number(row.quantity));
+      const key = row.menu_item_id ?? `name:${row.item_name}`;
+      const running = summary.get(key);
+      summary.set(key, {
+        menuItemId: row.menu_item_id,
+        itemName: row.item_name,
+        itemNameHi: row.item_name_hi,
+        quantity: (running?.quantity ?? 0) + Number(row.quantity),
+        remainingQty: null,
+      });
     }
   }
 
   return {
     scope,
     orders,
-    summary: [...summary.entries()]
-      .map(([itemName, quantity]) => ({ itemName, quantity }))
-      .sort((a, b) => a.itemName.localeCompare(b.itemName)),
+    summary: [...summary.values()].sort((a, b) => a.itemName.localeCompare(b.itemName)),
   };
 }
 

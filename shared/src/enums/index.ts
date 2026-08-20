@@ -5,6 +5,7 @@
 
 export * from './equipment';
 export * from './cleaning';
+export * from './purchase';
 
 export const UserRole = {
   SUPER_ADMIN: 'SUPER_ADMIN',
@@ -412,6 +413,22 @@ export const NotificationType = {
   EQUIPMENT_OUT_OF_SERVICE: 'EQUIPMENT_OUT_OF_SERVICE',
   WARRANTY_EXPIRING: 'WARRANTY_EXPIRING',
   SUPPLIER_FOLLOW_UP: 'SUPPLIER_FOLLOW_UP',
+
+  /**
+   * Cleaning & hygiene. Same inbox again; `data` carries `taskId` / `areaId` /
+   * `correctiveActionId` so tapping the notification lands on the screen that can act on it.
+   */
+  CLEANING_TASK_ASSIGNED: 'CLEANING_TASK_ASSIGNED',
+  CLEANING_TASK_DUE: 'CLEANING_TASK_DUE',
+  CLEANING_TASK_OVERDUE: 'CLEANING_TASK_OVERDUE',
+  /** Nobody eligible was on shift, so a supervisor has to decide. */
+  CLEANING_TASK_UNASSIGNED: 'CLEANING_TASK_UNASSIGNED',
+  CLEANING_VERIFICATION_REQUIRED: 'CLEANING_VERIFICATION_REQUIRED',
+  CLEANING_VERIFICATION_FAILED: 'CLEANING_VERIFICATION_FAILED',
+  CLEANING_RECLEAN_REQUIRED: 'CLEANING_RECLEAN_REQUIRED',
+  CLEANING_CORRECTIVE_ACTION_ASSIGNED: 'CLEANING_CORRECTIVE_ACTION_ASSIGNED',
+  CLEANING_CORRECTIVE_ACTION_OVERDUE: 'CLEANING_CORRECTIVE_ACTION_OVERDUE',
+  HYGIENE_COMPLIANCE_ALERT: 'HYGIENE_COMPLIANCE_ALERT',
 } as const;
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];
 
@@ -467,6 +484,10 @@ export const AlertSoundSlot = {
   KDS_ATTENTION: 'KDS_ATTENTION',
   /** KDS: a line is past its due time, and the repeat while it stays late. */
   KDS_CRITICAL: 'KDS_CRITICAL',
+  /** Chat: a message arrived, on either the admin or the counter side. */
+  CHAT_MESSAGE: 'CHAT_MESSAGE',
+  /** Chat: the office rang the counter's bell. Deliberately a different, more insistent sound. */
+  CHAT_BELL: 'CHAT_BELL',
 } as const;
 export type AlertSoundSlot = (typeof AlertSoundSlot)[keyof typeof AlertSoundSlot];
 
@@ -482,6 +503,12 @@ export const KDS_ALERT_SOUND_SLOTS: readonly AlertSoundSlot[] = [
   AlertSoundSlot.KDS_NEW,
   AlertSoundSlot.KDS_ATTENTION,
   AlertSoundSlot.KDS_CRITICAL,
+];
+
+/** Slots the admin↔counter chat uses — configured on Settings → Chat & Messaging. */
+export const CHAT_ALERT_SOUND_SLOTS: readonly AlertSoundSlot[] = [
+  AlertSoundSlot.CHAT_MESSAGE,
+  AlertSoundSlot.CHAT_BELL,
 ];
 
 /** Defaults applied when an admin has never configured a given alert. */

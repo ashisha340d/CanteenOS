@@ -4,6 +4,7 @@ import { Check, Pencil, RotateCcw, UtensilsCrossed, X } from 'lucide-react';
 import type { KdsStationMenuItemDto, KdsStationMenuUpsertRequest } from '@menuboard/shared';
 import { fetchStationMenu, saveStationMenuItem } from '../api/kds';
 import { API_ORIGIN, readErrorMessage } from '../api/client';
+import { pickName, useLang, useT } from '../i18n';
 import type { StationSelection } from '../config/station';
 
 interface Props {
@@ -34,6 +35,8 @@ function mediaUrl(path: string | null): string | null {
  *    finishes the dish by itself.
  */
 export function MenuItemsView({ station }: Props): JSX.Element {
+  const t = useT();
+  const { lang } = useLang();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -72,6 +75,7 @@ export function MenuItemsView({ station }: Props): JSX.Element {
       (item) =>
         item.displayName.toLowerCase().includes(needle) ||
         item.masterName.toLowerCase().includes(needle) ||
+        (item.displayNameHi ?? '').toLowerCase().includes(needle) ||
         item.categoryName.toLowerCase().includes(needle),
     );
   }, [menu.data, search]);
@@ -113,23 +117,25 @@ export function MenuItemsView({ station }: Props): JSX.Element {
       <div className="kds-menu__toolbar">
         <input
           className="kds-menu__search"
-          placeholder="Search this station's menu…"
+          placeholder={t.searchStationMenu}
           value={search}
           onChange={(event) => setSearch(event.target.value)}
         />
         <span className="kds-menu__stat">
-          {items.length} item{items.length === 1 ? '' : 's'}
-          {finishedCount > 0 ? ` · ${finishedCount} finished` : ''}
-          {menu.data !== undefined ? ` · ${menu.data.shift.toLowerCase()} shift` : ''}
+          {t.itemsCount(items.length)}
+          {finishedCount > 0 ? ` · ${finishedCount} ${t.finished}` : ''}
+          {menu.data !== undefined
+            ? ` · ${menu.data.shift === 'MORNING' ? t.morningShift : t.eveningShift}`
+            : ''}
         </span>
       </div>
 
-      {menu.isPending && <p style={{ color: 'var(--kds-soft)' }}>Loading the menu file…</p>}
+      {menu.isPending && <p style={{ color: 'var(--kds-soft)' }}>{t.loadingMenuFile}</p>}
       {menu.error !== null && (
-        <p style={{ color: 'var(--kds-late)' }}>{readErrorMessage(menu.error, 'Could not load the menu file.')}</p>
+        <p style={{ color: 'var(--kds-late)' }}>{readErrorMessage(menu.error, t.menuFileFailed)}</p>
       )}
       {menu.isFetched && items.length === 0 && (
-        <p style={{ color: 'var(--kds-faint)', fontSize: 15 }}>No dishes match.</p>
+        <p style={{ color: 'var(--kds-faint)', fontSize: 15 }}>{t.noDishesMatch}</p>
       )}
 
       {items.map((item) => {
@@ -166,7 +172,7 @@ export function MenuItemsView({ station }: Props): JSX.Element {
                       if (event.key === 'Escape') setEditingId(null);
                     }}
                   />
-                  <button type="submit" disabled={mutation.isPending} title="Save name">
+                  <button type="submit" disabled={mutation.isPending} title={t.save}>
                     <Check className="size-4" />
                   </button>
                   {item.hasCustomName && (
@@ -175,7 +181,7 @@ export function MenuItemsView({ station }: Props): JSX.Element {
                       className="kds-menu__rename-clear"
                       disabled={mutation.isPending}
                       onClick={() => commitRename(item, null)}
-                      title="Back to the master name"
+                      title={t.backToMasterName}
                     >
                       <RotateCcw className="size-4" />
                     </button>
@@ -184,20 +190,20 @@ export function MenuItemsView({ station }: Props): JSX.Element {
                     type="button"
                     className="kds-menu__rename-clear"
                     onClick={() => setEditingId(null)}
-                    title="Cancel"
+                    title={t.cancel}
                   >
                     <X className="size-4" />
                   </button>
                 </form>
               ) : (
                 <p className="kds-menu__name">
-                  <span>{item.displayName}</span>
+                  <span>{pickName(lang, item.displayName, item.displayNameHi)}</span>
                   <button
                     type="button"
                     className="kds-menu__pencil"
                     onClick={() => startRename(item)}
-                    aria-label={`Rename ${item.displayName} on this screen`}
-                    title="Rename on this screen"
+                    aria-label={t.renameOnThisScreen}
+                    title={t.renameOnThisScreen}
                   >
                     <Pencil className="size-3.5" />
                   </button>
@@ -206,7 +212,7 @@ export function MenuItemsView({ station }: Props): JSX.Element {
 
               <p className="kds-menu__meta">
                 {item.categoryName}
-                {item.hasCustomName ? ` · master: ${item.masterName}` : ''}
+                {item.hasCustomName ? ` · ${t.masterName}: ${item.masterName}` : ''}
                 {item.basePrice !== null ? ` · ₹${item.basePrice.toFixed(2)}` : ''}
               </p>
 
@@ -216,13 +222,9 @@ export function MenuItemsView({ station }: Props): JSX.Element {
                   className={`kds-menu__stock ${item.isFinished ? 'kds-menu__stock--out' : 'kds-menu__stock--in'}`}
                   disabled={mutation.isPending}
                   onClick={() => save(item.menuItemId, { isFinished: !item.isFinished })}
-                  title={
-                    item.isFinished
-                      ? 'Put it back — returns to the menu board too'
-                      : 'Mark finished — leaves the menu board until the next shift'
-                  }
+                  title={item.isFinished ? t.putBackHint : t.finishedHint}
                 >
-                  {item.isFinished ? 'Finished' : 'Available'}
+                  {item.isFinished ? t.finished : t.available}
                 </button>
 
                 {station.mode !== 'kitchen' &&
@@ -240,17 +242,17 @@ export function MenuItemsView({ station }: Props): JSX.Element {
                         min={0}
                         step="any"
                         inputMode="decimal"
-                        placeholder="qty in hand"
+                        placeholder={t.qtyInHand}
                         value={draftQty}
                         onChange={(event) => setDraftQty(event.target.value)}
                         onKeyDown={(event) => {
                           if (event.key === 'Escape') setQtyId(null);
                         }}
                       />
-                      <button type="submit" disabled={mutation.isPending} title="Register this count">
+                      <button type="submit" disabled={mutation.isPending} title={t.registerQty}>
                         <Check className="size-4" />
                       </button>
-                      <button type="button" onClick={() => setQtyId(null)} title="Cancel">
+                      <button type="button" onClick={() => setQtyId(null)} title={t.cancel}>
                         <X className="size-4" />
                       </button>
                     </form>
@@ -259,16 +261,16 @@ export function MenuItemsView({ station }: Props): JSX.Element {
                       type="button"
                       className={`kds-menu__qty ${item.remainingQty === 0 ? 'kds-menu__qty--empty' : ''}`}
                       onClick={() => startQty(item)}
-                      title="Register how many portions are in hand for this shift"
+                      title={t.qtyInHand}
                     >
                       {item.openingQty === null ? (
-                        'Set qty'
+                        t.setQty
                       ) : (
                         <>
-                          <strong>{item.remainingQty}</strong> left
+                          <strong>{item.remainingQty}</strong> {t.left}
                           <small>
-                            of {item.openingQty}
-                            {item.issuedQty > 0 ? ` · ${item.issuedQty} sold` : ''}
+                            {t.of} {item.openingQty}
+                            {item.issuedQty > 0 ? ` · ${item.issuedQty} ${t.sold}` : ''}
                           </small>
                         </>
                       )}

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { LockKeyhole, PersonStanding, SettingsIcon, Volume2Icon } from 'lucide-react';
+import { LockKeyhole, PersonStanding, SettingsIcon } from 'lucide-react';
 import type { KdsOrderDto } from '@menuboard/shared';
 import {
   acknowledgeLine,
@@ -23,6 +23,10 @@ import { ExchangeModal } from './ExchangeModal';
 import { Celebration } from './Celebration';
 import { useFlipGrid } from './useFlipGrid';
 import { BottomNav, type BoardTab } from './BottomNav';
+import { useT } from '../i18n';
+import { LanguageSwitch } from '../components/LanguageSwitch';
+import { ChatDock } from '../chat/ChatDock';
+import { useCounterChat } from '../chat/useCounterChat';
 import { SettingsModal } from './SettingsModal';
 import { MenuItemsView } from './MenuItemsView';
 import { CompletedView } from './CompletedView';
@@ -36,6 +40,7 @@ interface Props {
 }
 
 export function CounterBoard({ station, queue, onChangeStation, onSignOut, onLock }: Props): JSX.Element {
+  const t = useT();
   const queryClient = useQueryClient();
   const now = useNow();
   const display = useDisplaySettings(station.id);
@@ -44,6 +49,10 @@ export function CounterBoard({ station, queue, onChangeStation, onSignOut, onLoc
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [celebrating, setCelebrating] = useState(false);
   const [away, setAway] = useState<AwayState>(() => readAway(station.id));
+  const [chatOpen, setChatOpen] = useState(false);
+  /** The order whose message the counter tapped, so the thread can jump straight to it. */
+  const [chatFocusOrderId, setChatFocusOrderId] = useState<string | null>(null);
+  const chat = useCounterChat(station.id, chatOpen);
   const knownOrderIdsRef = useRef<Set<string>>(new Set());
   const hadOrdersRef = useRef(false);
   const cardsRef = useRef<HTMLElement>(null);
@@ -148,8 +157,8 @@ export function CounterBoard({ station, queue, onChangeStation, onSignOut, onLoc
     );
     flight.onfinish = () => {
       ghost.remove();
-      tab.classList.add('kds-bottomnav__tab--pulse');
-      window.setTimeout(() => tab.classList.remove('kds-bottomnav__tab--pulse'), 620);
+      tab.classList.add('kds-tabs__tab--pulse');
+      window.setTimeout(() => tab.classList.remove('kds-tabs__tab--pulse'), 620);
     };
   };
 
@@ -245,13 +254,26 @@ export function CounterBoard({ station, queue, onChangeStation, onSignOut, onLoc
       className="kds-board"
       data-skin={display.resolvedSkin}
       style={display.style}
-      onPointerDown={alarms.unlock}
+      onPointerDown={() => {
+        alarms.unlock();
+        chat.unlockSound();
+      }}
     >
+      {/* One compact bar: identity, counts, the tabs and the controls. The tabs used to sit in
+          their own row at the bottom, which cost a whole strip of wall for four words. */}
       <header className="kds-topbar">
         <div className="kds-topbar__station">
           <h1>{station.name}</h1>
-          <p>Service KDS</p>
+          <p>{t.serviceKds}</p>
         </div>
+
+        <BottomNav
+          active={tab}
+          onSelect={setTab}
+          openOrders={orders.length}
+          queuedItems={queuedItems}
+          completedCount={0}
+        />
 
         <MetricChips
           pendingOrders={metrics.data?.pendingOrders ?? orders.length}
@@ -261,29 +283,26 @@ export function CounterBoard({ station, queue, onChangeStation, onSignOut, onLoc
           overdueLines={metrics.data?.overdueLines ?? 0}
         />
 
+        <LanguageSwitch compact />
+
         <button
           type="button"
           className={`kds-topbar__btn ${away.on ? 'kds-topbar__btn--away' : ''}`}
           onClick={() => setAway(away.on ? { on: false, manual: false } : { on: true, manual: true })}
           aria-pressed={away.on}
-          title={away.on ? 'Mark back at station' : 'Step away — mark out of station'}
+          title={away.on ? t.awayToggleOff : t.awayToggleOn}
         >
           <PersonStanding className="size-4" />
-          {away.on ? 'Away' : 'At station'}
+          {away.on ? t.away : t.atStation}
         </button>
-        {!alarms.soundReady && (
-          <button type="button" className="kds-topbar__btn kds-topbar__btn--primary" onClick={alarms.unlock}>
-            <Volume2Icon className="size-4" /> Enable alarms
-          </button>
-        )}
-        <button type="button" className="kds-topbar__btn" onClick={onLock} title="Lock the screen">
+        <button type="button" className="kds-topbar__btn" onClick={onLock} title={t.lockScreen}>
           <LockKeyhole className="size-4" />
         </button>
         <button
           type="button"
           className="kds-topbar__btn"
           onClick={() => setSettingsOpen(true)}
-          aria-label="Display settings"
+          aria-label={t.displaySettings}
         >
           <SettingsIcon className="size-4" />
         </button>
@@ -292,9 +311,9 @@ export function CounterBoard({ station, queue, onChangeStation, onSignOut, onLoc
       {away.on && (
         <div className="kds-away" role="status">
           <PersonStanding className="size-4" />
-          Out of station — orders keep arriving and alarms keep ringing
+          {t.awayBanner}
           <button type="button" onClick={() => setAway({ on: false, manual: false })}>
-            I&apos;m back
+            {t.imBack}
           </button>
         </div>
       )}
@@ -302,12 +321,12 @@ export function CounterBoard({ station, queue, onChangeStation, onSignOut, onLoc
       {tab === 'orders' && (
         <div className="kds-board__body">
           <main className="kds-cards" ref={cardsRef}>
-            {queue.isPending && <p style={{ color: 'var(--kds-soft)' }}>Loading the board…</p>}
+            {queue.isPending && <p style={{ color: 'var(--kds-soft)' }}>{t.loadingBoard}</p>}
             {queue.error !== null && (
-              <p style={{ color: 'var(--kds-late)' }}>{readErrorMessage(queue.error, 'Could not load the board.')}</p>
+              <p style={{ color: 'var(--kds-late)' }}>{readErrorMessage(queue.error, t.boardLoadFailed)}</p>
             )}
             {queue.isFetched && orders.length === 0 && !celebrating && (
-              <p style={{ color: 'var(--kds-faint)', fontSize: 18 }}>Nothing queued. The counter is clear.</p>
+              <p style={{ color: 'var(--kds-faint)', fontSize: 18 }}>{t.nothingQueued}</p>
             )}
             {orders.map((order) => (
               <OrderCard
@@ -323,6 +342,12 @@ export function CounterBoard({ station, queue, onChangeStation, onSignOut, onLoc
                 onUndo={(lineId) => mutation.mutate(() => revertLine(lineId))}
                 onServeAll={handleServeAll}
                 onExchange={setExchangeFor}
+                chatUnread={chat.tagsByOrder.get(order.id)?.unreadCount ?? 0}
+                chatCount={chat.tagsByOrder.get(order.id)?.messageCount ?? 0}
+                onOpenChat={(orderId) => {
+                  setChatOpen(true);
+                  setChatFocusOrderId(orderId);
+                }}
               />
             ))}
           </main>
@@ -330,11 +355,19 @@ export function CounterBoard({ station, queue, onChangeStation, onSignOut, onLoc
       )}
 
       {tab === 'queue' && (
-        <div className="kds-board__body">
+        <div className="kds-board__body kds-board__body--queue">
           <QueueGrid
             summary={queue.data?.summary ?? []}
             scale={display.settings.queueScale}
             onScaleChange={(queueScale) => display.update({ queueScale })}
+            size={
+              display.settings.queueWidth === null || display.settings.queueHeight === null
+                ? undefined
+                : { width: display.settings.queueWidth, height: display.settings.queueHeight }
+            }
+            onSizeChange={({ width, height }) =>
+              display.update({ queueWidth: width, queueHeight: height })
+            }
           />
         </div>
       )}
@@ -348,14 +381,6 @@ export function CounterBoard({ station, queue, onChangeStation, onSignOut, onLoc
           onRevert={(lineId) => mutation.mutate(() => revertLine(lineId))}
         />
       )}
-
-      <BottomNav
-        active={tab}
-        onSelect={setTab}
-        openOrders={orders.length}
-        queuedItems={queuedItems}
-        completedCount={0}
-      />
 
       {settingsOpen && (
         <SettingsModal
@@ -394,7 +419,24 @@ export function CounterBoard({ station, queue, onChangeStation, onSignOut, onLoc
         />
       )}
 
-      {celebrating && <Celebration onDone={() => setCelebrating(false)} />}
+      {/* Docked right, above everything, and collapsed until it has something to say. */}
+      <ChatDock
+        chat={chat}
+        open={chatOpen}
+        onOpenChange={setChatOpen}
+        focusOrderId={chatFocusOrderId}
+        onFocusHandled={() => setChatFocusOrderId(null)}
+        onShowOrder={() => {
+          setTab('orders');
+          setChatOpen(true);
+        }}
+      />
+
+      {/* An arriving order outranks the celebration: it clears instantly rather than covering
+          a fresh ticket for the rest of its brief moment. */}
+      {celebrating && (
+        <Celebration onDone={() => setCelebrating(false)} interrupted={orders.length > 0} />
+      )}
     </div>
   );
 }

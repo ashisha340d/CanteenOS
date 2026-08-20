@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { App } from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { LanguageProvider } from './i18n';
 import './index.css';
 
 const queryClient = new QueryClient({
@@ -27,7 +28,11 @@ createRoot(document.getElementById('root') as HTMLElement).render(
   <StrictMode>
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <App />
+        {/* Above <App/>: the language is a device choice, and sign-in, the station chooser and
+            the lock screen all render before a station exists. */}
+        <LanguageProvider>
+          <App />
+        </LanguageProvider>
       </QueryClientProvider>
     </ErrorBoundary>
   </StrictMode>,

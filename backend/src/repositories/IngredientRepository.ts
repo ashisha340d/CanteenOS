@@ -5,12 +5,19 @@ import type { CountRow, IngredientCategoryRow, IngredientRow } from '../models/r
 import { toDbDateTime } from '../utils/time';
 
 /**
- * The recipe-only ingredient master: `ingredient_categories` and `ingredients`.
+ * The recipe-facing view of the item master: `ingredient_categories` and `products`.
  *
- * Deliberately narrow — name/unit/category, no purchase unit, pack size, price, GST, HSN
- * or brand fields. Both are written only by the Admin Portal; recipes reference
- * `ingredients.id` instead of a free-text name.
+ * This used to read a separate, deliberately narrow `ingredients` table. Migration 004 made
+ * `products` the single item master — it reproduces every column `ingredients` had, under the
+ * same names, and every row was copied across keeping its id — so this repository now reads
+ * `products` and nothing above it changed: the DTO, the `ingredients` sync entity name and
+ * the recipe rows on the phone are all byte-for-byte what they were.
+ *
+ * What it deliberately does *not* do is widen. Recipes care about name, unit and category;
+ * the purchase attributes on the same rows (tax profile, batch policy, valuation, reorder
+ * levels) belong to the product master's own repository. Two readers, one table, one truth.
  */
+const PRODUCTS_TABLE = 'products';
 
 export interface MasterListFilter {
   search?: string;
@@ -192,7 +199,7 @@ export class IngredientRepository {
   async findById(db: Db, id: string): Promise<IngredientRow | null> {
     return selectOne<IngredientRow>(
       db,
-      `SELECT ${INGREDIENT_COLUMNS} FROM ingredients WHERE id = ? AND deleted_at IS NULL`,
+      `SELECT ${INGREDIENT_COLUMNS} FROM products WHERE id = ? AND deleted_at IS NULL`,
       [id],
     );
   }
@@ -202,7 +209,7 @@ export class IngredientRepository {
     const placeholders = ids.map(() => '?').join(', ');
     return selectRows<IngredientRow>(
       db,
-      `SELECT ${INGREDIENT_COLUMNS} FROM ingredients WHERE id IN (${placeholders}) AND deleted_at IS NULL`,
+      `SELECT ${INGREDIENT_COLUMNS} FROM products WHERE id IN (${placeholders}) AND deleted_at IS NULL`,
       ids,
     );
   }
@@ -210,7 +217,7 @@ export class IngredientRepository {
   async findByName(db: Db, name: string): Promise<IngredientRow | null> {
     return selectOne<IngredientRow>(
       db,
-      `SELECT ${INGREDIENT_COLUMNS} FROM ingredients WHERE name = ? AND deleted_at IS NULL`,
+      `SELECT ${INGREDIENT_COLUMNS} FROM products WHERE name = ? AND deleted_at IS NULL`,
       [name],
     );
   }
@@ -241,7 +248,7 @@ export class IngredientRepository {
       `SELECT i.id, i.category_id, i.name, i.name_hi, i.unit, i.status, i.sort_order, i.created_by,
               i.created_at, i.updated_at, i.deleted_at, i.revision, i.sync_seq,
               c.name AS category_name
-         FROM ingredients i
+         FROM products i
          LEFT JOIN ingredient_categories c ON c.id = i.category_id
          ${where}
          ORDER BY i.name ASC LIMIT ? OFFSET ?`,
@@ -249,7 +256,7 @@ export class IngredientRepository {
     );
     const countRow = await selectOne<CountRow>(
       db,
-      `SELECT COUNT(*) AS total FROM ingredients i ${where}`,
+      `SELECT COUNT(*) AS total FROM products i ${where}`,
       params,
     );
     return { rows, total: countRow === null ? 0 : Number(countRow.total) };
@@ -272,7 +279,7 @@ export class IngredientRepository {
     const now = toDbDateTime();
     await mutate(
       db,
-      `INSERT INTO ingredients
+      `INSERT INTO products
         (id, category_id, name, name_hi, unit, status, sort_order, created_by,
          created_at, updated_at, revision, sync_seq)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
@@ -333,12 +340,12 @@ export class IngredientRepository {
       assignments.push('sort_order = ?');
       params.push(input.sortOrder);
     }
-    await applyUpdate(db, 'ingredients', id, assignments, params);
+    await applyUpdate(db, PRODUCTS_TABLE, id, assignments, params);
     return this.findById(db, id);
   }
 
   async softDelete(db: Db, id: string): Promise<boolean> {
-    return softDeleteRow(db, 'ingredients', id);
+    return softDeleteRow(db, PRODUCTS_TABLE, id);
   }
 
   async isReferencedByRecipes(db: Db, id: string): Promise<boolean> {
@@ -353,7 +360,7 @@ export class IngredientRepository {
   async distinctUnits(db: Db): Promise<string[]> {
     const rows = await selectRows<RowDataPacket & { unit: string }>(
       db,
-      `SELECT DISTINCT unit FROM ingredients WHERE deleted_at IS NULL ORDER BY unit ASC`,
+      `SELECT DISTINCT unit FROM products WHERE deleted_at IS NULL ORDER BY unit ASC`,
     );
     return rows.map((row) => row.unit);
   }
@@ -361,7 +368,7 @@ export class IngredientRepository {
   async changedSince(db: Db, cursor: number, limit: number): Promise<IngredientRow[]> {
     return selectRows<IngredientRow>(
       db,
-      `SELECT ${INGREDIENT_COLUMNS} FROM ingredients WHERE sync_seq > ? ORDER BY sync_seq ASC LIMIT ?`,
+      `SELECT ${INGREDIENT_COLUMNS} FROM products WHERE sync_seq > ? ORDER BY sync_seq ASC LIMIT ?`,
       [cursor, limit],
     );
   }

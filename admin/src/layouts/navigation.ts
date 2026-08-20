@@ -4,17 +4,21 @@ import {
   ChartNoAxesCombinedIcon,
   ChefHatIcon,
   ContactIcon,
+  FileTextIcon,
   HardHatIcon,
   HistoryIcon,
   LayoutDashboardIcon,
   MonitorIcon,
   MonitorPlayIcon,
   MonitorSmartphoneIcon,
+  PackageIcon,
   ReceiptTextIcon,
   ScanBarcodeIcon,
   SparklesIcon,
   UsersIcon,
   UtensilsIcon,
+  WalletIcon,
+  WarehouseIcon,
   type LucideIcon,
 } from 'lucide-react';
 import { Capability } from '@menuboard/shared';
@@ -105,6 +109,59 @@ export const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
+    heading: 'Purchase',
+    items: [
+      {
+        to: '/purchase/entry',
+        label: 'Purchase Entry',
+        icon: ReceiptTextIcon,
+        capability: Capability.PURCHASE_READ,
+        keywords:
+          'purchase entry bill supplier invoice grn goods receipt marg buy inward batch expiry rate gst cgst sgst igst credit cash upi cheque payable post',
+      },
+      {
+        to: '/purchase/register',
+        label: 'Purchase Register',
+        icon: HistoryIcon,
+        capability: Capability.PURCHASE_READ,
+        keywords:
+          'purchase register day book purchase report supplier bill outstanding paid taxable gst exceptions posted draft',
+      },
+      {
+        to: '/purchase/masters',
+        label: 'Purchase Masters',
+        icon: PackageIcon,
+        capability: Capability.PRODUCT_READ,
+        keywords:
+          'product item stock uom unit of measure conversion inventory location warehouse day store supplier product sku hsn reorder level batch expiry valuation purchase masters',
+      },
+      {
+        to: '/purchase/payables',
+        label: 'Vendor Accounting',
+        icon: WalletIcon,
+        capability: Capability.PAYABLE_READ,
+        keywords:
+          'vendor accounting accounts payable payable outstanding due overdue ageing aging bucket payment queue pay supplier vendor payment advance on account allocation vendor ledger statement opening closing balance debit credit creditors',
+      },
+      {
+        to: '/purchase/documents',
+        label: 'Purchase Documents',
+        icon: FileTextIcon,
+        capability: Capability.PURCHASE_READ,
+        keywords:
+          'purchase invoice bill goods receipt grn lines destinations split match status payment status taxable cgst sgst igst document flow traceability',
+      },
+      {
+        to: '/stock',
+        label: 'Stock & Inventory',
+        icon: WarehouseIcon,
+        capability: Capability.INVENTORY_READ,
+        keywords:
+          'stock inventory balance on hand stock card ledger movement history adjustment wastage expiry damage theft correction count physical count variance batch lot valuation reserved available negative reorder',
+      },
+    ],
+  },
+  {
     heading: 'SOP',
     items: [
       {
@@ -130,8 +187,12 @@ export const NAV_SECTIONS: NavSection[] = [
         to: '/cleaning',
         label: 'Cleaning',
         icon: SparklesIcon,
-        capability: Capability.MAINTENANCE_VIEW,
-        keywords: 'cleaning schedules checklists area assignments',
+        // CLEANING_VIEW, not MAINTENANCE_VIEW: seeing cleaning work reaches Employee, and
+        // gating it on the maintenance capability would hide the module from everybody who
+        // actually does the cleaning.
+        capability: Capability.CLEANING_VIEW,
+        keywords:
+          'cleaning hygiene housekeeping schedules checklists rules procedures sop area assignments spill contamination sanitise sanitize disinfect chemicals tools shifts skills verification reclean corrective action compliance audit report',
       },
     ],
   },

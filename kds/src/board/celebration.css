@@ -1,0 +1,329 @@
+/* The all-clear moment.
+
+   Three acts driven by one class on the root — `--enter`, `--hold`, `--leave` — so every layer
+   stays in step without a timeline library. Each layer animates on entry and then holds its
+   final state via `forwards`; the leave act overrides them all at once.
+
+   Deliberately its own stylesheet rather than more of board.css: this is a self-contained piece
+   of theatre, and none of it is reused by the working screen underneath. */
+
+.kds-celebrate {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  overflow: hidden;
+  background: radial-gradient(120% 90% at 50% 45%, #101a2e 0%, #080a12 55%, #05060a 100%);
+  animation: kds-cel-in 320ms ease-out both;
+}
+
+@keyframes kds-cel-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+/* The whole scene lifts and dissolves together — one transform on the root, so nothing can
+   drift out of step on the way out. */
+.kds-celebrate--leave {
+  animation: kds-cel-out 700ms cubic-bezier(0.4, 0, 0.9, 0.4) forwards;
+}
+
+@keyframes kds-cel-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(1.08);
+    filter: blur(7px);
+  }
+}
+
+/* ------------------------------------------------------------------------ the light */
+
+/* Two vast, slowly counter-rotating colour washes. They never resolve into a shape, which is
+   the point: it reads as light in the room rather than as a graphic on a screen. */
+.kds-celebrate__aurora {
+  position: absolute;
+  inset: -30%;
+  background:
+    radial-gradient(38% 42% at 32% 38%, rgb(124 92 255 / 46%) 0%, transparent 62%),
+    radial-gradient(34% 40% at 70% 62%, rgb(52 211 153 / 40%) 0%, transparent 62%),
+    radial-gradient(30% 34% at 58% 26%, rgb(255 209 102 / 32%) 0%, transparent 60%);
+  filter: blur(28px);
+  animation: kds-cel-aurora 9s ease-in-out infinite alternate;
+}
+
+@keyframes kds-cel-aurora {
+  from {
+    transform: rotate(-7deg) scale(1);
+  }
+
+  to {
+    transform: rotate(7deg) scale(1.13);
+  }
+}
+
+/* The thump: a ring thrown out from the centre on the first beat. The second one is delayed
+   and slower, which is what makes a single burst feel like it has weight behind it. */
+.kds-celebrate__shock {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 220px;
+  height: 220px;
+  margin: -110px 0 0 -110px;
+  border: 3px solid rgb(255 255 255 / 70%);
+  border-radius: 50%;
+  animation: kds-cel-shock 1s cubic-bezier(0.16, 0.8, 0.3, 1) forwards;
+}
+
+.kds-celebrate__shock--late {
+  border-color: rgb(124 92 255 / 65%);
+  animation-duration: 1.35s;
+  animation-delay: 160ms;
+}
+
+@keyframes kds-cel-shock {
+  from {
+    transform: scale(0.2);
+    opacity: 0.95;
+    border-width: 5px;
+  }
+
+  to {
+    transform: scale(7);
+    opacity: 0;
+    border-width: 1px;
+  }
+}
+
+/* ---------------------------------------------------------------------- the sparks */
+
+.kds-celebrate__sparks {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+}
+
+/* Each spark is rotated to its own angle, then thrown *along* that angle. Rotating the element
+   and translating on one axis keeps the maths to a single custom property per spark. */
+.kds-celebrate__sparks span {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border-radius: 2px;
+  background: linear-gradient(140deg, #ffd166 0%, #34d399 50%, #7c5cff 100%);
+  transform: rotate(var(--angle)) translateY(0) scale(1);
+  animation: kds-cel-spark 1.15s cubic-bezier(0.12, 0.7, 0.3, 1) var(--delay) forwards;
+  opacity: 0;
+}
+
+@keyframes kds-cel-spark {
+  0% {
+    transform: rotate(var(--angle)) translateY(0) scale(0.4) rotate(0deg);
+    opacity: 0;
+  }
+
+  18% {
+    opacity: 1;
+  }
+
+  100% {
+    transform: rotate(var(--angle)) translateY(-46vmin) scale(0.25) rotate(540deg);
+    opacity: 0;
+  }
+}
+
+.kds-celebrate__lottie {
+  position: relative;
+  z-index: 1;
+  animation: kds-cel-pop 700ms cubic-bezier(0.2, 1.5, 0.4, 1) both;
+}
+
+/* Overshoot on the way in — the spring is what makes it feel thrown rather than faded. */
+@keyframes kds-cel-pop {
+  from {
+    transform: scale(0.55);
+    opacity: 0;
+  }
+
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* ----------------------------------------------------------------------- the words */
+
+.kds-celebrate__words {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+}
+
+.kds-celebrate__phrase {
+  position: relative;
+  margin: 0;
+  padding: 0 24px;
+  font-size: clamp(40px, 7.5vw, 96px);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1.12;
+  color: #fff;
+  text-shadow: 0 4px 26px rgb(0 0 0 / 55%);
+  animation: kds-cel-rise 720ms cubic-bezier(0.22, 1, 0.36, 1) 220ms both;
+}
+
+@keyframes kds-cel-rise {
+  from {
+    transform: translateY(26px) scale(0.94);
+    opacity: 0;
+  }
+
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* A highlight sweeping across the phrase once it has landed. Painted as a duplicate of the
+   text via `data-text`, clipped to the glyphs, so the sweep follows the letterforms instead of
+   passing over a rectangle. */
+.kds-celebrate__phrase::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  padding: inherit;
+  background: linear-gradient(
+    100deg,
+    transparent 38%,
+    rgb(255 255 255 / 92%) 50%,
+    transparent 62%
+  );
+  background-size: 260% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: kds-cel-shine 1.5s ease-in-out 800ms 2;
+}
+
+@keyframes kds-cel-shine {
+  from {
+    background-position: 190% 0;
+  }
+
+  to {
+    background-position: -90% 0;
+  }
+}
+
+.kds-celebrate__sub {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 7px 18px 7px 14px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 9%);
+  border: 1px solid rgb(255 255 255 / 16%);
+  font-size: clamp(14px, 1.5vw, 19px);
+  font-weight: 700;
+  color: #eaf2ff;
+  animation: kds-cel-rise 640ms cubic-bezier(0.22, 1, 0.36, 1) 520ms both;
+}
+
+/* The tick draws itself: two borders on a rotated box, revealed by animating their length. */
+.kds-celebrate__tick {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  position: relative;
+  border-radius: 50%;
+  background: #34d399;
+}
+
+.kds-celebrate__tick::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 8px;
+  width: 6px;
+  height: 11px;
+  border: solid #06281d;
+  border-width: 0 2.5px 2.5px 0;
+  transform-origin: 50% 50%;
+  transform: rotate(45deg) scale(0);
+  animation: kds-cel-tick 420ms cubic-bezier(0.2, 1.4, 0.4, 1) 760ms forwards;
+}
+
+@keyframes kds-cel-tick {
+  to {
+    transform: rotate(45deg) scale(1);
+  }
+}
+
+/* The phrase keeps breathing through the hold, so a held frame never looks like a freeze. */
+.kds-celebrate--hold .kds-celebrate__phrase {
+  animation: kds-cel-breathe 2.6s ease-in-out infinite alternate;
+}
+
+@keyframes kds-cel-breathe {
+  from {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+
+  to {
+    transform: scale(1.028);
+    filter: brightness(1.16);
+  }
+}
+
+/* Motion sensitivity: keep the moment, drop the movement. Everything still appears, holds and
+   goes — on opacity alone — so the timing the board depends on is unchanged. */
+@media (prefers-reduced-motion: reduce) {
+  .kds-celebrate__aurora,
+  .kds-celebrate__shock,
+  .kds-celebrate__sparks,
+  .kds-celebrate__phrase::after {
+    display: none;
+  }
+
+  .kds-celebrate__lottie,
+  .kds-celebrate__phrase,
+  .kds-celebrate__sub,
+  .kds-celebrate--hold .kds-celebrate__phrase,
+  .kds-celebrate--leave {
+    animation: kds-cel-in 260ms ease-out both;
+  }
+
+  .kds-celebrate--leave {
+    animation: kds-cel-out-plain 400ms ease-in forwards;
+  }
+
+  @keyframes kds-cel-out-plain {
+    to {
+      opacity: 0;
+    }
+  }
+}

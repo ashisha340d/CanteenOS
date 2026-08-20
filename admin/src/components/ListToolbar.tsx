@@ -52,6 +52,11 @@ interface ListToolbarProps {
   onClearFilters?: () => void;
   view: 'table' | 'card';
   onViewChange: (view: 'table' | 'card') => void;
+  /**
+   * Drops the view toggle for lists that only work as a grid — a payment queue needs row
+   * checkboxes and a ledger needs its columns, so offering cards would be a dead control.
+   */
+  hideView?: boolean;
   page: number;
   pageSize: number;
   total: number;
@@ -82,6 +87,7 @@ export function ListToolbar({
   onClearFilters,
   view,
   onViewChange,
+  hideView,
   page,
   pageSize,
   total,
@@ -182,20 +188,22 @@ export function ListToolbar({
 
         {extraActions}
 
-        <ToggleGroup
-          type="single"
-          size="sm"
-          variant="outline"
-          value={view}
-          onValueChange={(next) => next && onViewChange(next as 'table' | 'card')}
-        >
-          <ToggleGroupItem value="table" aria-label="Table view">
-            <ListIcon />
-          </ToggleGroupItem>
-          <ToggleGroupItem value="card" aria-label="Card view">
-            <LayoutGridIcon />
-          </ToggleGroupItem>
-        </ToggleGroup>
+        {!hideView && (
+          <ToggleGroup
+            type="single"
+            size="sm"
+            variant="outline"
+            value={view}
+            onValueChange={(next) => next && onViewChange(next as 'table' | 'card')}
+          >
+            <ToggleGroupItem value="table" aria-label="Table view">
+              <ListIcon />
+            </ToggleGroupItem>
+            <ToggleGroupItem value="card" aria-label="Card view">
+              <LayoutGridIcon />
+            </ToggleGroupItem>
+          </ToggleGroup>
+        )}
 
         {createButton}
 

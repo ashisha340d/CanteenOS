@@ -217,6 +217,19 @@ export default function BoardsScreen(): React.JSX.Element {
               },
             ]
             : []),
+          // Cleaning sits beside Equipment for the same reason and on the same terms: it is a
+          // stack route off the landing screen, shown to anybody who may see cleaning work or
+          // report something. `cleaning.view` reaches Employee, so in practice this is
+          // everybody — which is the point.
+          ...(has(Capability.CLEANING_VIEW) || has(Capability.CLEANING_REPORT_INCIDENT)
+            ? [
+              {
+                icon: 'cleaning-services' as const,
+                onPress: () => router.push('/cleaning'),
+                accessibilityLabel: 'Cleaning',
+              },
+            ]
+            : []),
           {
             icon: 'notifications-none',
             onPress: () => router.push('/notifications'),

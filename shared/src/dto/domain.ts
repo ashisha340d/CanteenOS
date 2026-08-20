@@ -238,6 +238,8 @@ export interface MenuItemDto extends SyncMeta {
   name: string;
   /** Devanagari name. Null falls back to `name`. */
   nameHi: string | null;
+  description: string | null;
+  descriptionHi: string | null;
   unit: string;
   /** Devanagari unit ("प्लेट", "किलो"). Null falls back to `unit`. */
   unitHi: string | null;
@@ -286,6 +288,8 @@ export interface MenuItemWriteRequest extends MasterWriteRequest {
   categoryId: Uuid;
   groupId?: Uuid | null;
   nameHi?: string | null;
+  description?: string | null;
+  descriptionHi?: string | null;
   unit: string;
   unitHi?: string | null;
   imagePath?: string | null;
@@ -640,6 +644,13 @@ export interface CounterRouteWriteRequest {
   status?: MasterStatus;
 }
 
+export interface CounterRouteMoveRequest {
+  entityType: RoutableEntityType;
+  entityId: Uuid;
+  sourceRouteId?: Uuid;
+  targetCounterId?: Uuid;
+}
+
 /* ---------------------------------------------------------------- item groups */
 
 /** Reusable tag master for the Food Item Master (À La Carte, Combo Eligible, Set Menu, ...). */
@@ -708,6 +719,13 @@ export interface PrintingRouteWriteRequest {
   status?: MasterStatus;
 }
 
+export interface PrintingRouteMoveRequest {
+  entityType: RoutableEntityType;
+  entityId: Uuid;
+  sourceRouteId?: Uuid;
+  targetPrintingGroupId?: Uuid;
+}
+
 /* ------------------------------------------------------------------- modifiers */
 
 export interface ModifierGroupDto extends SyncMeta {
@@ -773,6 +791,23 @@ export interface ModifierAssignmentWriteRequest {
   isRequired?: boolean;
   sortOrder?: number;
   status?: MasterStatus;
+}
+
+export interface ModifierAssignmentMoveRequest {
+  entityType: RoutableEntityType;
+  entityId: Uuid;
+  sourceAssignmentId?: Uuid;
+  targetModifierGroupId?: Uuid;
+}
+
+export interface MenuAssignmentWorkspaceDto {
+  menuItems: MenuItemDto[];
+  counters: CounterDto[];
+  kitchens: PrintingGroupDto[];
+  modifierGroups: ModifierGroupDto[];
+  counterRoutes: CounterRouteDto[];
+  printingRoutes: PrintingRouteDto[];
+  modifierAssignments: ModifierAssignmentDto[];
 }
 
 /* --------------------------------------------------------------- menu schedules */
@@ -2216,4 +2251,67 @@ export interface PosDashboardDto {
   takeaway: PosOrderDto[];
   named: PosOrderDto[];
   open: PosOrderDto[];
+}
+
+/** A business-date range for the POS analytics reads. Inclusive at both ends. */
+export interface PosAnalyticsQuery {
+  dateFrom: IsoDate;
+  dateTo: IsoDate;
+}
+
+/** One business date's takings, for the sparkline on the Sales widget. */
+export interface PosSalesDayDto {
+  businessDate: IsoDate;
+  netSales: number;
+  transactionCount: number;
+}
+
+/** The comparable figures for the equally-long range immediately before the one asked for. */
+export interface PosSalesComparisonDto {
+  netSales: number;
+  transactionCount: number;
+  averageTicket: number;
+}
+
+/** Takings over a range: what came in, what went back out, and how it is trending. */
+export interface PosSalesSummaryDto {
+  dateFrom: IsoDate;
+  dateTo: IsoDate;
+  /** Payments less reversals. The figure the widget leads with. */
+  netSales: number;
+  /** Payments only, before any void was reversed out. */
+  grossSales: number;
+  /** What voids handed back, as a positive number. */
+  refundedAmount: number;
+  /** Settled tickets in the range. */
+  transactionCount: number;
+  /** `netSales / transactionCount`, or 0 when nothing sold. */
+  averageTicket: number;
+  /** Active lines sold, summed over their quantities. */
+  itemsSold: number;
+  discountAmount: number;
+  taxAmount: number;
+  previous: PosSalesComparisonDto;
+  /** One entry per business date that had activity, oldest first. */
+  series: PosSalesDayDto[];
+}
+
+/** One line of the Top Selling Items widget. */
+export interface PosTopItemDto {
+  /** Null for a custom/off-menu line, which is grouped by its typed name. */
+  menuItemId: Uuid | null;
+  itemName: string;
+  variantName: string | null;
+  quantity: number;
+  netAmount: number;
+  /** This item's share of the range's item revenue, 0–1. */
+  share: number;
+}
+
+/** One bar of the Busy Hours graph. Every hour 0–23 is present, including the quiet ones. */
+export interface PosBusyHourDto {
+  /** 0–23, from the ticket's `placed_at`. */
+  hour: number;
+  transactionCount: number;
+  netSales: number;
 }

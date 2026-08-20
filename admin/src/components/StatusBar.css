@@ -136,6 +136,41 @@
   height: 12px;
 }
 
+/* The chat tray icon is the one tray slot that is clickable, so it gets a hit target and a
+   hover state the passive indicators beside it do not. */
+.os-status__tray-btn {
+  position: relative;
+  width: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.os-status__tray-btn:hover {
+  opacity: 1;
+  background: var(--desk-cell-bg);
+}
+
+/* Sits half off the icon: the tray row is 18px tall, so an inline badge would not fit. */
+.os-status__tray-badge {
+  position: absolute;
+  top: -1px;
+  right: -2px;
+  min-width: 12px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 8.5px;
+  font-weight: 900;
+  line-height: 12px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
 @keyframes os-tray-spin {
   to {
     transform: rotate(360deg);
@@ -154,14 +189,6 @@
   }
 }
 
-.os-status__tray-user {
-  max-width: 10rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  padding: 0 6px;
-  font-weight: 600;
-}
 
 .os-status__clock {
   display: flex;
@@ -182,4 +209,84 @@
 .os-status__clock-date {
   font-size: 8.5px;
   opacity: 0.7;
+}
+/* ------------------------------------------------------- moved down from the top bar */
+
+/* Show-the-desktop, beside Start. Sized like a task button so the left end of the bar reads
+   as one row of controls rather than a button and a stray icon. */
+.os-status__chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 22px;
+  height: 20px;
+  color: var(--desk-task-fg);
+  border: 1px solid;
+  border-color: var(--desk-bevel-hi) var(--desk-bevel-lo) var(--desk-bevel-lo) var(--desk-bevel-hi);
+  background: var(--desk-task-bg);
+}
+
+.os-status__chip:hover {
+  background: var(--desk-task-hover-bg);
+}
+
+.os-status__chip.active {
+  border-color: var(--desk-bevel-lo) var(--desk-bevel-hi) var(--desk-bevel-hi) var(--desk-bevel-lo);
+  background: var(--desk-task-active-bg);
+}
+
+.os-status__chip-glyph {
+  width: 12px;
+  height: 12px;
+}
+
+/* Identity: initial plus name, the whole thing a menu trigger. The name is allowed to
+   disappear on a narrow bar — the badge alone is still a target you can find. */
+.os-status__user {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  height: 18px;
+  max-width: 11rem;
+  padding: 0 5px 0 2px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.os-status__user:hover {
+  background: var(--desk-task-hover-bg);
+}
+
+.os-status__user-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--desk-accent);
+  color: #fff;
+  font-size: 8.5px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.os-status__user-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .os-status__user-name {
+    display: none;
+  }
 }

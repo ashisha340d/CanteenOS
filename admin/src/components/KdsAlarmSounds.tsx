@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { AlertSoundSlot } from '@menuboard/shared';
 import {
+  BellIcon,
   BellRingIcon,
+  MessageSquareIcon,
   PauseIcon,
   PlayIcon,
   SirenIcon,
@@ -32,6 +34,28 @@ export const KDS_SOUNDS: { slot: AlertSoundSlot; title: string; description: str
     title: 'Critical — past due',
     description: 'Sounds when a line passes its due time, then repeats at the set interval.',
     icon: <SirenIcon className="size-4" />,
+  },
+];
+
+/**
+ * The two chat voices. Same upload/preview machinery as the board alarms — a notification
+ * sound is an uploaded file in a slot, and building a second way to do that would only mean
+ * two places to fix when audio handling changes.
+ */
+export const CHAT_SOUNDS: { slot: AlertSoundSlot; title: string; description: string; icon: JSX.Element }[] = [
+  {
+    slot: AlertSoundSlot.CHAT_MESSAGE,
+    title: 'Message arrives',
+    description:
+      'Plays on the counter board when the office writes, and on this desktop when a counter answers.',
+    icon: <MessageSquareIcon className="size-4" />,
+  },
+  {
+    slot: AlertSoundSlot.CHAT_BELL,
+    title: 'Bell',
+    description:
+      'Plays on the counter board when the office rings it. Worth making louder than the message sound.',
+    icon: <BellIcon className="size-4" />,
   },
 ];
 
@@ -141,6 +165,17 @@ export function KdsAlarmSoundsCard(): JSX.Element {
   return (
     <div className="bg-card overflow-hidden rounded-xl border">
       {KDS_SOUNDS.map((entry, index) => (
+        <KdsSoundRow key={entry.slot} entry={entry} bordered={index > 0} />
+      ))}
+    </div>
+  );
+}
+
+/** The chat's two sounds, on Settings -> Chat & Messaging. */
+export function ChatSoundsCard(): JSX.Element {
+  return (
+    <div className="bg-card overflow-hidden rounded-xl border">
+      {CHAT_SOUNDS.map((entry, index) => (
         <KdsSoundRow key={entry.slot} entry={entry} bordered={index > 0} />
       ))}
     </div>

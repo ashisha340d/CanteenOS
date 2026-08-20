@@ -2,6 +2,7 @@ import type {
   AvailabilityStatus,
   CounterDto,
   CounterRouteDto,
+  CounterRouteMoveRequest,
   CounterRouteWriteRequest,
   CounterWriteRequest,
   ItemGroupDto,
@@ -19,11 +20,14 @@ import type {
   MenuItemVariantDto,
   MenuItemVariantWriteRequest,
   MenuWriteRequest,
+  MenuAssignmentWorkspaceDto,
   MenuTreeDto,
   MenuBoardScreenDto,
   MenuBoardSnapshotDto,
   CreateMenuBoardScreenRequest,
   UpdateMenuBoardScreenRequest,
+  ModifierAssignmentDto,
+  ModifierAssignmentMoveRequest,
   ModifierDto,
   ModifierGroupDto,
   ModifierGroupWriteRequest,
@@ -32,6 +36,7 @@ import type {
   PrintingGroupDto,
   PrintingGroupWriteRequest,
   PrintingRouteDto,
+  PrintingRouteMoveRequest,
   PrintingRouteWriteRequest,
   RoutableEntityType,
 } from '@menuboard/shared';
@@ -40,6 +45,10 @@ import { http, unwrap, unwrapPaged } from './client';
 export interface MasterListQuery extends PageQuery {
   status?: MasterStatus;
 }
+
+export const menuAssignmentWorkspaceApi = {
+  get: () => unwrap<MenuAssignmentWorkspaceDto>(http.get('/menu-assignment-workspace')),
+};
 
 export const menusApi = {
   list: (query: MasterListQuery) => unwrapPaged<MenuDto>(http.get('/menus', { params: query })),
@@ -108,6 +117,8 @@ export const counterRoutesApi = {
   listForEntity: (entityType: RoutableEntityType, entityId: string) =>
     unwrap<CounterRouteDto[]>(http.get('/counter-routes', { params: { entityType, entityId } })),
   assign: (body: CounterRouteWriteRequest) => unwrap<CounterRouteDto>(http.post('/counter-routes', body)),
+  move: (body: CounterRouteMoveRequest) =>
+    unwrap<CounterRouteDto[]>(http.post('/counter-routes/move', body)),
   remove: (id: string) => unwrap<null>(http.delete(`/counter-routes/${id}`)),
 };
 
@@ -150,6 +161,8 @@ export const printingRoutesApi = {
   listForEntity: (entityType: RoutableEntityType, entityId: string) =>
     unwrap<PrintingRouteDto[]>(http.get('/printing-routes', { params: { entityType, entityId } })),
   assign: (body: PrintingRouteWriteRequest) => unwrap<PrintingRouteDto>(http.post('/printing-routes', body)),
+  move: (body: PrintingRouteMoveRequest) =>
+    unwrap<PrintingRouteDto[]>(http.post('/printing-routes/move', body)),
   remove: (id: string) => unwrap<null>(http.delete(`/printing-routes/${id}`)),
 };
 
@@ -169,6 +182,13 @@ export const modifiersApi = {
   update: (id: string, body: Partial<ModifierWriteRequest>) =>
     unwrap<ModifierDto>(http.patch(`/modifiers/${id}`, body)),
   remove: (id: string) => unwrap<null>(http.delete(`/modifiers/${id}`)),
+};
+
+export const modifierAssignmentsApi = {
+  move: (body: ModifierAssignmentMoveRequest) =>
+    unwrap<ModifierAssignmentDto[]>(http.post('/modifier-assignments/move', body)),
+  removeGroupFromMenuItems: (groupId: string) =>
+    unwrap<null>(http.delete(`/modifier-assignments/group/${groupId}/menu-items`)),
 };
 
 /**

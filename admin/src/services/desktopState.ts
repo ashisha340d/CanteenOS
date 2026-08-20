@@ -22,6 +22,12 @@ export interface PersistedWindowLayout {
   zIndex: number;
   minimized: boolean;
   maximized: boolean;
+  /**
+   * Where a maximised window goes back to. Without it, a window restored in the maximised
+   * state had nothing to un-maximise *to* — it simply stayed full-screen, which read as the
+   * desktop having forgotten the size it was given.
+   */
+  restore?: { x: number; y: number; w: number; h: number };
 }
 
 export interface DesktopSnapshot {

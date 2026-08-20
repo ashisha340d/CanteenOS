@@ -342,6 +342,100 @@ no `menu_items` row is created, so the catalogue remains Admin-owned and the cac
 read-only. If that dish becomes part of the standing menu, an Admin registers it in the
 Admin Portal — the Android app never promotes an ad-hoc line into the catalogue.
 
+### 3e. Cleaning & Hygiene Management (extension)
+
+Added in `backend/src/db/migrations/001_schema.sql`. Like §3c this extension reaches **both**
+clients, and it reaches further down the roster than anything else in the product: seeing,
+doing and reporting cleaning work are all Employee-level, because the person standing in front
+of the mess is the only person who knows about it.
+
+- **A report costs a place and a sentence.** `POST /cleaning/reports` requires one of an area
+  or a cleanable asset, and nothing else. Naming only an area resolves to that area's *general*
+  cleanable asset — an `AREA`-typed row created on first use — so somebody who has never seen
+  the asset register can still raise real, assignable work. Everything else (which rules match,
+  which procedure, who gets it, when it is due) is resolved server-side.
+- **A report always produces something.** If no configured rule covers what was reported, the
+  seeded `CLN-REPORTED` rule and procedure carry it as an ad-hoc clean-up. A report that
+  quietly produced nothing would teach everybody to stop reporting, which is the only way this
+  module actually fails. The response says what was raised and who has it, rather than a bare
+  201.
+- **Everything is raised by an event.** Every task in the system points at a row in
+  `cleaning_events` — a person tapping "this needs cleaning", a shift starting, the sweep
+  noticing a schedule came due. "Why does this task exist?" therefore always has an answer, and
+  scheduled work is as explainable afterwards as reported work.
+- **The occurrence key is the idempotency guarantee.** A rule + an asset + a period key is
+  unique in the database, so the sweep running twice, or a phone retrying a report, cannot
+  produce two identical tasks. Calendar frequencies derive their key from the period;
+  event-driven ones from the event's own id, because a second spill really is more work.
+- **A task pins the published procedure *version*, not the procedure.** A procedure is a
+  controlled document: you edit a draft, you publish it, and from that moment it is immutable
+  and tasks pin it. Editing a published procedure starts a new draft from what is in force. A
+  rule whose procedure has never been published cannot raise work, and says so on the rules
+  page.
+- **The step sheet is a snapshot.** Each task gets its own row per step, so a later edit to the
+  procedure cannot change what an operator was asked to do. A required step cannot be silently
+  skipped — skipping demands a written reason and completion is refused while one is pending —
+  and a step that demands a photo blocks completion until one is attached. That is the
+  difference between a hygiene record and a tick box.
+- **Nobody signs off their own clean.** Enforced in the service against the task and the
+  person, not on the endpoint, so it holds however the request arrives. A failed check moves
+  the same task to `RECLEAN_REQUIRED` and raises a corrective action, so one object carries the
+  whole story and "what happened to this occurrence" stays a single query.
+- **The assignment engine is explainable rather than clever.** It scores candidates on four
+  facts an operator can see — on shift, owns the area, holds the required competence, current
+  load — records the whole candidate list on the assignment row, and picks the top score. When
+  nobody qualifies it leaves the task `UNASSIGNED` and pages a supervisor: handing a
+  food-contact deep clean to somebody uncertified because the alternative looked untidy is
+  exactly the failure this module exists to prevent. An area may opt into a relaxed second pass
+  that drops the shift and area requirements — never the skill one.
+- **Wall-clock inputs are local; stored instants are UTC.** A rule's `dueTime` and a shift's
+  hours are times a manager typed meaning the clock on the wall, and the occurrence day is the
+  operator's day. `due_at` and `scheduled_at` remain UTC like every other datetime.
+- **Derived state is never stored.** Overdue-ness, compliance rates, warranty-style expiry on
+  a chemical or a certificate, and "who may act on this" are computed on read from status and
+  the clock. Compliance has one definition — fell due, on time, late, missed — stated once and
+  used by both the dashboard and the report, so the two can never disagree.
+- **No second blob store and no second audit trail.** Photos are `media_assets` rows reached
+  through link tables and served by the existing signed-URL route; every mutation writes to the
+  global `audit_logs`. `cleaning_task_state_history` is a different thing and both exist: it is
+  the operator-facing timeline of one task, while `audit_logs` remains the security record.
+- **No sync bookkeeping.** No `revision`/`sync_seq` columns; the module is REST-served to both
+  clients, the same posture as §3c. A cleaning task is assigned by an engine weighing who is on
+  shift *now*, and two phones queueing an offline "I did it" would both believe they owned the
+  job.
+- **The phone carries the whole working loop, not only the doing.** My cleaning, all cleaning
+  (the unowned pool first, because that is the state the module pages a supervisor about), one
+  task, one corrective action, report, and scan-to-find. Assignment lives on the task screen for
+  anybody holding `cleaning.assign`, and it offers the engine's own scored roster with the reason
+  each person is on it — including the ineligible, since a hand assignment that overrides the
+  engine is a judgement somebody may have to defend, and hiding the alternatives would defeat
+  that. Recording a root cause and closing a fix live on the corrective-action screen; the close
+  button stays disabled until the cause and the remedy are both written down, because that is
+  precisely what the server refuses without. A control that cannot succeed is the same defect as
+  one that does nothing.
+- **One audience, deliberately wide** (grants in `role_capabilities` and in
+  `shared/src/permissions/index.ts` must always agree):
+  - **Seeing, doing and reporting reach Employee.** `cleaning.view`, `cleaning.work` and
+    `cleaning.report_incident` are held by every role. Withholding any of the three would make
+    the module ornamental.
+  - **Verifying starts at Manager**, and the service additionally refuses to let anybody sign
+    off their own work.
+  - **Configuration is Manager and above** — the asset register, rules, procedures, chemicals,
+    tools, standards, skills, shifts, area responsibility and the assignment policy — because
+    each of those manufactures work for other people. The machine-to-machine event ingest sits
+    here too, for the same reason.
+  - Deleting a cleaning record — which destroys the evidence that the clean happened — is
+    **Admin**.
+  - `ANDROID_FORBIDDEN_CAPABILITIES` stays empty, so the whole module is reachable from the
+    phone.
+
+Still excluded, and not made reachable by this extension: a cleaning-consumables stock or
+purchasing system (a chemical here is a reference master describing dosage and safety, not
+a stock item with a quantity on hand),
+pest-control contracts and visit records, laundry management, staff time and attendance,
+temperature-log monitoring as a standalone HACCP module, and any automatic pass/fail that a
+human has not confirmed.
+
 ## 4. Core objects and lifecycle
 
 - **Board** — a workspace (e.g. a kitchen, an event) with members and orders.

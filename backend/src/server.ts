@@ -8,6 +8,7 @@ import { realtime } from './realtime/RealtimeGateway';
 import { menuBoardRealtime } from './realtime/menuBoardSocket';
 import { attachmentService } from './services/AttachmentService';
 import { maintenanceSchedulerService } from './services/MaintenanceSchedulerService';
+import { cleaningSchedulerService } from './services/CleaningSchedulerService';
 import { menuShiftSchedulerService } from './services/MenuShiftSchedulerService';
 import { permissionsCacheService } from './services/PermissionsCacheService';
 import { youtubeImportService } from './services/YoutubeImportService';
@@ -45,6 +46,11 @@ async function main(): Promise<void> {
   // Preventive maintenance: turns schedules that have fallen due into tickets and raises the
   // due/overdue/warranty reminders. Idempotent, so a missed run costs nothing.
   maintenanceSchedulerService.start();
+
+  // The cleaning sweep: raises the calendar occurrences that have come due and chases the
+  // overdue and unowned ones. Hourly rather than six-hourly, because a cleaning rule can name
+  // a due time and a late sweep would raise it already overdue.
+  cleaningSchedulerService.start();
 
   // Un-hides whatever the morning/evening shift boundary brings back onto a menu. Also
   // idempotent — see MenuShiftSchedulerService's `menu.last_shift_reset` bookkeeping.
@@ -130,6 +136,7 @@ function registerShutdownHandlers(
     clearInterval(housekeeping);
     youtubeImportService.stopWorker();
     maintenanceSchedulerService.stop();
+    cleaningSchedulerService.stop();
     menuShiftSchedulerService.stop();
     realtime.detach();
     menuBoardRealtime.detach();

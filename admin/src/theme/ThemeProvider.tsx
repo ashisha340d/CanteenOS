@@ -20,9 +20,42 @@ export type DesktopSkin = 'sandalwood' | 'graphite' | 'azure' | 'beta';
 
 export const DESKTOP_SKINS: DesktopSkin[] = ['sandalwood', 'graphite', 'azure', 'beta'];
 
+/** The typeface the entire portal is set in. Stacks live in theme/appearance.css. */
+export type FontChoice =
+  | 'geist'
+  | 'inter'
+  | 'manrope'
+  | 'jakarta'
+  | 'figtree'
+  | 'lexend'
+  | 'plex'
+  | 'source'
+  | 'public'
+  | 'outfit';
+
+export const FONT_CHOICES: FontChoice[] = [
+  'geist',
+  'inter',
+  'manrope',
+  'jakarta',
+  'figtree',
+  'lexend',
+  'plex',
+  'source',
+  'public',
+  'outfit',
+];
+
+/** How the desktop draws its icons — tile shape, fill and glyph treatment. */
+export type IconSet = 'aurora' | 'slate' | 'frost' | 'outline' | 'mono' | 'classic';
+
+export const ICON_SETS: IconSet[] = ['aurora', 'slate', 'frost', 'outline', 'mono', 'classic'];
+
 const SKIN_KEY = 'menuboard.admin.theme';
 const TEXT_SIZE_KEY = 'menuboard.admin.textSize';
 const DESKTOP_SKIN_KEY = 'menuboard.admin.desktopSkin';
+const FONT_KEY = 'menuboard.admin.font';
+const ICON_SET_KEY = 'menuboard.admin.iconSet';
 
 /**
  * `brand` is the high-contrast skin. It carries `dark` as well as `contrast` so that any
@@ -60,6 +93,18 @@ export function getStoredDesktopSkin(): DesktopSkin {
   return 'sandalwood';
 }
 
+export function getStoredFont(): FontChoice {
+  const raw = localStorage.getItem(FONT_KEY);
+  if (FONT_CHOICES.includes(raw as FontChoice)) return raw as FontChoice;
+  return 'geist';
+}
+
+export function getStoredIconSet(): IconSet {
+  const raw = localStorage.getItem(ICON_SET_KEY);
+  if (ICON_SETS.includes(raw as IconSet)) return raw as IconSet;
+  return 'aurora';
+}
+
 interface ThemeContextValue {
   skin: ThemeSkin;
   setSkin: (skin: ThemeSkin) => void;
@@ -67,6 +112,10 @@ interface ThemeContextValue {
   setTextSize: (size: TextSize) => void;
   desktopSkin: DesktopSkin;
   setDesktopSkin: (skin: DesktopSkin) => void;
+  font: FontChoice;
+  setFont: (font: FontChoice) => void;
+  iconSet: IconSet;
+  setIconSet: (set: IconSet) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -75,6 +124,8 @@ export function ThemeProvider({ children }: { children: ReactNode }): JSX.Elemen
   const [skin, setSkinState] = useState<ThemeSkin>(getStoredSkin);
   const [textSize, setTextSizeState] = useState<TextSize>(getStoredTextSize);
   const [desktopSkin, setDesktopSkinState] = useState<DesktopSkin>(getStoredDesktopSkin);
+  const [font, setFontState] = useState<FontChoice>(getStoredFont);
+  const [iconSet, setIconSetState] = useState<IconSet>(getStoredIconSet);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -91,6 +142,14 @@ export function ThemeProvider({ children }: { children: ReactNode }): JSX.Elemen
     document.documentElement.dataset['desktopSkin'] = desktopSkin;
   }, [desktopSkin]);
 
+  useEffect(() => {
+    document.documentElement.dataset['font'] = font;
+  }, [font]);
+
+  useEffect(() => {
+    document.documentElement.dataset['iconSet'] = iconSet;
+  }, [iconSet]);
+
   const setSkin = useCallback((next: ThemeSkin) => {
     setSkinState(next);
     localStorage.setItem(SKIN_KEY, next);
@@ -106,9 +165,41 @@ export function ThemeProvider({ children }: { children: ReactNode }): JSX.Elemen
     localStorage.setItem(DESKTOP_SKIN_KEY, next);
   }, []);
 
+  const setFont = useCallback((next: FontChoice) => {
+    setFontState(next);
+    localStorage.setItem(FONT_KEY, next);
+  }, []);
+
+  const setIconSet = useCallback((next: IconSet) => {
+    setIconSetState(next);
+    localStorage.setItem(ICON_SET_KEY, next);
+  }, []);
+
   const value = useMemo(
-    () => ({ skin, setSkin, textSize, setTextSize, desktopSkin, setDesktopSkin }),
-    [skin, setSkin, textSize, setTextSize, desktopSkin, setDesktopSkin],
+    () => ({
+      skin,
+      setSkin,
+      textSize,
+      setTextSize,
+      desktopSkin,
+      setDesktopSkin,
+      font,
+      setFont,
+      iconSet,
+      setIconSet,
+    }),
+    [
+      skin,
+      setSkin,
+      textSize,
+      setTextSize,
+      desktopSkin,
+      setDesktopSkin,
+      font,
+      setFont,
+      iconSet,
+      setIconSet,
+    ],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
@@ -130,6 +221,55 @@ export const TEXT_SIZE_LABEL: Record<TextSize, string> = {
   compact: 'Compact',
   default: 'Default',
   large: 'Large',
+};
+
+/**
+ * Ten faces chosen for a dense operational portal read over a long shift: open apertures,
+ * unambiguous digits, and a tall enough x-height to stay legible at the compact text size.
+ * The hint says what each one is actually good at, not what it looks like.
+ */
+export const FONT_LABEL: Record<FontChoice, string> = {
+  geist: 'Geist',
+  inter: 'Inter',
+  manrope: 'Manrope',
+  jakarta: 'Plus Jakarta Sans',
+  figtree: 'Figtree',
+  lexend: 'Lexend',
+  plex: 'IBM Plex Sans',
+  source: 'Source Sans 3',
+  public: 'Public Sans',
+  outfit: 'Outfit',
+};
+
+export const FONT_HINT: Record<FontChoice, string> = {
+  geist: 'The default. Neutral grotesque with tabular figures — built for interfaces.',
+  inter: 'The most-tested UI face there is. Very high legibility at small sizes.',
+  manrope: 'Semi-rounded and a little warmer. Reads well in headings.',
+  jakarta: 'Geometric with tall lowercase. Distinctive without being loud.',
+  figtree: 'Friendly geometric sans. Soft, but keeps its shape when dense.',
+  lexend: 'Engineered for reading speed. The easiest of the ten to scan quickly.',
+  plex: 'IBM’s corporate face. Slightly technical; excellent numerals.',
+  source: 'Adobe’s UI workhorse. Compact, so more fits on a row.',
+  public: 'Plain, sturdy, and neutral. Nothing about it draws attention.',
+  outfit: 'Pure geometric. Strong at large sizes, best paired with a large text size.',
+};
+
+export const ICON_SET_LABEL: Record<IconSet, string> = {
+  aurora: 'Aurora',
+  slate: 'Slate',
+  frost: 'Frost',
+  outline: 'Outline',
+  mono: 'Mono',
+  classic: 'Classic',
+};
+
+export const ICON_SET_HINT: Record<IconSet, string> = {
+  aurora: 'Glossy rounded tiles in each module’s colour. The default.',
+  slate: 'The same tiles, flat — no gloss, no shadow, tighter corners.',
+  frost: 'Translucent panes over the wallpaper, with the colour on the glyph.',
+  outline: 'No fill at all. The quietest set over a busy wallpaper.',
+  mono: 'One neutral surface for every module. Shape carries the identity.',
+  classic: 'No tile — a large drawn glyph, the way a file manager shows a document.',
 };
 
 export const DESKTOP_SKIN_LABEL: Record<DesktopSkin, string> = {

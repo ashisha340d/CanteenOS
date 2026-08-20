@@ -1,12 +1,6 @@
-import { createElement, useCallback, useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { DesktopWindow } from './DesktopWindow';
 import { useWindowManager, type ManagedWindow } from '@/services/WindowManager';
-import {
-  loadWindowLayout,
-  STATE_RESTORED_EVENT,
-  type PersistedWindowLayout,
-} from '@/services/desktopState';
-import { findApp } from '@/services/appRegistry';
 
 /** Fields and rich-text areas own Escape while they have the caret. */
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -28,9 +22,16 @@ function overlayIsOpen(): boolean {
   );
 }
 
+/**
+ * Where the windows are drawn.
+ *
+ * Restoring the saved layout is deliberately *not* done here. This layer mounts under the
+ * window manager, so anything it restored would arrive one render after the manager had
+ * already published — and begun persisting — an empty desktop. The manager seeds itself from
+ * storage instead, and this component only ever renders what it is given.
+ */
 export function WindowsLayer(): JSX.Element {
-  const { windows, close, focusedId, move, open, minimize, setViewport, closeAll } =
-    useWindowManager();
+  const { windows, close, focusedId, move, setViewport } = useWindowManager();
   const layerRef = useRef<HTMLDivElement>(null);
   const windowsRef = useRef<ManagedWindow[]>(windows);
   windowsRef.current = windows;
@@ -47,54 +48,6 @@ export function WindowsLayer(): JSX.Element {
     setViewport({ width: layer.clientWidth, height: layer.clientHeight });
     return () => observer.disconnect();
   }, [setViewport]);
-
-  // Bring back the windows that were open when the session ended. Only registry apps can come
-  // back — a window whose module no longer ships is dropped rather than revived as an error.
-  const restoreLayout = useCallback(
-    (layout: PersistedWindowLayout[]): void => {
-      closeAll();
-      [...layout]
-        .sort((a, b) => a.zIndex - b.zIndex)
-        .forEach((saved) => {
-          const app = findApp(saved.id);
-          if (!app) return;
-          open({
-            id: app.id,
-            title: app.label,
-            accent: app.accent,
-            Icon: app.Icon,
-            component: createElement(app.Component),
-            x: saved.x,
-            y: saved.y,
-            w: saved.w,
-            h: saved.h,
-            maximized: saved.maximized,
-            alwaysMaximized: app.alwaysMaximized,
-          });
-        });
-      // open() always raises; minimized windows were never meant to be raised by a restore.
-      layout
-        .filter((saved) => saved.minimized)
-        .forEach((saved) => {
-          if (windowsRef.current.some((w) => w.id === saved.id)) minimize(saved.id);
-        });
-    },
-    [open, minimize, closeAll],
-  );
-
-  useEffect(() => {
-    restoreLayout(loadWindowLayout());
-    // Restore exactly once per session; state restores later ask again through the event.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    function onRestored(): void {
-      restoreLayout(loadWindowLayout());
-    }
-    window.addEventListener(STATE_RESTORED_EVENT, onRestored);
-    return () => window.removeEventListener(STATE_RESTORED_EVENT, onRestored);
-  }, [restoreLayout]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent): void {

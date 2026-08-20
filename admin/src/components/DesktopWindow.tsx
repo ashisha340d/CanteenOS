@@ -1,6 +1,8 @@
 import { Suspense, useCallback, useRef } from 'react';
 import { Spinner } from '@/components/ui/spinner';
+import { WindowHostProvider } from '@/services/WindowHost';
 import { useWindowManager, type ManagedWindow } from '@/services/WindowManager';
+import { CaptionControls } from './CaptionControls';
 import './DesktopWindow.css';
 
 interface DesktopWindowProps {
@@ -8,7 +10,8 @@ interface DesktopWindowProps {
   isFocused: boolean;
 }
 
-const TITLE_HEIGHT = 38;
+/** Windows' caption height. The buttons are sized to fill it exactly. */
+const TITLE_HEIGHT = 32;
 const MIN_W = 420;
 const MIN_H = 300;
 
@@ -17,7 +20,7 @@ type ResizeEdge = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
 const RESIZE_EDGES: ResizeEdge[] = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
 
 export function DesktopWindow({ win, isFocused }: DesktopWindowProps): JSX.Element | null {
-  const { close, focus, minimize, maximize, move, setBounds } = useWindowManager();
+  const { focus, maximize, move, setBounds } = useWindowManager();
   const winRef = useRef<HTMLDivElement>(null);
 
   const handleTitleMouseDown = useCallback(
@@ -96,57 +99,31 @@ export function DesktopWindow({ win, isFocused }: DesktopWindowProps): JSX.Eleme
   return (
     <div
       ref={winRef}
-      className={`os-window ${isFocused ? 'os-window--focused' : ''} ${win.maximized ? 'os-window--docked' : ''
-        }`}
+      className={`os-window ${isFocused ? 'os-window--focused' : ''} ${
+        win.maximized ? 'os-window--maximized' : ''
+      }`}
       style={{ ...geometry, zIndex: win.zIndex }}
       onMouseDown={() => focus(win.id)}
     >
-      {/* Maximised windows dock their caption into the app bar (see AppShell), so the title
-          bar is not drawn here at all — that row of space goes back to the content. */}
-      {!win.maximized && (
-        <div
-          className="os-window__titlebar"
-          style={{ height: TITLE_HEIGHT }}
-          onMouseDown={handleTitleMouseDown}
-          onDoubleClick={() => maximize(win.id)}
-        >
-          <div className="os-window__lights">
-            <button
-              type="button"
-              aria-label={`Close ${win.title}`}
-              title="Close"
-              className="os-window__light os-window__light--close"
-              onMouseDown={(e) => e.stopPropagation()}
-              onClick={() => close(win.id)}
-            />
-            <button
-              type="button"
-              aria-label={`Minimise ${win.title}`}
-              title="Minimise"
-              className="os-window__light os-window__light--min"
-              onMouseDown={(e) => e.stopPropagation()}
-              onClick={() => minimize(win.id)}
-            />
-            <button
-              type="button"
-              aria-label={`Maximise ${win.title}`}
-              title="Maximise"
-              className="os-window__light os-window__light--max"
-              onMouseDown={(e) => e.stopPropagation()}
-              onClick={() => maximize(win.id)}
-            />
-          </div>
-
-          {win.Icon ? (
-            <span className="os-window__icon" style={{ background: win.accent }}>
-              <win.Icon className="os-window__icon-glyph" />
-            </span>
-          ) : (
-            win.accent && <span className="os-window__accent" style={{ background: win.accent }} />
-          )}
-          <span className="os-window__title">{win.title}</span>
-        </div>
-      )}
+      {/* A maximised window keeps its own caption rather than surrendering it to a parent bar.
+          That is how Windows does it, and it is the only chrome the window has left once the
+          app's own top bar is gone — it has to carry the title and the close button itself. */}
+      <div
+        className="os-window__titlebar"
+        style={{ height: TITLE_HEIGHT }}
+        onMouseDown={handleTitleMouseDown}
+        onDoubleClick={() => maximize(win.id)}
+      >
+        {win.Icon ? (
+          <span className="os-window__icon" style={{ background: win.accent }}>
+            <win.Icon className="os-window__icon-glyph" />
+          </span>
+        ) : (
+          win.accent && <span className="os-window__accent" style={{ background: win.accent }} />
+        )}
+        <span className="os-window__title">{win.title}</span>
+        <CaptionControls win={win} />
+      </div>
 
       <div className="os-window__body">
         <Suspense
@@ -157,7 +134,9 @@ export function DesktopWindow({ win, isFocused }: DesktopWindowProps): JSX.Eleme
             </div>
           }
         >
-          {win.component}
+          {/* Modules render generically here, so the frame tells them where they are rather
+              than every call site passing a flag down. */}
+          <WindowHostProvider>{win.component}</WindowHostProvider>
         </Suspense>
       </div>
 
@@ -173,3 +152,4 @@ export function DesktopWindow({ win, isFocused }: DesktopWindowProps): JSX.Eleme
     </div>
   );
 }
+

@@ -23,6 +23,12 @@ export type PosKdsLineStatus = (typeof PosKdsLineStatus)[keyof typeof PosKdsLine
 export interface KdsLineDto {
   id: Uuid;
   itemName: string;
+  /**
+   * The dish's Hindi name from the menu master, for a board switched to Hindi. Null for an
+   * ad-hoc line typed at the till and for any dish nobody has given a Hindi name — a display
+   * falls back to `itemName` rather than showing a blank.
+   */
+  itemNameHi: string | null;
   variantName: string | null;
   customItemName: string | null;
   quantity: number;
@@ -56,11 +62,26 @@ export interface KdsOrderDto {
   lines: KdsLineDto[];
 }
 
+/** One row of the queue view: what is still owed for a dish, and what is left to make it with. */
+export interface KdsQueueSummaryRow {
+  menuItemId: Uuid | null;
+  itemName: string;
+  /** Hindi name for the queue grid, on the same fall-back rule as `KdsLineDto.itemNameHi`. */
+  itemNameHi: string | null;
+  /** Outstanding quantity across every unserved line on this board. */
+  quantity: number;
+  /**
+   * Portions still in hand at this counter — the registered count minus what has been sold.
+   * Null when nobody has counted the dish for this shift, which is not the same as zero.
+   */
+  remainingQty: number | null;
+}
+
 export interface KdsQueueDto {
   scope: { counterId?: Uuid; printingGroupId?: Uuid };
   orders: KdsOrderDto[];
   /** Aggregated outstanding quantities across the whole queue, for the summary rail. */
-  summary: { itemName: string; quantity: number }[];
+  summary: KdsQueueSummaryRow[];
 }
 
 /** The last served lines at a counter — the undo list. `revert` accepts anything in it. */
@@ -69,6 +90,8 @@ export interface KdsRecentActionDto {
   orderId: Uuid;
   orderNumber: string;
   itemName: string;
+  /** Hindi name, on the same fall-back rule as `KdsLineDto.itemNameHi`. */
+  itemNameHi: string | null;
   variantName: string | null;
   quantity: number;
   servedAt: IsoDateTime;
@@ -123,6 +146,15 @@ export interface KdsStationMenuItemDto {
   categoryName: string;
   masterName: string;
   displayName: string;
+  /**
+   * The effective name in Hindi: the menu's Hindi override where it has one, otherwise the
+   * dish's own Hindi name. Null when neither exists.
+   *
+   * A station's own rename (`hasCustomName`) is deliberately *not* mirrored here — the counter
+   * typed that name for its own screen, in whichever language it chose, so a board in Hindi
+   * shows the rename rather than reverting to a master Hindi name the counter overrode.
+   */
+  displayNameHi: string | null;
   /** True when the station renamed the dish — reverting clears the override row. */
   hasCustomName: boolean;
   /**

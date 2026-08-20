@@ -2,6 +2,9 @@ import type { Server as HttpServer } from 'node:http';
 import { Server as SocketServer, type Socket } from 'socket.io';
 import {
   Capability,
+  CHAT_SOCKET_EVENTS,
+  ClientType,
+  CounterMessageDirection,
   KDS_SOCKET_EVENTS,
   PosPaymentMethod,
   SOCKET_EVENTS,
@@ -22,6 +25,8 @@ import { KDS_REALTIME_ROOMS, realtime } from './RealtimeGateway';
 interface SocketAuth {
   userId: string;
   deviceId: string;
+  /** Which app this socket is: decides which side of the counter chat it speaks as. */
+  clientType: ClientType;
   capabilities: Capability[];
 }
 
@@ -77,6 +82,7 @@ export function createSocketServer(httpServer: HttpServer): SocketServer {
       (socket.data as SocketAuth) = {
         userId: user.id,
         deviceId: claims.did,
+        clientType: claims.ct,
         capabilities: tokenService.capabilitiesFor(user.role, claims.ct),
       };
       next();
@@ -191,6 +197,47 @@ async function onConnection(socket: Socket): Promise<void> {
     }
   });
 
+  /* The office↔counter chat. Its own room rather than the KDS one it shadows, so a message
+     does not wake every board listener into a queue refetch. Admin sockets have no other way
+     into a counter-scoped room — they join only user/board/masters rooms above — so this
+     handler is the single door, and it is capability-gated like the display scopes. */
+  socket.on(CHAT_SOCKET_EVENTS.CHAT_SUBSCRIBE, (payload: unknown) => {
+    joinChatScope(socket, auth, payload).catch((error: unknown) => {
+      logger.warn('Socket chat room join failed', { userId: auth.userId }, error);
+    });
+  });
+
+  socket.on(CHAT_SOCKET_EVENTS.CHAT_UNSUBSCRIBE, (payload: unknown) => {
+    const counterId = readScopeId(payload, 'counterId');
+    if (counterId === null) return;
+    Promise.resolve(socket.leave(KDS_REALTIME_ROOMS.chatCounter(counterId))).catch(
+      (error: unknown) => {
+        logger.warn('Socket chat room leave failed', { userId: auth.userId, counterId }, error);
+      },
+    );
+  });
+
+  /* Typing presence, relayed and never stored — same discipline as the board's. Membership of
+     the room is the authorisation: a socket can only announce itself on a channel it already
+     joined, and the side it speaks as comes from its token, not from the payload. */
+  socket.on(CHAT_SOCKET_EVENTS.CHAT_TYPING_SET, (payload: unknown) => {
+    const counterId = readScopeId(payload, 'counterId');
+    if (counterId === null) return;
+    const room = KDS_REALTIME_ROOMS.chatCounter(counterId);
+    if (!socket.rooms.has(room)) return;
+
+    const typing =
+      typeof payload === 'object' &&
+      payload !== null &&
+      (payload as { typing?: unknown }).typing === true;
+
+    socket.to(room).emit(CHAT_SOCKET_EVENTS.CHAT_TYPING, {
+      counterId,
+      direction: sideFor(auth.clientType),
+      typing,
+    });
+  });
+
   socket.on('disconnect', (reason) => {
     logger.debug('Socket disconnected', { socketId: socket.id, userId: auth.userId, reason });
   });
@@ -255,6 +302,32 @@ async function joinCdsScope(socket: Socket, auth: SocketAuth, payload: unknown):
   if (counterId !== null) {
     await socket.join(KDS_REALTIME_ROOMS.cdsCounter(counterId));
   }
+}
+
+/**
+ * A chat channel is a counter, gated on POS_READ exactly like the display scopes: whoever may
+ * watch a counter's board may talk to it. Re-verified on every join rather than trusted from
+ * the handshake, mirroring `joinKdsScope`.
+ */
+async function joinChatScope(socket: Socket, auth: SocketAuth, payload: unknown): Promise<void> {
+  if (!auth.capabilities.includes(Capability.POS_READ)) {
+    logger.warn('Socket denied chat room join', { userId: auth.userId });
+    return;
+  }
+  const counterId = readScopeId(payload, 'counterId');
+  if (counterId !== null) {
+    await socket.join(KDS_REALTIME_ROOMS.chatCounter(counterId));
+  }
+}
+
+/**
+ * Which side of the channel this socket speaks as. Read from the client type in the token, so a
+ * wall display cannot announce itself as the office.
+ */
+function sideFor(clientType: ClientType): CounterMessageDirection {
+  return clientType === ClientType.KDS
+    ? CounterMessageDirection.TO_ADMIN
+    : CounterMessageDirection.TO_COUNTER;
 }
 
 /**

@@ -54,6 +54,15 @@ const POS_ITEM_COLUMNS = `id, pos_order_id, menu_item_id, variant_id, custom_ite
 const POS_PAYMENT_COLUMNS = `id, pos_order_id, method, amount, tendered_amount, change_amount,
     reference, notes, entity_id, is_reversal, received_by, received_at, created_at, updated_at`;
 
+/** A transaction is one settled ticket, however many tenders it was split across. */
+const SETTLED_TRANSACTIONS = `COUNT(DISTINCT CASE WHEN po.status = 'COMPLETED' THEN po.id END)`;
+
+/** Lines that were actually sold: live lines on settled tickets, within the range. */
+const ANALYTICS_ITEM_CONDITIONS = `po.business_date BETWEEN ? AND ?
+          AND po.deleted_at IS NULL
+          AND po.status = 'COMPLETED'
+          AND poi.status = 'ACTIVE'`;
+
 export interface PosOrderListFilter {
   status?: PosOrderStatus[];
   orderType?: PosOrderType[];
@@ -190,6 +199,45 @@ export interface PosCounterLoadRow extends RowDataPacket {
 export interface PosPaymentMethodTotalRow extends RowDataPacket {
   method: PosPaymentMethod;
   total: number;
+}
+
+export interface PosSalesTotalsRow extends RowDataPacket {
+  net_sales: string;
+  gross_sales: string;
+  refunded_amount: string;
+  transaction_count: number;
+}
+
+export interface PosSalesDayRow extends RowDataPacket {
+  business_date: string;
+  net_sales: string;
+  transaction_count: number;
+}
+
+export interface PosItemTotalsRow extends RowDataPacket {
+  items_sold: string;
+  discount_amount: string;
+  tax_amount: string;
+}
+
+export interface PosTopItemRow extends RowDataPacket {
+  menu_item_id: string | null;
+  item_name: string;
+  variant_name: string | null;
+  quantity: string;
+  net_amount: string;
+}
+
+export interface PosBusyHourRow extends RowDataPacket {
+  hour: number;
+  transaction_count: number;
+  net_sales: string;
+}
+
+/** Inclusive business-date window every analytics read is scoped to. */
+export interface PosAnalyticsRange {
+  dateFrom: string;
+  dateTo: string;
 }
 
 function buildWhere(filter: PosOrderListFilter): { where: string; params: unknown[] } {
@@ -756,6 +804,111 @@ export class PosRepository {
       result[row.method] = Number(row.total);
     }
     return result;
+  }
+
+  /* -------------------------------------------------------------- analytics */
+
+  /**
+   * Takings over a range, in one pass over the payment ledger.
+   *
+   * A void does not delete anything: it appends a negative row against the original, so a
+   * plain `SUM(amount)` is already net and the two halves only have to be split back out by
+   * `is_reversal`. That is also why the money side is not restricted to COMPLETED tickets —
+   * a voided sale is CANCELLED, and excluding it would hide the very refund being measured.
+   * The count is: a transaction is a settled ticket, and one bill split across cash and card
+   * is still one of them.
+   */
+  async salesTotals(db: Db, range: PosAnalyticsRange): Promise<PosSalesTotalsRow | null> {
+    return selectOne<PosSalesTotalsRow>(
+      db,
+      `SELECT COALESCE(SUM(p.amount), 0) AS net_sales,
+              COALESCE(SUM(CASE WHEN p.is_reversal = 0 THEN p.amount ELSE 0 END), 0) AS gross_sales,
+              -COALESCE(SUM(CASE WHEN p.is_reversal = 1 THEN p.amount ELSE 0 END), 0)
+                AS refunded_amount,
+              ${SETTLED_TRANSACTIONS} AS transaction_count
+         FROM pos_payments p
+         JOIN pos_orders po ON po.id = p.pos_order_id
+        WHERE po.business_date BETWEEN ? AND ? AND po.deleted_at IS NULL`,
+      [range.dateFrom, range.dateTo],
+    );
+  }
+
+  /** The same figures broken down per business date, for the sparkline. */
+  async salesByDay(db: Db, range: PosAnalyticsRange): Promise<PosSalesDayRow[]> {
+    return selectRows<PosSalesDayRow>(
+      db,
+      `SELECT po.business_date AS business_date,
+              COALESCE(SUM(p.amount), 0) AS net_sales,
+              ${SETTLED_TRANSACTIONS} AS transaction_count
+         FROM pos_payments p
+         JOIN pos_orders po ON po.id = p.pos_order_id
+        WHERE po.business_date BETWEEN ? AND ? AND po.deleted_at IS NULL
+        GROUP BY po.business_date
+        ORDER BY po.business_date ASC`,
+      [range.dateFrom, range.dateTo],
+    );
+  }
+
+  /** What was actually sold, from the lines rather than the ledger. */
+  async itemTotals(db: Db, range: PosAnalyticsRange): Promise<PosItemTotalsRow | null> {
+    return selectOne<PosItemTotalsRow>(
+      db,
+      `SELECT COALESCE(SUM(poi.quantity), 0) AS items_sold,
+              COALESCE(SUM(poi.discount_amount), 0) AS discount_amount,
+              COALESCE(SUM(poi.tax_amount), 0) AS tax_amount
+         FROM pos_order_items poi
+         JOIN pos_orders po ON po.id = poi.pos_order_id
+        WHERE ${ANALYTICS_ITEM_CONDITIONS}`,
+      [range.dateFrom, range.dateTo],
+    );
+  }
+
+  /**
+   * The best sellers of the range by revenue.
+   *
+   * Grouping carries `menu_item_id` alongside the names so an off-menu line — which has no
+   * catalogue id at all — still collapses with the other lines someone typed the same name
+   * for, instead of merging every custom line in the range into one row.
+   */
+  async topItems(db: Db, range: PosAnalyticsRange, limit: number): Promise<PosTopItemRow[]> {
+    return selectRows<PosTopItemRow>(
+      db,
+      `SELECT poi.menu_item_id AS menu_item_id,
+              poi.item_name    AS item_name,
+              poi.variant_name AS variant_name,
+              COALESCE(SUM(poi.quantity), 0) AS quantity,
+              COALESCE(SUM(poi.line_total), 0) AS net_amount
+         FROM pos_order_items poi
+         JOIN pos_orders po ON po.id = poi.pos_order_id
+        WHERE ${ANALYTICS_ITEM_CONDITIONS}
+        GROUP BY poi.menu_item_id, poi.item_name, poi.variant_name
+        ORDER BY net_amount DESC
+        LIMIT ?`,
+      [range.dateFrom, range.dateTo, limit],
+    );
+  }
+
+  /**
+   * When the tickets were rung up, by hour of the day.
+   *
+   * Keyed on `placed_at` rather than on the payment: the question the graph answers is when
+   * the counter was busy, and that is when the order was taken.
+   */
+  async busyHours(db: Db, range: PosAnalyticsRange): Promise<PosBusyHourRow[]> {
+    return selectRows<PosBusyHourRow>(
+      db,
+      `SELECT HOUR(po.placed_at) AS hour,
+              COUNT(*) AS transaction_count,
+              COALESCE(SUM(po.total_amount), 0) AS net_sales
+         FROM pos_orders po
+        WHERE po.business_date BETWEEN ? AND ?
+          AND po.deleted_at IS NULL
+          AND po.status = 'COMPLETED'
+          AND po.placed_at IS NOT NULL
+        GROUP BY HOUR(po.placed_at)
+        ORDER BY hour ASC`,
+      [range.dateFrom, range.dateTo],
+    );
   }
 
   /* -------------------------------------------------------- catalogue reads */

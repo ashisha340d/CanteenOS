@@ -33,12 +33,26 @@ const TYPE_ICON: Record<NotificationType, keyof typeof Ionicons.glyphMap> = {
   EQUIPMENT_OUT_OF_SERVICE: 'close-circle-outline',
   WARRANTY_EXPIRING: 'shield-outline',
   SUPPLIER_FOLLOW_UP: 'call-outline',
+
+  CLEANING_TASK_ASSIGNED: 'sparkles-outline',
+  CLEANING_TASK_DUE: 'time-outline',
+  CLEANING_TASK_OVERDUE: 'alert-circle-outline',
+  CLEANING_TASK_UNASSIGNED: 'help-circle-outline',
+  CLEANING_VERIFICATION_REQUIRED: 'eye-outline',
+  CLEANING_VERIFICATION_FAILED: 'close-circle-outline',
+  CLEANING_RECLEAN_REQUIRED: 'refresh-circle-outline',
+  CLEANING_CORRECTIVE_ACTION_ASSIGNED: 'build-outline',
+  CLEANING_CORRECTIVE_ACTION_OVERDUE: 'warning-outline',
+  HYGIENE_COMPLIANCE_ALERT: 'shield-half-outline',
 };
 
-/** Equipment notifications carry their subject in `data` rather than in a column. */
+/**
+ * Equipment and cleaning notifications carry their subject in `data` rather than in a column,
+ * because neither entity is board- or order-scoped.
+ */
 function stringFromData(
   data: Record<string, unknown> | null,
-  key: 'ticketId' | 'equipmentId',
+  key: 'ticketId' | 'equipmentId' | 'taskId' | 'correctiveActionId',
 ): string | null {
   const value = data?.[key];
   return typeof value === 'string' && value !== '' ? value : null;
@@ -80,10 +94,26 @@ export default function NotificationsScreen(): React.JSX.Element {
     await notificationRepository.markReadLocal([notification.id]);
     await load();
 
-    // A maintenance notification points at a ticket, or failing that at the asset itself.
+    // A maintenance notification points at a ticket, or failing that at the asset itself; a
+    // cleaning one points at the task. Checked before the order/board fallbacks because
+    // neither module's notifications carry either column.
     const ticketId = stringFromData(notification.data, 'ticketId');
     const equipmentId = stringFromData(notification.data, 'equipmentId');
-    if (ticketId !== null) {
+    const isCleaning = notification.type.startsWith('CLEANING');
+    // A corrective action carries its parent task too, and both would open something true — but
+    // the fix is what the reader was paged about, so it wins.
+    const correctiveActionId = isCleaning
+      ? stringFromData(notification.data, 'correctiveActionId')
+      : null;
+    const cleaningTaskId = isCleaning ? stringFromData(notification.data, 'taskId') : null;
+    if (correctiveActionId !== null) {
+      router.push({
+        pathname: '/cleaning/corrective/[actionId]',
+        params: { actionId: correctiveActionId },
+      });
+    } else if (cleaningTaskId !== null) {
+      router.push({ pathname: '/cleaning/[taskId]', params: { taskId: cleaningTaskId } });
+    } else if (ticketId !== null) {
       router.push({ pathname: '/equipment/tickets/[ticketId]', params: { ticketId } });
     } else if (equipmentId !== null) {
       router.push({ pathname: '/equipment/[equipmentId]', params: { equipmentId } });

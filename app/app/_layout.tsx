@@ -198,6 +198,14 @@ export default function RootLayout(): React.JSX.Element {
             <Stack.Screen name="equipment/tickets/[ticketId]" options={{ headerShown: false }} />
             <Stack.Screen name="equipment/suppliers/index" options={{ headerShown: false }} />
             <Stack.Screen name="equipment/suppliers/[supplierId]" options={{ headerShown: false }} />
+            {/* Cleaning draws its own TopAppBar on every screen, so the navigator's would double
+                up — a route missing from this list renders two stacked headers. */}
+            <Stack.Screen name="cleaning/index" options={{ headerShown: false }} />
+            <Stack.Screen name="cleaning/tasks" options={{ headerShown: false }} />
+            <Stack.Screen name="cleaning/[taskId]" options={{ headerShown: false }} />
+            <Stack.Screen name="cleaning/report" options={{ headerShown: false }} />
+            <Stack.Screen name="cleaning/scan" options={{ headerShown: false }} />
+            <Stack.Screen name="cleaning/corrective/[actionId]" options={{ headerShown: false }} />
           </Stack>
         )}
       </SafeAreaProvider>

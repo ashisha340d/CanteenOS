@@ -45,6 +45,14 @@ const SLOT_LABELS: Record<AlertSoundSlot, { title: string; description: string }
     title: 'KDS — critical',
     description: 'Configured on the KDS & CDS tab.',
   },
+  [AlertSoundSlot.CHAT_MESSAGE]: {
+    title: 'Chat message',
+    description: 'Configured in Chat & Messaging settings.',
+  },
+  [AlertSoundSlot.CHAT_BELL]: {
+    title: 'Chat bell',
+    description: 'Configured in Chat & Messaging settings.',
+  },
 };
 
 const ALERT_TYPE_LABELS: Record<AlertType, string> = {

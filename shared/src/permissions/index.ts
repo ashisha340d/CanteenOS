@@ -94,6 +94,98 @@ export const Capability = {
   SHOPPING_LIST_READ: 'shopping.read',
   SHOPPING_LIST_GENERATE: 'shopping.generate',
 
+  /* ------------------------------------- product, unit & location masters --- */
+
+  /** Read the purchase/stock product master. Everyone who touches goods. */
+  PRODUCT_READ: 'product.read',
+  /** Create/edit a product, its units, tax profile, batch policy and stock levels. Manager+. */
+  PRODUCT_WRITE: 'product.write',
+  /** Maintain the unit-of-measure master and its conversion factors. Manager and above. */
+  UOM_MANAGE: 'inventory.uom.manage',
+  /** Maintain inventory locations — warehouse, day store, kitchen, production. Manager+. */
+  INVENTORY_LOCATION_MANAGE: 'inventory.location.manage',
+  /** Maintain the supplier↔product mapping used by OCR and automated purchasing. Manager+. */
+  SUPPLIER_PRODUCT_MANAGE: 'purchase.supplier_product.manage',
+
+  /* ------------------------------------------- inventory & stock movement --- */
+
+  /** Read stock balances per product and location. Everyone who works a store. */
+  INVENTORY_READ: 'inventory.read',
+  /** Read the immutable stock ledger — every movement and its source document. */
+  STOCK_LEDGER_READ: 'stock.ledger.read',
+  /** Record a physical stock count. Floor staff count what is in front of them. */
+  STOCK_COUNT_CREATE: 'stock.count.create',
+  /** Approve a completed count so its variance may be posted. Manager and above. */
+  STOCK_COUNT_APPROVE: 'stock.count.approve',
+  /** Raise a stock adjustment (wastage, expiry, count variance). Manager and above. */
+  STOCK_ADJUSTMENT_CREATE: 'stock.adjustment.create',
+  /**
+   * Post a stock adjustment. Separate from creating one because an adjustment rewrites the
+   * physical truth without a supplier document behind it. Admin only.
+   */
+  STOCK_ADJUSTMENT_APPROVE: 'stock.adjustment.approve',
+  /** Raise a transfer between two locations. Manager and above. */
+  STOCK_TRANSFER_CREATE: 'stock.transfer.create',
+  /** Approve a requested transfer. Manager and above. */
+  STOCK_TRANSFER_APPROVE: 'stock.transfer.approve',
+  /** Pick and dispatch an approved transfer out of the source location. Manager and above. */
+  STOCK_TRANSFER_DISPATCH: 'stock.transfer.dispatch',
+  /**
+   * Book a dispatched transfer into the destination location. Reaches User: the person
+   * standing in the receiving store is the person who confirms what actually arrived.
+   */
+  STOCK_TRANSFER_RECEIVE: 'stock.transfer.receive',
+
+  /* -------------------------------------------------- purchase management --- */
+
+  /** See the purchase dashboard and read purchase documents. Manager and above. */
+  PURCHASE_READ: 'purchase.read',
+  /** Raise a purchase requirement. Manager and above. */
+  PURCHASE_REQUIREMENT_CREATE: 'purchase.requirement.create',
+  /** Approve a requirement so it may be ordered. Manager and above. */
+  PURCHASE_REQUIREMENT_APPROVE: 'purchase.requirement.approve',
+  /** Draft a purchase order. Manager and above. */
+  PURCHASE_ORDER_CREATE: 'purchase.order.create',
+  /** Approve a purchase order — it commits the business to a supplier. Admin only. */
+  PURCHASE_ORDER_APPROVE: 'purchase.order.approve',
+  /** Raise a direct purchase entry with no requirement or order behind it. Manager and above. */
+  PURCHASE_ENTRY_CREATE: 'purchase.entry.create',
+  /** Book goods in against an order, an entry, or nothing at all. Manager and above. */
+  PURCHASE_RECEIVE: 'purchase.receive',
+  /** Accept or reject received quantity. Only accepted quantity becomes stock. Manager+. */
+  PURCHASE_QC: 'purchase.qc',
+  /** Record the supplier's financial claim. Manager and above. */
+  PURCHASE_INVOICE_CREATE: 'purchase.invoice.create',
+  /** Approve an invoice that failed three-way matching. Admin only. */
+  PURCHASE_INVOICE_APPROVE: 'purchase.invoice.approve',
+  /**
+   * Post a purchase: stock in, invoice, vendor ledger, payable and settlement, atomically.
+   * The single capability that turns a draft into an immutable, auditable transaction.
+   */
+  PURCHASE_POST: 'purchase.post',
+  /** Return goods to a supplier. Manager and above. */
+  PURCHASE_RETURN_CREATE: 'purchase.return.create',
+  /** Post a purchase return — it moves stock out and adjusts the supplier. Admin only. */
+  PURCHASE_RETURN_APPROVE: 'purchase.return.approve',
+  /** Raise a debit memo against a supplier. Manager and above. */
+  DEBIT_MEMO_CREATE: 'purchase.debit_memo.create',
+  /** Post a debit memo. It changes what is owed, so it stops at Admin. */
+  DEBIT_MEMO_APPROVE: 'purchase.debit_memo.approve',
+  /** Record a supplier credit memo. Manager and above. */
+  CREDIT_MEMO_CREATE: 'purchase.credit_memo.create',
+  /** Post a credit memo. It changes what is owed, so it stops at Admin. */
+  CREDIT_MEMO_APPROVE: 'purchase.credit_memo.approve',
+  /** Read the vendor ledger, statement and running balance. Manager and above. */
+  VENDOR_LEDGER_READ: 'purchase.vendor_ledger.read',
+  /** Read accounts payable, outstanding and ageing. Manager and above. */
+  PAYABLE_READ: 'purchase.payable.read',
+  /** Queue an approved payable for payment. Manager and above. */
+  PAYABLE_SUBMIT: 'purchase.payable.submit',
+  /** Pay a supplier and allocate it against invoices. Money leaves — Admin only. */
+  VENDOR_PAYMENT_CREATE: 'purchase.payment.create',
+  /** Read purchase registers, price history and variance reports. Manager and above. */
+  PURCHASE_REPORT_READ: 'purchase.report.read',
+
   /* ------------------------------- equipment monitoring & maintenance ------- */
 
   /**
@@ -250,6 +342,13 @@ const USER_CAPABILITIES: readonly Capability[] = [
   Capability.EQUIPMENT_REPORT_PROBLEM,
   Capability.MAINTENANCE_VIEW,
   Capability.MAINTENANCE_CREATE,
+  // Goods, not purchasing. A store keeper reads the product master, sees what is on their
+  // shelf, counts it, and confirms what arrived from another store. They cannot buy anything,
+  // cannot price anything, and cannot post an adjustment that rewrites the balance.
+  Capability.PRODUCT_READ,
+  Capability.INVENTORY_READ,
+  Capability.STOCK_COUNT_CREATE,
+  Capability.STOCK_TRANSFER_RECEIVE,
 ];
 
 const MANAGER_CAPABILITIES: readonly Capability[] = [
@@ -294,6 +393,38 @@ const MANAGER_CAPABILITIES: readonly Capability[] = [
   Capability.CLEANING_WORKFORCE_MANAGE,
   Capability.CLEANING_EVENT_PUBLISH,
   Capability.CLEANING_COMPLIANCE_VIEW,
+  // The Manager buys the goods. They own the masters behind purchasing, raise every purchase
+  // document, receive and QC the delivery, and post it — including settling a cash purchase,
+  // because a van driver waiting at the back door cannot wait for an Admin. What they cannot
+  // do is commit the business to a supplier on paper (PO approval), wave through an invoice
+  // that failed matching, pay off a credit bill, or post an adjustment or memo that rewrites
+  // a balance with no supplier document behind it. Those sit with Admin.
+  Capability.PURCHASE_READ,
+  Capability.PRODUCT_WRITE,
+  Capability.UOM_MANAGE,
+  Capability.INVENTORY_LOCATION_MANAGE,
+  Capability.SUPPLIER_PRODUCT_MANAGE,
+  Capability.STOCK_LEDGER_READ,
+  Capability.STOCK_COUNT_APPROVE,
+  Capability.STOCK_ADJUSTMENT_CREATE,
+  Capability.STOCK_TRANSFER_CREATE,
+  Capability.STOCK_TRANSFER_APPROVE,
+  Capability.STOCK_TRANSFER_DISPATCH,
+  Capability.PURCHASE_REQUIREMENT_CREATE,
+  Capability.PURCHASE_REQUIREMENT_APPROVE,
+  Capability.PURCHASE_ORDER_CREATE,
+  Capability.PURCHASE_ENTRY_CREATE,
+  Capability.PURCHASE_RECEIVE,
+  Capability.PURCHASE_QC,
+  Capability.PURCHASE_INVOICE_CREATE,
+  Capability.PURCHASE_POST,
+  Capability.PURCHASE_RETURN_CREATE,
+  Capability.DEBIT_MEMO_CREATE,
+  Capability.CREDIT_MEMO_CREATE,
+  Capability.VENDOR_LEDGER_READ,
+  Capability.PAYABLE_READ,
+  Capability.PAYABLE_SUBMIT,
+  Capability.PURCHASE_REPORT_READ,
 ];
 
 const ADMIN_CAPABILITIES: readonly Capability[] = [
@@ -337,6 +468,15 @@ const ADMIN_CAPABILITIES: readonly Capability[] = [
   // Deleting a cleaning record erases the evidence that the clean happened, so it stops at
   // Admin. Cancelling a task and deactivating a rule are the Manager-level equivalents.
   Capability.CLEANING_DELETE,
+  // The four purchase decisions that move money or rewrite a balance without a supplier
+  // delivery behind them. A Manager raises each of these; only an Admin makes them real.
+  Capability.PURCHASE_ORDER_APPROVE,
+  Capability.PURCHASE_INVOICE_APPROVE,
+  Capability.PURCHASE_RETURN_APPROVE,
+  Capability.DEBIT_MEMO_APPROVE,
+  Capability.CREDIT_MEMO_APPROVE,
+  Capability.VENDOR_PAYMENT_CREATE,
+  Capability.STOCK_ADJUSTMENT_APPROVE,
 ];
 
 /**

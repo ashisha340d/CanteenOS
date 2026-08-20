@@ -82,18 +82,34 @@ export function useMenuCategories(query: CatalogueScopedListQuery) {
 }
 export function useCreateMenuCategory() {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: (body: MenuCategoryWriteRequest) => menuCategoriesApi.create(body), onSuccess: () => qc.invalidateQueries({ queryKey: ['menu-categories'] }) });
+  return useMutation({
+    mutationFn: (body: MenuCategoryWriteRequest) => menuCategoriesApi.create(body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['menu-categories'] });
+      qc.invalidateQueries({ queryKey: ['menu-category-assignments'] });
+    },
+  });
 }
 export function useUpdateMenuCategory() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: Partial<MenuCategoryWriteRequest> }) => menuCategoriesApi.update(id, body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['menu-categories'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['menu-categories'] });
+      qc.invalidateQueries({ queryKey: ['menu-category-assignments'] });
+      qc.invalidateQueries({ queryKey: ['menu-items'] });
+    },
   });
 }
 export function useDeleteMenuCategory() {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: (id: string) => menuCategoriesApi.remove(id), onSuccess: () => qc.invalidateQueries({ queryKey: ['menu-categories'] }) });
+  return useMutation({
+    mutationFn: (id: string) => menuCategoriesApi.remove(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['menu-categories'] });
+      qc.invalidateQueries({ queryKey: ['menu-category-assignments'] });
+    },
+  });
 }
 
 /* ------------------------------------------------------------------- menu items */
@@ -110,16 +126,37 @@ export function useMenuItem(id: string | undefined) {
 }
 export function useCreateMenuItem() {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: (body: MenuItemWriteRequest) => menuItemsApi.create(body), onSuccess: () => qc.invalidateQueries({ queryKey: ['menu-items'] }) });
+  return useMutation({
+    mutationFn: (body: MenuItemWriteRequest) => menuItemsApi.create(body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['menu-items'] });
+      qc.invalidateQueries({ queryKey: ['menu-assignment-workspace'] });
+    },
+  });
 }
 export function useUpdateMenuItem() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: Partial<MenuItemWriteRequest> }) => menuItemsApi.update(id, body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['menu-items'] }),
+    onSuccess: (item, variables) => {
+      qc.setQueryData(['menu-item', variables.id], item);
+      qc.invalidateQueries({ queryKey: ['menu-items'] });
+      qc.invalidateQueries({ queryKey: ['menu-item-assignments'] });
+      qc.invalidateQueries({ queryKey: ['menu-assignment-workspace'] });
+    },
   });
 }
 export function useDeleteMenuItem() {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: (id: string) => menuItemsApi.remove(id), onSuccess: () => qc.invalidateQueries({ queryKey: ['menu-items'] }) });
+  return useMutation({
+    mutationFn: (id: string) => menuItemsApi.remove(id),
+    onSuccess: (_data, id) => {
+      qc.removeQueries({ queryKey: ['menu-item', id] });
+      qc.invalidateQueries({ queryKey: ['menu-items'] });
+      qc.invalidateQueries({ queryKey: ['menu-item-assignments'] });
+      qc.invalidateQueries({ queryKey: ['menu-assignment-workspace'] });
+      qc.invalidateQueries({ queryKey: ['counter-routes'] });
+      qc.invalidateQueries({ queryKey: ['printing-routes'] });
+    },
+  });
 }

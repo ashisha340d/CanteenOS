@@ -1,6 +1,7 @@
 import {
   MasterStatus,
   type AvailabilityStatus,
+  type CounterRouteMoveRequest,
   type CounterRouteWriteRequest,
   type CounterWriteRequest,
   type ItemGroupWriteRequest,
@@ -14,10 +15,12 @@ import {
   type MenuScheduleWriteRequest,
   type MenuTreeDto,
   type MenuWriteRequest,
+  type ModifierAssignmentMoveRequest,
   type ModifierAssignmentWriteRequest,
   type ModifierGroupWriteRequest,
   type ModifierWriteRequest,
   type PrintingGroupWriteRequest,
+  type PrintingRouteMoveRequest,
   type PrintingRouteWriteRequest,
   type ResolvedMenuCategoryDto,
   type ResolvedMenuItemDto,
@@ -32,6 +35,7 @@ import {
   mapItemGroup,
   mapMenu,
   mapMenuCategoryAssignment,
+  mapMenuItem,
   mapMenuItemAssignment,
   mapMenuItemSchedule,
   mapMenuItemVariant,
@@ -105,6 +109,50 @@ function pagingFor(query: MenuMasterQuery): MasterListFilter & { page: number; p
  * item or category; it only ever creates the assignment that offers an existing one on a menu.
  */
 export class MenuMasterService {
+  private async assertRoutableEntity(
+    db: Db,
+    entityType: RoutableEntityType,
+    entityId: string,
+  ): Promise<void> {
+    const entity =
+      entityType === 'MENU_ITEM'
+        ? await menuItemRepository.findById(db, entityId)
+        : entityType === 'MENU_ITEM_ASSIGNMENT'
+          ? await menuItemAssignmentRepository.findById(db, entityId)
+          : await menuItemVariantRepository.findById(db, entityId);
+    if (entity === null) throw new NotFoundError('Assignment target', entityId);
+  }
+
+  async getMenuAssignmentWorkspace(userId: string) {
+    const pool = getPool();
+    const filter = { status: MasterStatus.ACTIVE, limit: 100_000, offset: 0 };
+    const [items, counters, kitchens, groups, counterRoutes, printingRoutes, modifierAssignments] =
+      await Promise.all([
+        menuItemRepository.list(pool, filter),
+        counterRepository.list(pool, filter),
+        printingGroupRepository.list(pool, filter),
+        modifierGroupRepository.list(pool, filter),
+        counterRouteRepository.listForEntityType(pool, 'MENU_ITEM'),
+        printingRouteRepository.listForEntityType(pool, 'MENU_ITEM'),
+        modifierAssignmentRepository.listForEntityType(pool, 'MENU_ITEM'),
+      ]);
+    const modifierGroups = await Promise.all(
+      groups.rows.map(async (group) => ({
+        ...mapModifierGroup(group),
+        modifiers: (await modifierRepository.listForGroup(pool, group.id)).map(mapModifier),
+      })),
+    );
+    return {
+      menuItems: items.rows.map((item) => mapMenuItem(item, userId)),
+      counters: counters.rows.map(mapCounter),
+      kitchens: kitchens.rows.map(mapPrintingGroup),
+      modifierGroups,
+      counterRoutes: counterRoutes.map(mapCounterRoute),
+      printingRoutes: printingRoutes.map(mapPrintingRoute),
+      modifierAssignments: modifierAssignments.map(mapModifierAssignment),
+    };
+  }
+
   /* ---------------------------------------------------------------------------- menus */
 
   async listMenus(query: MenuMasterQuery) {
@@ -398,6 +446,15 @@ export class MenuMasterService {
 
       const foodItem = await menuItemRepository.findById(connection, input.foodItemId);
       if (foodItem === null) throw new NotFoundError('Food item', input.foodItemId);
+      if (input.categoryAssignmentId) {
+        const category = await menuCategoryAssignmentRepository.findById(
+          connection,
+          input.categoryAssignmentId,
+        );
+        if (category === null || category.menu_id !== menuId) {
+          throw new ValidationError('The selected category does not belong to this menu');
+        }
+      }
 
       const existing = await menuItemAssignmentRepository.findByMenuAndFoodItem(
         connection,
@@ -455,6 +512,15 @@ export class MenuMasterService {
     const row = await withTransaction(async (connection) => {
       const before = await menuItemAssignmentRepository.findById(connection, id);
       if (before === null) throw new NotFoundError('Menu item assignment', id);
+      if (input.categoryAssignmentId) {
+        const category = await menuCategoryAssignmentRepository.findById(
+          connection,
+          input.categoryAssignmentId,
+        );
+        if (category === null || category.menu_id !== before.menu_id) {
+          throw new ValidationError('The selected category does not belong to this menu');
+        }
+      }
 
       const { foodItemId: _ignored, ...rest } = input;
       const updated = await menuItemAssignmentRepository.update(connection, id, rest);
@@ -484,6 +550,10 @@ export class MenuMasterService {
         );
       }
 
+      await counterRouteRepository.softDeleteForEntity(connection, 'MENU_ITEM_ASSIGNMENT', id);
+      await printingRouteRepository.softDeleteForEntity(connection, 'MENU_ITEM_ASSIGNMENT', id);
+      await modifierAssignmentRepository.softDeleteForEntity(connection, 'MENU_ITEM_ASSIGNMENT', id);
+      await mediaAssignmentRepository.softDeleteForEntity(connection, 'MENU_ITEM_ASSIGNMENT', id);
       await menuItemAssignmentRepository.softDelete(connection, id);
       await auditService.record(connection, actor, {
         action: AuditAction.MASTER_DELETED,
@@ -585,6 +655,11 @@ export class MenuMasterService {
         );
       }
 
+      await counterRouteRepository.softDeleteForEntity(connection, 'MENU_ITEM_VARIANT', id);
+      await printingRouteRepository.softDeleteForEntity(connection, 'MENU_ITEM_VARIANT', id);
+      await modifierAssignmentRepository.softDeleteForEntity(connection, 'MENU_ITEM_VARIANT', id);
+      await mediaAssignmentRepository.softDeleteForEntity(connection, 'MENU_ITEM_VARIANT', id);
+      await menuItemVariantCatalogPriceRepository.softDeleteForVariants(connection, [id]);
       await menuItemVariantRepository.softDelete(connection, id);
       await auditService.record(connection, actor, {
         action: AuditAction.MASTER_DELETED,
@@ -647,12 +722,8 @@ export class MenuMasterService {
     await withTransaction(async (connection) => {
       const before = await counterRepository.findById(connection, id);
       if (before === null) throw new NotFoundError('Counter', id);
-      const references = await counterRepository.countRouteReferences(connection, id);
-      if (references > 0) {
-        throw new ConflictError(
-          `${references} menu item(s)/variant(s) still route to this counter; remove them first`,
-        );
-      }
+      await counterRouteRepository.softDeleteForCounter(connection, id);
+      await mediaAssignmentRepository.softDeleteForEntity(connection, 'COUNTER', id);
       await counterRepository.softDelete(connection, id);
       await auditService.record(connection, actor, {
         action: AuditAction.MASTER_DELETED,
@@ -672,6 +743,7 @@ export class MenuMasterService {
     const row = await withTransaction(async (connection) => {
       const counter = await counterRepository.findById(connection, input.counterId);
       if (counter === null) throw new NotFoundError('Counter', input.counterId);
+      await this.assertRoutableEntity(connection, input.entityType, input.entityId);
       const created = await counterRouteRepository.insert(connection, {
         id: newId(),
         entityType: input.entityType,
@@ -689,6 +761,47 @@ export class MenuMasterService {
     });
     this.announce('counter-routes', Number(row.sync_seq));
     return mapCounterRoute(row);
+  }
+
+  async moveCounterRoute(input: CounterRouteMoveRequest, actor: AuditActor) {
+    if (!input.sourceRouteId && !input.targetCounterId) {
+      throw new ValidationError('A source assignment or target counter is required');
+    }
+    await withTransaction(async (connection) => {
+      await this.assertRoutableEntity(connection, input.entityType, input.entityId);
+      const source = input.sourceRouteId
+        ? await counterRouteRepository.findById(connection, input.sourceRouteId)
+        : null;
+      if (source && (source.entity_type !== input.entityType || source.entity_id !== input.entityId)) {
+        throw new ValidationError('The source counter assignment does not belong to this menu item');
+      }
+      let targetId = source?.id ?? input.entityId;
+      if (input.targetCounterId) {
+        const counter = await counterRepository.findById(connection, input.targetCounterId);
+        if (counter === null) throw new NotFoundError('Counter', input.targetCounterId);
+        const target = await counterRouteRepository.insert(connection, {
+          id: newId(),
+          entityType: input.entityType,
+          entityId: input.entityId,
+          counterId: input.targetCounterId,
+          status: MasterStatus.ACTIVE,
+          createdBy: actor.userId,
+        });
+        targetId = target.id;
+      }
+      if (source && source.counter_id !== input.targetCounterId) {
+        await counterRouteRepository.softDelete(connection, source.id);
+      }
+      await auditService.record(connection, actor, {
+        action: AuditAction.MASTER_UPDATED,
+        entityType: 'counter_route',
+        entityId: targetId,
+      });
+    });
+    this.announce('counter-routes', 0);
+    return (await counterRouteRepository.listForEntity(getPool(), input.entityType, input.entityId)).map(
+      mapCounterRoute,
+    );
   }
 
   async removeCounterRoute(id: string, actor: AuditActor) {
@@ -932,12 +1045,8 @@ export class MenuMasterService {
     await withTransaction(async (connection) => {
       const before = await printingGroupRepository.findById(connection, id);
       if (before === null) throw new NotFoundError('Printing group', id);
-      const references = await printingGroupRepository.countRouteReferences(connection, id);
-      if (references > 0) {
-        throw new ConflictError(
-          `${references} menu item(s)/variant(s) still route to this printing group; remove them first`,
-        );
-      }
+      await printingRouteRepository.softDeleteForPrintingGroup(connection, id);
+      await mediaAssignmentRepository.softDeleteForEntity(connection, 'PRINTING_GROUP', id);
       await printingGroupRepository.softDelete(connection, id);
       await auditService.record(connection, actor, {
         action: AuditAction.MASTER_DELETED,
@@ -957,6 +1066,7 @@ export class MenuMasterService {
     const row = await withTransaction(async (connection) => {
       const group = await printingGroupRepository.findById(connection, input.printingGroupId);
       if (group === null) throw new NotFoundError('Printing group', input.printingGroupId);
+      await this.assertRoutableEntity(connection, input.entityType, input.entityId);
       const created = await printingRouteRepository.insert(connection, {
         id: newId(),
         entityType: input.entityType,
@@ -975,6 +1085,48 @@ export class MenuMasterService {
     });
     this.announce('printing-routes', Number(row.sync_seq));
     return mapPrintingRoute(row);
+  }
+
+  async movePrintingRoute(input: PrintingRouteMoveRequest, actor: AuditActor) {
+    if (!input.sourceRouteId && !input.targetPrintingGroupId) {
+      throw new ValidationError('A source assignment or target kitchen is required');
+    }
+    await withTransaction(async (connection) => {
+      await this.assertRoutableEntity(connection, input.entityType, input.entityId);
+      const source = input.sourceRouteId
+        ? await printingRouteRepository.findById(connection, input.sourceRouteId)
+        : null;
+      if (source && (source.entity_type !== input.entityType || source.entity_id !== input.entityId)) {
+        throw new ValidationError('The source kitchen assignment does not belong to this menu item');
+      }
+      let targetId = source?.id ?? input.entityId;
+      if (input.targetPrintingGroupId) {
+        const group = await printingGroupRepository.findById(connection, input.targetPrintingGroupId);
+        if (group === null) throw new NotFoundError('Printing group', input.targetPrintingGroupId);
+        const target = await printingRouteRepository.insert(connection, {
+          id: newId(),
+          entityType: input.entityType,
+          entityId: input.entityId,
+          printingGroupId: input.targetPrintingGroupId,
+          sortOrder: source?.sort_order ?? 0,
+          status: MasterStatus.ACTIVE,
+          createdBy: actor.userId,
+        });
+        targetId = target.id;
+      }
+      if (source && source.printing_group_id !== input.targetPrintingGroupId) {
+        await printingRouteRepository.softDelete(connection, source.id);
+      }
+      await auditService.record(connection, actor, {
+        action: AuditAction.MASTER_UPDATED,
+        entityType: 'printing_route',
+        entityId: targetId,
+      });
+    });
+    this.announce('printing-routes', 0);
+    return (await printingRouteRepository.listForEntity(getPool(), input.entityType, input.entityId)).map(
+      mapPrintingRoute,
+    );
   }
 
   async removePrintingRoute(id: string, actor: AuditActor) {
@@ -1005,14 +1157,19 @@ export class MenuMasterService {
   }
 
   async createModifierGroup(input: ModifierGroupWriteRequest, actor: AuditActor) {
+    const minSelect = input.minSelect ?? 0;
+    const maxSelect = input.maxSelect ?? null;
+    if (maxSelect !== null && minSelect > maxSelect) {
+      throw new ValidationError('Minimum selections cannot exceed maximum selections');
+    }
     const row = await withTransaction(async (connection) => {
       const created = await modifierGroupRepository.insert(connection, {
         id: input.id ?? newId(),
         name: input.name,
         description: input.description ?? null,
         selectionType: input.selectionType ?? 'MULTIPLE',
-        minSelect: input.minSelect ?? 0,
-        maxSelect: input.maxSelect ?? null,
+        minSelect,
+        maxSelect,
         status: input.status ?? MasterStatus.ACTIVE,
         sortOrder: input.sortOrder ?? 0,
         createdBy: actor.userId,
@@ -1033,6 +1190,11 @@ export class MenuMasterService {
     const row = await withTransaction(async (connection) => {
       const before = await modifierGroupRepository.findById(connection, id);
       if (before === null) throw new NotFoundError('Modifier group', id);
+      const minSelect = input.minSelect ?? Number(before.min_select);
+      const maxSelect = input.maxSelect === undefined ? before.max_select : input.maxSelect;
+      if (maxSelect !== null && minSelect > Number(maxSelect)) {
+        throw new ValidationError('Minimum selections cannot exceed maximum selections');
+      }
       const updated = await modifierGroupRepository.update(connection, id, input);
       if (updated === null) throw new NotFoundError('Modifier group', id);
       await auditService.record(connection, actor, {
@@ -1050,6 +1212,8 @@ export class MenuMasterService {
     await withTransaction(async (connection) => {
       const before = await modifierGroupRepository.findById(connection, id);
       if (before === null) throw new NotFoundError('Modifier group', id);
+      await modifierAssignmentRepository.softDeleteForModifierGroup(connection, id);
+      await modifierRepository.softDeleteForGroup(connection, id);
       await modifierGroupRepository.softDelete(connection, id);
       await auditService.record(connection, actor, {
         action: AuditAction.MASTER_DELETED,
@@ -1126,6 +1290,7 @@ export class MenuMasterService {
     const row = await withTransaction(async (connection) => {
       const group = await modifierGroupRepository.findById(connection, input.modifierGroupId);
       if (group === null) throw new NotFoundError('Modifier group', input.modifierGroupId);
+      await this.assertRoutableEntity(connection, input.entityType, input.entityId);
       const created = await modifierAssignmentRepository.insert(connection, {
         id: newId(),
         entityType: input.entityType,
@@ -1145,6 +1310,67 @@ export class MenuMasterService {
     });
     this.announce('modifier-assignments', Number(row.sync_seq));
     return mapModifierAssignment(row);
+  }
+
+  async moveModifierAssignment(input: ModifierAssignmentMoveRequest, actor: AuditActor) {
+    if (!input.sourceAssignmentId && !input.targetModifierGroupId) {
+      throw new ValidationError('A source assignment or target modifier group is required');
+    }
+    await withTransaction(async (connection) => {
+      await this.assertRoutableEntity(connection, input.entityType, input.entityId);
+      const source = input.sourceAssignmentId
+        ? await modifierAssignmentRepository.findById(connection, input.sourceAssignmentId)
+        : null;
+      if (source && (source.entity_type !== input.entityType || source.entity_id !== input.entityId)) {
+        throw new ValidationError('The source modifier assignment does not belong to this menu item');
+      }
+      let targetId = source?.id ?? input.entityId;
+      if (input.targetModifierGroupId) {
+        const group = await modifierGroupRepository.findById(connection, input.targetModifierGroupId);
+        if (group === null) throw new NotFoundError('Modifier group', input.targetModifierGroupId);
+        const target = await modifierAssignmentRepository.insert(connection, {
+          id: newId(),
+          entityType: input.entityType,
+          entityId: input.entityId,
+          modifierGroupId: input.targetModifierGroupId,
+          isRequired: source?.is_required === 1,
+          sortOrder: source?.sort_order ?? 0,
+          status: MasterStatus.ACTIVE,
+          createdBy: actor.userId,
+        });
+        targetId = target.id;
+      }
+      if (source && source.modifier_group_id !== input.targetModifierGroupId) {
+        await modifierAssignmentRepository.softDelete(connection, source.id);
+      }
+      await auditService.record(connection, actor, {
+        action: AuditAction.MASTER_UPDATED,
+        entityType: 'modifier_assignment',
+        entityId: targetId,
+      });
+    });
+    this.announce('modifier-assignments', 0);
+    return (
+      await modifierAssignmentRepository.listForEntity(getPool(), input.entityType, input.entityId)
+    ).map(mapModifierAssignment);
+  }
+
+  async removeMenuItemModifierGroupAssignments(modifierGroupId: string, actor: AuditActor) {
+    await withTransaction(async (connection) => {
+      const group = await modifierGroupRepository.findById(connection, modifierGroupId);
+      if (group === null) throw new NotFoundError('Modifier group', modifierGroupId);
+      await modifierAssignmentRepository.softDeleteForModifierGroup(
+        connection,
+        modifierGroupId,
+        'MENU_ITEM',
+      );
+      await auditService.record(connection, actor, {
+        action: AuditAction.MASTER_UPDATED,
+        entityType: 'modifier_assignment_group',
+        entityId: modifierGroupId,
+      });
+    });
+    this.announce('modifier-assignments', 0);
   }
 
   async removeModifierAssignment(id: string, actor: AuditActor) {
@@ -1297,6 +1523,33 @@ export class MenuMasterService {
       'MENU_ITEM' as MediaEntityType,
       uniqueFoodItemIds,
     );
+    const [foodCounterRoutes, itemCounterRoutes, variantCounterRoutes, foodPrintingRoutes,
+      itemPrintingRoutes, variantPrintingRoutes, foodModifierAssignments, itemModifierAssignments,
+      variantModifierAssignments] = await Promise.all([
+        counterRouteRepository.listForEntities(pool, 'MENU_ITEM', uniqueFoodItemIds),
+        counterRouteRepository.listForEntities(pool, 'MENU_ITEM_ASSIGNMENT', itemAssignments.map((item) => item.id)),
+        counterRouteRepository.listForEntities(pool, 'MENU_ITEM_VARIANT', allVariantIds),
+        printingRouteRepository.listForEntities(pool, 'MENU_ITEM', uniqueFoodItemIds),
+        printingRouteRepository.listForEntities(pool, 'MENU_ITEM_ASSIGNMENT', itemAssignments.map((item) => item.id)),
+        printingRouteRepository.listForEntities(pool, 'MENU_ITEM_VARIANT', allVariantIds),
+        modifierAssignmentRepository.listForEntities(pool, 'MENU_ITEM', uniqueFoodItemIds),
+        modifierAssignmentRepository.listForEntities(pool, 'MENU_ITEM_ASSIGNMENT', itemAssignments.map((item) => item.id)),
+        modifierAssignmentRepository.listForEntities(pool, 'MENU_ITEM_VARIANT', allVariantIds),
+      ]);
+    const groupByEntity = <T extends { entity_id: string }>(rows: T[]) => {
+      const grouped = new Map<string, T[]>();
+      for (const row of rows) grouped.set(row.entity_id, [...(grouped.get(row.entity_id) ?? []), row]);
+      return grouped;
+    };
+    const foodCounters = groupByEntity(foodCounterRoutes);
+    const itemCounters = groupByEntity(itemCounterRoutes);
+    const variantCounters = groupByEntity(variantCounterRoutes);
+    const foodKitchens = groupByEntity(foodPrintingRoutes);
+    const itemKitchens = groupByEntity(itemPrintingRoutes);
+    const variantKitchens = groupByEntity(variantPrintingRoutes);
+    const foodModifiers = groupByEntity(foodModifierAssignments);
+    const itemModifiers = groupByEntity(itemModifierAssignments);
+    const variantModifiers = groupByEntity(variantModifierAssignments);
 
     // `findPrimaryForEntities` returns the media asset id, not a path, so reaching the bytes
     // always means building a URL — `mediaUrlFor` decides which kind. A legacy `image_path`
@@ -1310,6 +1563,15 @@ export class MenuMasterService {
     // sellable in Menu Master but invisible everywhere the tree is the only read path (the
     // POS), so it surfaces here as an "Uncategorized" bucket rather than disappearing.
     const buildItem = (item: (typeof itemAssignments)[number]): ResolvedMenuItemDto => {
+      const inheritedCounters = itemCounters.get(item.id)?.length
+        ? itemCounters.get(item.id) ?? []
+        : foodCounters.get(item.food_item_id) ?? [];
+      const inheritedKitchens = itemKitchens.get(item.id)?.length
+        ? itemKitchens.get(item.id) ?? []
+        : foodKitchens.get(item.food_item_id) ?? [];
+      const inheritedModifiers = itemModifiers.get(item.id)?.length
+        ? itemModifiers.get(item.id) ?? []
+        : foodModifiers.get(item.food_item_id) ?? [];
       const variants = (variantsByFoodItem.get(item.food_item_id) ?? []).map(
         (variant): ResolvedMenuVariantDto => ({
           id: variant.id,
@@ -1328,9 +1590,18 @@ export class MenuMasterService {
             toUrl(foodItemMedia.get(item.food_item_id)),
           preparationTimeMinutes: variant.preparation_time_minutes,
           allowDecimalQuantity: variant.allow_decimal_quantity === 1,
-          counters: [],
-          printingGroups: [],
-          modifierGroupIds: [],
+          counters: (variantCounters.get(variant.id)?.length
+            ? variantCounters.get(variant.id) ?? []
+            : inheritedCounters
+          ).map((route) => route.counter_id),
+          printingGroups: (variantKitchens.get(variant.id)?.length
+            ? variantKitchens.get(variant.id) ?? []
+            : inheritedKitchens
+          ).map((route) => route.printing_group_id),
+          modifierGroupIds: (variantModifiers.get(variant.id)?.length
+            ? variantModifiers.get(variant.id) ?? []
+            : inheritedModifiers
+          ).map((assignment) => assignment.modifier_group_id),
         }),
       );
       return {
@@ -1338,7 +1609,7 @@ export class MenuMasterService {
         foodItemId: item.food_item_id,
         name: item.display_name ?? item.food_item_name ?? '',
         nameHi: item.display_name_hi ?? item.food_item_name_hi ?? null,
-        description: item.description,
+        description: item.description ?? item.food_item_description ?? null,
         unit: item.unit ?? item.food_item_unit ?? 'NOS',
         availability: item.availability,
         sortOrder: item.sort_order,

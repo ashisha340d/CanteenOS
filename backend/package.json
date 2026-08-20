@@ -2,7 +2,7 @@
   "name": "@menuboard/backend",
   "version": "1.0.0",
   "private": true,
-  "description": "MenuBoard backend — Express, MariaDB, Socket.IO",
+  "description": "MenuBoard backend \u2014 Express, MariaDB, Socket.IO",
   "main": "dist/server.js",
   "scripts": {
     "build": "tsc -b && node scripts/copy-assets.mjs",
@@ -13,9 +13,12 @@
     "migrate": "tsx src/db/cli/migrate.ts",
     "migrate:status": "tsx src/db/cli/migrate.ts --status",
     "seed": "tsx src/db/cli/seed.ts",
+    "seed:cleaning": "tsx src/db/cli/seedCleaning.ts",
     "smoke": "node scripts/smoke.mjs",
     "smoke:socket": "node scripts/smoke-socket.mjs",
     "smoke:pos": "node scripts/smoke-pos.mjs",
+    "smoke:chat": "node scripts/smoke-chat.mjs",
+    "smoke:chat-socket": "node scripts/smoke-chat-socket.mjs",
     "test": "vitest run"
   },
   "dependencies": {

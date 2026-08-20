@@ -12,12 +12,13 @@ export interface ModalGeometry {
   height: number | null;
 }
 
-/*
- * `v2`: opening a dialog persists its geometry immediately, so every dialog a user had ever
- * opened carried the old fixed 640px default. Versioning the key retires those so the
- * content-sized default above actually takes effect; a genuine resize re-persists at once.
- */
-const GEOMETRY_PREFIX = 'menuboard.admin.modal.geometry.v2.';
+interface WindowState {
+  geometry: ModalGeometry;
+  maximized: boolean;
+  minimized: boolean;
+}
+
+const GEOMETRY_PREFIX = 'menuboard.admin.modal.geometry.v3.';
 const FORM_PREFIX = 'menuboard.admin.modal.form.';
 
 /** Roughly where a content-sized dialog will end up, used to centre it before it has a height. */
@@ -33,31 +34,70 @@ function defaultGeometry(): ModalGeometry {
   };
 }
 
-/** Persists a modal's on-screen position and size per modal id, restored on next open. */
+function defaultWindowState(): WindowState {
+  return { geometry: defaultGeometry(), maximized: false, minimized: false };
+}
+
+function viewportGeometry(): ModalGeometry {
+  return { x: 8, y: 8, width: window.innerWidth - 16, height: window.innerHeight - 16 };
+}
+
+/** Persists a modal's on-screen position, size and window state per id, restored on next open. */
 export function useModalGeometry(modalId: string): {
   geometry: ModalGeometry;
   setGeometry: (next: ModalGeometry) => void;
+  maximized: boolean;
+  setMaximized: (next: boolean) => void;
+  minimized: boolean;
+  setMinimized: (next: boolean) => void;
 } {
   const key = GEOMETRY_PREFIX + modalId;
-  const [geometry, setGeometryState] = useState<ModalGeometry>(() => {
+  const [state, setState] = useState<WindowState>(() => {
     try {
       const raw = localStorage.getItem(key);
-      if (raw) return JSON.parse(raw) as ModalGeometry;
+      if (raw) {
+        const parsed = JSON.parse(raw) as Partial<WindowState>;
+        if (parsed.geometry && typeof parsed.geometry.x === 'number') {
+          return {
+            geometry: parsed.geometry,
+            maximized: Boolean(parsed.maximized),
+            minimized: Boolean(parsed.minimized),
+          };
+        }
+      }
     } catch {
       // fall through to default
     }
-    return defaultGeometry();
+    return defaultWindowState();
   });
 
-  const setGeometry = useCallback(
-    (next: ModalGeometry) => {
-      setGeometryState(next);
-      localStorage.setItem(key, JSON.stringify(next));
+  const setWindowState = useCallback(
+    (updater: (prev: WindowState) => WindowState) => {
+      setState((prev) => {
+        const next = updater(prev);
+        localStorage.setItem(key, JSON.stringify(next));
+        return next;
+      });
     },
     [key],
   );
 
-  return { geometry, setGeometry };
+  const setGeometry = useCallback(
+    (next: ModalGeometry) => setWindowState((prev) => ({ ...prev, geometry: next })),
+    [setWindowState],
+  );
+  const setMaximized = useCallback(
+    (next: boolean) => setWindowState((prev) => ({ ...prev, maximized: next })),
+    [setWindowState],
+  );
+  const setMinimized = useCallback(
+    (next: boolean) => setWindowState((prev) => ({ ...prev, minimized: next })),
+    [setWindowState],
+  );
+
+  const geometry = state.maximized ? viewportGeometry() : state.geometry;
+
+  return { geometry, setGeometry, maximized: state.maximized, setMaximized, minimized: state.minimized, setMinimized };
 }
 
 /**

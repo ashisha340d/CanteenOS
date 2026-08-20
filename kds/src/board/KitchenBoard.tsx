@@ -9,6 +9,7 @@ import type { useQueue } from '../pages/BoardPage';
 import { useNow } from './useNow';
 import { OrderCard } from './OrderCard';
 import { SettingsModal } from './SettingsModal';
+import { useT } from '../i18n';
 
 interface Props {
   station: StationSelection;
@@ -23,6 +24,7 @@ interface Props {
  * kitchen watches the same deadlines. Nothing on this board mutates anything.
  */
 export function KitchenBoard({ station, queue, onChangeStation, onSignOut, onLock }: Props): JSX.Element {
+  const t = useT();
   const now = useNow();
   const display = useDisplaySettings(station.id);
   const config = useQuery({
@@ -51,17 +53,17 @@ export function KitchenBoard({ station, queue, onChangeStation, onSignOut, onLoc
       <header className="kds-topbar">
         <div className="kds-topbar__station">
           <h1>{station.name}</h1>
-          <p>Kitchen display — read only, counters mark served</p>
+          <p>{t.kitchenBoardSubtitle}</p>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-          <button type="button" className="kds-topbar__btn" onClick={onLock} title="Lock the screen">
+          <button type="button" className="kds-topbar__btn" onClick={onLock} title={t.lockScreen}>
             <LockKeyhole className="size-4" />
           </button>
           <button
             type="button"
             className="kds-topbar__btn"
             onClick={() => setSettingsOpen(true)}
-            aria-label="Display settings"
+            aria-label={t.displaySettings}
           >
             <SettingsIcon className="size-4" />
           </button>
@@ -70,12 +72,12 @@ export function KitchenBoard({ station, queue, onChangeStation, onSignOut, onLoc
 
       <div className="kds-board__body">
         <main className="kds-cards">
-          {queue.isPending && <p style={{ color: 'var(--kds-soft)' }}>Loading the board…</p>}
+          {queue.isPending && <p style={{ color: 'var(--kds-soft)' }}>{t.loadingBoard}</p>}
           {queue.error !== null && (
-            <p style={{ color: 'var(--kds-late)' }}>{readErrorMessage(queue.error, 'Could not load the board.')}</p>
+            <p style={{ color: 'var(--kds-late)' }}>{readErrorMessage(queue.error, t.boardLoadFailed)}</p>
           )}
           {queue.isFetched && orders.length === 0 && (
-            <p style={{ color: 'var(--kds-faint)', fontSize: 18 }}>Nothing for this kitchen right now.</p>
+            <p style={{ color: 'var(--kds-faint)', fontSize: 18 }}>{t.nothingForKitchen}</p>
           )}
           {orders.map((order) => (
             <OrderCard

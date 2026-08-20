@@ -1,10 +1,13 @@
 import type { Server as SocketServer } from 'socket.io';
 import {
+  CHAT_SOCKET_EVENTS,
   KDS_SOCKET_EVENTS,
   SOCKET_EVENTS,
   SOCKET_ROOMS,
   type CdsBillDto,
   type CdsLiveDto,
+  type CounterMessageDirection,
+  type CounterMessageDto,
   type SyncEntity,
 } from '@menuboard/shared';
 import { logger } from '../utils/logger';
@@ -17,6 +20,12 @@ export const KDS_REALTIME_ROOMS = {
   kdsCounter: (counterId: string): string => `kds:counter:${counterId}`,
   kdsKitchen: (printingGroupId: string): string => `kds:kitchen:${printingGroupId}`,
   cdsCounter: (counterId: string): string => `cds:counter:${counterId}`,
+  /**
+   * The admin↔counter chat channel. Deliberately not the `kdsCounter` room it shadows: a chat
+   * message there would wake every board listener into a full queue refetch, so the busiest
+   * screen in the building would re-read its orders every time the office said hello.
+   */
+  chatCounter: (counterId: string): string => `chat:counter:${counterId}`,
 } as const;
 
 /**
@@ -154,6 +163,46 @@ export class RealtimeGateway {
    */
   emitCdsLive(counterId: string, live: CdsLiveDto | null): void {
     this.emit(KDS_REALTIME_ROOMS.cdsCounter(counterId), KDS_SOCKET_EVENTS.CDS_LIVE, live);
+  }
+
+  /**
+   * A chat message, payload and all.
+   *
+   * The second deliberate exception to this class's "hints, not data" rule, after `emitCdsBill`
+   * — and for the same reason. A chat has no cursor to sync against and no other route to the
+   * content, so a bare hint would just mean every client immediately asking for the thing the
+   * server already had in its hand. Re-emitting the same id later (the Hindi rendering arriving
+   * behind the message) is a replace, not a duplicate; clients key on `id`.
+   */
+  emitChatMessage(counterId: string, message: CounterMessageDto): void {
+    this.emit(KDS_REALTIME_ROOMS.chatCounter(counterId), CHAT_SOCKET_EVENTS.CHAT_MESSAGE, message);
+  }
+
+  /** The office ringing a counter. Its own event so a client can react loudly to it alone. */
+  emitChatBell(counterId: string, message: CounterMessageDto): void {
+    this.emit(KDS_REALTIME_ROOMS.chatCounter(counterId), CHAT_SOCKET_EVENTS.CHAT_BELL, message);
+  }
+
+  /** The office put the handset down. The counter stops ringing at once. */
+  emitChatBellEnd(counterId: string): void {
+    this.emit(KDS_REALTIME_ROOMS.chatCounter(counterId), CHAT_SOCKET_EVENTS.CHAT_BELL_END, {
+      counterId,
+    });
+  }
+
+  /** One side read the thread; the other side's badge should clear. */
+  emitChatRead(counterId: string, direction: CounterMessageDirection): void {
+    this.emit(KDS_REALTIME_ROOMS.chatCounter(counterId), CHAT_SOCKET_EVENTS.CHAT_READ, {
+      counterId,
+      direction,
+    });
+  }
+
+  /** The office cleared a thread; both sides empty their view. */
+  emitChatCleared(counterId: string): void {
+    this.emit(KDS_REALTIME_ROOMS.chatCounter(counterId), CHAT_SOCKET_EVENTS.CHAT_CLEARED, {
+      counterId,
+    });
   }
 
   private emit(room: string, event: string, payload: unknown): void {

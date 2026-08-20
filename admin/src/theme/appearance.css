@@ -1,0 +1,141 @@
+/*
+ * Two workstation preferences that are not colour: the typeface the whole portal is set in,
+ * and the style the desktop draws its icons in. Both follow the same discipline as the skins
+ * — a data attribute on <html> selects a block of custom properties, and no component ever
+ * names a font stack or a tile shape itself.
+ *
+ * Every stack is also declared unconditionally on :root, not only inside its own selector.
+ * That is what lets the Settings picker render each option in its own face while a different
+ * one is active, without restating ten font stacks in TypeScript.
+ */
+
+:root {
+  --font-stack-geist: 'Geist Variable', 'Segoe UI Variable Display', 'Segoe UI', Roboto, system-ui, sans-serif;
+  --font-stack-inter: 'Inter Variable', 'Segoe UI Variable Display', 'Segoe UI', Roboto, system-ui, sans-serif;
+  --font-stack-manrope: 'Manrope Variable', 'Segoe UI Variable Display', 'Segoe UI', Roboto, system-ui, sans-serif;
+  --font-stack-jakarta: 'Plus Jakarta Sans Variable', 'Segoe UI Variable Display', 'Segoe UI', Roboto, system-ui, sans-serif;
+  --font-stack-figtree: 'Figtree Variable', 'Segoe UI Variable Display', 'Segoe UI', Roboto, system-ui, sans-serif;
+  --font-stack-lexend: 'Lexend Variable', 'Segoe UI Variable Display', 'Segoe UI', Roboto, system-ui, sans-serif;
+  --font-stack-plex: 'IBM Plex Sans Variable', 'Segoe UI', Roboto, system-ui, sans-serif;
+  --font-stack-source: 'Source Sans 3 Variable', 'Segoe UI', Roboto, system-ui, sans-serif;
+  --font-stack-public: 'Public Sans Variable', 'Segoe UI', Roboto, system-ui, sans-serif;
+  --font-stack-outfit: 'Outfit Variable', 'Segoe UI Variable Display', 'Segoe UI', Roboto, system-ui, sans-serif;
+
+  --app-font-sans: var(--font-stack-geist);
+}
+
+html[data-font='geist'] { --app-font-sans: var(--font-stack-geist); }
+html[data-font='inter'] { --app-font-sans: var(--font-stack-inter); }
+html[data-font='manrope'] { --app-font-sans: var(--font-stack-manrope); }
+html[data-font='jakarta'] { --app-font-sans: var(--font-stack-jakarta); }
+html[data-font='figtree'] { --app-font-sans: var(--font-stack-figtree); }
+html[data-font='lexend'] { --app-font-sans: var(--font-stack-lexend); }
+html[data-font='plex'] { --app-font-sans: var(--font-stack-plex); }
+html[data-font='source'] { --app-font-sans: var(--font-stack-source); }
+html[data-font='public'] { --app-font-sans: var(--font-stack-public); }
+html[data-font='outfit'] { --app-font-sans: var(--font-stack-outfit); }
+
+/* ---------------------------------------------------------------- desktop icon sets */
+
+/*
+ * Six ways to draw the same icon. Each app still supplies one colour — `--icon-accent`, set
+ * per icon from the app registry — and the set decides what to do with it: fill the tile,
+ * tint it, outline it, ignore it, or hand it straight to the glyph. Nothing here knows which
+ * application it is drawing.
+ */
+
+:root,
+html[data-icon-set='aurora'] {
+  --icon-tile-size: 52px;
+  --icon-tile-radius: 13px;
+  --icon-tile-bg: var(--icon-accent);
+  --icon-tile-overlay: linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(0, 0, 0, 0.08) 100%);
+  --icon-tile-border: transparent;
+  --icon-tile-shadow: 0 1px 6px rgba(0, 0, 0, 0.12), 0 1px 0 rgba(255, 255, 255, 0.35) inset;
+  --icon-tile-blur: none;
+  --icon-glyph-color: #ffffff;
+  --icon-glyph-size: 26px;
+  --icon-glyph-stroke: 1.9;
+  --icon-glyph-shadow: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.25));
+  --icon-label-weight: 600;
+}
+
+/* Slate — the same tile with the gloss and the contact shadow taken off. */
+html[data-icon-set='slate'] {
+  --icon-tile-size: 50px;
+  --icon-tile-radius: 10px;
+  --icon-tile-bg: var(--icon-accent);
+  --icon-tile-overlay: none;
+  --icon-tile-border: transparent;
+  --icon-tile-shadow: none;
+  --icon-tile-blur: none;
+  --icon-glyph-color: #ffffff;
+  --icon-glyph-size: 25px;
+  --icon-glyph-stroke: 2;
+  --icon-glyph-shadow: none;
+  --icon-label-weight: 600;
+}
+
+/* Frost — a tinted pane over the wallpaper; the accent moves from the fill to the glyph. */
+html[data-icon-set='frost'] {
+  --icon-tile-size: 52px;
+  --icon-tile-radius: 15px;
+  --icon-tile-bg: color-mix(in srgb, var(--icon-accent) 18%, transparent);
+  --icon-tile-overlay: linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0%, transparent 100%);
+  --icon-tile-border: color-mix(in srgb, var(--icon-accent) 42%, transparent);
+  --icon-tile-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  --icon-tile-blur: blur(8px);
+  --icon-glyph-color: var(--icon-accent);
+  --icon-glyph-size: 25px;
+  --icon-glyph-stroke: 2;
+  --icon-glyph-shadow: none;
+  --icon-label-weight: 600;
+}
+
+/* Outline — no fill at all. The quietest set over a busy wallpaper. */
+html[data-icon-set='outline'] {
+  --icon-tile-size: 50px;
+  --icon-tile-radius: 12px;
+  --icon-tile-bg: transparent;
+  --icon-tile-overlay: none;
+  --icon-tile-border: color-mix(in srgb, var(--icon-accent) 70%, transparent);
+  --icon-tile-shadow: none;
+  --icon-tile-blur: none;
+  --icon-glyph-color: var(--icon-accent);
+  --icon-glyph-size: 24px;
+  --icon-glyph-stroke: 1.8;
+  --icon-glyph-shadow: none;
+  --icon-label-weight: 500;
+}
+
+/* Mono — one surface for every application. Shape carries the identity, not colour. */
+html[data-icon-set='mono'] {
+  --icon-tile-size: 50px;
+  --icon-tile-radius: 11px;
+  --icon-tile-bg: var(--desk-cell-bg);
+  --icon-tile-overlay: none;
+  --icon-tile-border: var(--desk-icon-hover-border);
+  --icon-tile-shadow: none;
+  --icon-tile-blur: none;
+  --icon-glyph-color: var(--desk-fg);
+  --icon-glyph-size: 24px;
+  --icon-glyph-stroke: 1.7;
+  --icon-glyph-shadow: none;
+  --icon-label-weight: 500;
+}
+
+/* Classic — no tile. A large drawn glyph, the way a file manager shows a document. */
+html[data-icon-set='classic'] {
+  --icon-tile-size: 48px;
+  --icon-tile-radius: 0px;
+  --icon-tile-bg: transparent;
+  --icon-tile-overlay: none;
+  --icon-tile-border: transparent;
+  --icon-tile-shadow: none;
+  --icon-tile-blur: none;
+  --icon-glyph-color: var(--icon-accent);
+  --icon-glyph-size: 38px;
+  --icon-glyph-stroke: 1.5;
+  --icon-glyph-shadow: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.3));
+  --icon-label-weight: 600;
+}

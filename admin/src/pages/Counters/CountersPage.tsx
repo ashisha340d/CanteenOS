@@ -60,7 +60,7 @@ export function CountersPage(): JSX.Element {
           <EditAction label={r.name} onClick={() => setEditing(r)} />
           <DeleteAction
             label={r.name}
-            tooltip="Delete — refused while any menu item/variant routes here"
+            tooltip="Delete counter and clear its menu assignments"
             onClick={() => setDeleting(r)}
           />
         </RowActions>
@@ -182,7 +182,7 @@ export function CountersPage(): JSX.Element {
       <ConfirmDialog
         open={Boolean(deleting)}
         title="Delete counter"
-        message={`Delete "${deleting?.name}"? Refused while any menu item/variant still routes here.`}
+        message={`Delete "${deleting?.name}"? Its menu item and variant assignments will also be removed.`}
         confirmLabel="Delete"
         danger
         loading={del.isPending}

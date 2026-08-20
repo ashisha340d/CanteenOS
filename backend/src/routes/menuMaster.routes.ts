@@ -26,6 +26,9 @@ import {
   menuItemScheduleBulkSchema,
   menuListQuerySchema,
   menuShiftApplyQuerySchema,
+  moveCounterRouteSchema,
+  moveModifierAssignmentSchema,
+  movePrintingRouteSchema,
   routableEntityRefSchema,
   updateCounterSchema,
   updateItemGroupSchema,
@@ -57,6 +60,12 @@ export function menuMasterRoutes(): Router {
   const router = Router();
   const read = requireCapability(Capability.MASTER_READ);
   const write = requireCapability(Capability.MASTER_WRITE);
+
+  router.get(
+    '/menu-assignment-workspace',
+    read,
+    asyncHandler(MenuMasterController.getMenuAssignmentWorkspace),
+  );
 
   /* menus */
   router.get('/menus', read, validate({ query: menuListQuerySchema }), asyncHandler(MenuMasterController.listMenus));
@@ -212,6 +221,12 @@ export function menuMasterRoutes(): Router {
     validate({ body: assignCounterRouteSchema }),
     asyncHandler(MenuMasterController.assignCounterRoute),
   );
+  router.post(
+    '/counter-routes/move',
+    write,
+    validate({ body: moveCounterRouteSchema }),
+    asyncHandler(MenuMasterController.moveCounterRoute),
+  );
   router.delete(
     '/counter-routes/:id',
     write,
@@ -304,6 +319,12 @@ export function menuMasterRoutes(): Router {
     validate({ body: assignPrintingRouteSchema }),
     asyncHandler(MenuMasterController.assignPrintingRoute),
   );
+  router.post(
+    '/printing-routes/move',
+    write,
+    validate({ body: movePrintingRouteSchema }),
+    asyncHandler(MenuMasterController.movePrintingRoute),
+  );
   router.delete(
     '/printing-routes/:id',
     write,
@@ -365,6 +386,18 @@ export function menuMasterRoutes(): Router {
     write,
     validate({ body: assignModifierGroupSchema }),
     asyncHandler(MenuMasterController.assignModifierGroup),
+  );
+  router.post(
+    '/modifier-assignments/move',
+    write,
+    validate({ body: moveModifierAssignmentSchema }),
+    asyncHandler(MenuMasterController.moveModifierAssignment),
+  );
+  router.delete(
+    '/modifier-assignments/group/:groupId/menu-items',
+    write,
+    validate({ params: groupIdParam }),
+    asyncHandler(MenuMasterController.removeMenuItemModifierGroupAssignments),
   );
   router.delete(
     '/modifier-assignments/:id',

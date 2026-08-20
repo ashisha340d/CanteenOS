@@ -493,8 +493,8 @@ export class MenuCategoryRepository {
 /* -------------------------------------------------------------------- menu items */
 
 const ITEM_COLUMNS = `
-  id, category_id, group_id, name, name_hi, unit, unit_hi, image_path, base_price, tax_profile_id,
-  always_available, prep_seconds,
+  id, category_id, group_id, name, name_hi, description, description_hi, unit, unit_hi, image_path,
+  base_price, tax_profile_id, always_available, prep_seconds,
   status, sort_order, created_by, created_at, updated_at, deleted_at, revision, sync_seq,
   (SELECT ma.media_id FROM media_assignments ma
      WHERE ma.entity_type = 'MENU_ITEM' AND ma.entity_id = menu_items.id
@@ -559,6 +559,8 @@ export class MenuItemRepository {
       groupId?: string | null;
       name: string;
       nameHi: string | null;
+      description?: string | null;
+      descriptionHi?: string | null;
       unit: string;
       unitHi: string | null;
       imagePath: string | null;
@@ -576,16 +578,18 @@ export class MenuItemRepository {
     await mutate(
       db,
       `INSERT INTO menu_items
-        (id, category_id, group_id, name, name_hi, unit, unit_hi, image_path, base_price, tax_profile_id,
-         always_available, prep_seconds,
-         status, sort_order, created_by, created_at, updated_at, revision, sync_seq)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
+        (id, category_id, group_id, name, name_hi, description, description_hi, unit, unit_hi, image_path,
+         base_price, tax_profile_id, always_available, prep_seconds, status, sort_order, created_by,
+         created_at, updated_at, revision, sync_seq)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
       [
         input.id,
         input.categoryId,
         input.groupId ?? null,
         input.name,
         input.nameHi ?? null,
+        input.description ?? null,
+        input.descriptionHi ?? null,
         input.unit,
         input.unitHi ?? null,
         input.imagePath,
@@ -614,6 +618,8 @@ export class MenuItemRepository {
       groupId?: string | null;
       name?: string;
       nameHi?: string | null;
+      description?: string | null;
+      descriptionHi?: string | null;
       unit?: string;
       unitHi?: string | null;
       imagePath?: string | null;
@@ -642,6 +648,14 @@ export class MenuItemRepository {
     if (input.nameHi !== undefined) {
       assignments.push('name_hi = ?');
       params.push(input.nameHi);
+    }
+    if (input.description !== undefined) {
+      assignments.push('description = ?');
+      params.push(input.description);
+    }
+    if (input.descriptionHi !== undefined) {
+      assignments.push('description_hi = ?');
+      params.push(input.descriptionHi);
     }
     if (input.unit !== undefined) {
       assignments.push('unit = ?');
@@ -691,8 +705,10 @@ export class MenuItemRepository {
   async countOrderReferences(db: Db, menuItemId: string): Promise<number> {
     const row = await selectOne<CountRow>(
       db,
-      'SELECT COUNT(*) AS total FROM order_items WHERE menu_item_id = ? AND deleted_at IS NULL',
-      [menuItemId],
+      `SELECT
+         (SELECT COUNT(*) FROM order_items WHERE menu_item_id = ? AND deleted_at IS NULL) +
+         (SELECT COUNT(*) FROM pos_order_items WHERE menu_item_id = ?) AS total`,
+      [menuItemId, menuItemId],
     );
     return row === null ? 0 : Number(row.total);
   }

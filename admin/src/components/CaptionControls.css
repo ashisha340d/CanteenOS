@@ -1,0 +1,70 @@
+/* Windows caption buttons.
+
+   Flush into the corner, no gaps, no rounding of their own except where the top-right one has
+   to follow the window's radius. The whole rectangle is the target — that is what makes the
+   corner of a window hittable by throwing the pointer at it. */
+
+.os-cap {
+  display: flex;
+  align-self: stretch;
+  align-items: stretch;
+  flex-shrink: 0;
+}
+
+.os-cap__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--desk-caption-fg);
+  cursor: pointer;
+  transition: background-color 90ms linear, color 90ms linear;
+}
+
+/* The wash is mixed from the caption ink, so it darkens a light chrome and lightens a dark one
+   without every skin having to declare a hover colour of its own. */
+.os-cap__btn:hover {
+  background: color-mix(in srgb, var(--desk-caption-fg) 12%, transparent);
+}
+
+.os-cap__btn:active {
+  background: color-mix(in srgb, var(--desk-caption-fg) 20%, transparent);
+}
+
+.os-cap__btn:focus-visible {
+  outline: 2px solid var(--desk-accent);
+  outline-offset: -3px;
+}
+
+/* Close is the one button that gets a colour rather than a wash. The glyph is forced white:
+   on the light skins the caption ink is near-black, and inheriting it would put a dark cross
+   on a dark red field. */
+.os-cap__btn--close:hover {
+  background: #c42b1c;
+  color: #fff;
+}
+
+.os-cap__btn--close:active {
+  background: #b1271a;
+  color: rgb(255 255 255 / 85%);
+}
+
+.os-cap__glyph {
+  width: 10px;
+  height: 10px;
+  flex: none;
+}
+
+/* Docked into a bar rather than a title bar: same buttons, tighter, because the bar is short. */
+.os-cap--docked .os-cap__btn {
+  width: 38px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .os-cap__btn {
+    transition: none;
+  }
+}

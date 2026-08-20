@@ -1,0 +1,702 @@
+/* The office conversation on a counter board.
+
+   The same floating messenger the admin desktop carries — dragged by its header, resized from
+   its corner — rather than a panel welded to the screen edge. A wall board is not one layout:
+   the cards that matter sit in different places at different counters, and only the person
+   standing there knows where a chat window is in the way.
+
+   Palette is hardcoded, deliberately independent of the board skin variables. Somebody moving
+   between the office screen and the wall should recognise the same thing in both places, and a
+   conversation that re-tinted itself with the board light/dark setting would not read as one.
+   Everything is a step larger than the desktop version: read standing up, tapped with a thumb. */
+
+.kc,
+.kc-tab {
+  --kc-bg: #171625;
+  --kc-bg-2: #1f1d31;
+  --kc-bg-3: #272442;
+  --kc-line: #322e4d;
+  --kc-ink: #f2f0fb;
+  --kc-soft: #a49fc4;
+  --kc-faint: #726d94;
+  --kc-accent: #7c5cff;
+  --kc-accent-2: #9b7dff;
+  --kc-answer: #22c55e;
+  --kc-danger: #f4577b;
+}
+
+.kc-i {
+  width: 17px;
+  height: 17px;
+  flex: none;
+}
+
+.kc-i-lg {
+  width: 22px;
+  height: 22px;
+  flex: none;
+}
+
+/* ------------------------------------------------------------------ minimised tab */
+
+.kc-tab {
+  position: fixed;
+  right: 0;
+  top: 40%;
+  z-index: 75;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 14px;
+  color: var(--kc-ink);
+  background: var(--kc-bg-2);
+  border: 1px solid var(--kc-line);
+  border-right: 0;
+  border-radius: 15px 0 0 15px;
+  cursor: pointer;
+  box-shadow: -6px 0 22px rgb(9 6 20 / 45%);
+}
+
+.kc-tab:hover {
+  background: var(--kc-bg-3);
+}
+
+/* Unread pulses rather than merely colouring: this sits at the edge of vision on a screen
+   somebody is working across, and a static tint there goes unseen. */
+.kc-tab--unread {
+  background: var(--kc-accent);
+  border-color: var(--kc-accent);
+  animation: kc-pulse 1.9s ease-in-out infinite;
+}
+
+/* A tab that is ringing outranks a tab that is merely unread. */
+.kc-tab--ringing {
+  background: var(--kc-answer);
+  border-color: var(--kc-answer);
+  animation: kc-pulse-green 1s ease-in-out infinite;
+}
+
+@keyframes kc-pulse {
+  0%,
+  100% {
+    box-shadow: -6px 0 22px rgb(9 6 20 / 45%), 0 0 0 0 rgb(124 92 255 / 55%);
+  }
+
+  55% {
+    box-shadow: -6px 0 22px rgb(9 6 20 / 45%), 0 0 0 14px rgb(124 92 255 / 0%);
+  }
+}
+
+@keyframes kc-pulse-green {
+  0%,
+  100% {
+    box-shadow: -6px 0 22px rgb(9 6 20 / 45%), 0 0 0 0 rgb(34 197 94 / 65%);
+  }
+
+  55% {
+    box-shadow: -6px 0 22px rgb(9 6 20 / 45%), 0 0 0 16px rgb(34 197 94 / 0%);
+  }
+}
+
+.kc-tab__count {
+  min-width: 22px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--kc-danger);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------------------- panel */
+
+.kc {
+  position: fixed;
+  z-index: 76;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--kc-ink);
+  background: var(--kc-bg);
+  border: 1px solid var(--kc-line);
+  border-radius: 16px;
+  box-shadow: 0 26px 64px rgb(9 6 20 / 55%);
+  font-size: 14px;
+  animation: kc-in 170ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes kc-in {
+  from {
+    transform: translateY(12px) scale(0.99);
+    opacity: 0;
+  }
+
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* -------------------------------------------------------------------------- head */
+
+.kc-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  background: linear-gradient(180deg, var(--kc-bg-3) 0%, var(--kc-bg-2) 100%);
+  border-bottom: 1px solid var(--kc-line);
+  flex-shrink: 0;
+  /* The whole bar is the drag handle; the buttons stop the event themselves. */
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.kc-head:active {
+  cursor: grabbing;
+}
+
+.kc-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  border-radius: 50%;
+  background: linear-gradient(140deg, var(--kc-accent) 0%, #4a8cff 100%);
+  color: #fff;
+}
+
+.kc-head__title {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.kc-head__title strong {
+  font-size: 14.5px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kc-head__title small {
+  font-size: 11.5px;
+  color: var(--kc-soft);
+}
+
+.kc-head__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.kc-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  color: var(--kc-soft);
+  background: transparent;
+  border: 0;
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+.kc-icon-btn:hover {
+  color: var(--kc-ink);
+  background: rgb(255 255 255 / 9%);
+}
+
+.kc-translate {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--kc-soft);
+  background: rgb(255 255 255 / 7%);
+  border: 1px solid var(--kc-line);
+  border-radius: 9px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.kc-translate:hover {
+  color: var(--kc-ink);
+}
+
+.kc-translate--on {
+  color: #fff;
+  background: var(--kc-accent);
+  border-color: var(--kc-accent);
+}
+
+/* -------------------------------------------------------------------- ringing bar
+
+   An unanswered bell is a phone still ringing, not a notice that one rang. The bar stays and
+   pulses; the green handset is the only thing that stops the sound. */
+
+.kc-ring {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 12px;
+  background: linear-gradient(135deg, #14532d 0%, #166534 100%);
+  border-bottom: 1px solid rgb(34 197 94 / 26%);
+  flex-shrink: 0;
+  animation: kc-ring-bar 1.5s ease-in-out infinite;
+}
+
+@keyframes kc-ring-bar {
+  0%,
+  100% {
+    background: linear-gradient(135deg, #14532d 0%, #166534 100%);
+  }
+
+  50% {
+    background: linear-gradient(135deg, #166534 0%, #15803d 100%);
+  }
+}
+
+.kc-ring__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.kc-ring__text strong {
+  font-size: 13.5px;
+  font-weight: 800;
+}
+
+.kc-ring__text span {
+  font-size: 11px;
+  color: #bbf7d0;
+}
+
+/* The handset itself: big, round, green, and unmistakably a thing you press. */
+.kc-answer {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-left: auto;
+  height: 50px;
+  padding: 0 16px;
+  flex: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  color: #fff;
+  background: var(--kc-answer);
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  animation: kc-answer-pulse 1.5s ease-out infinite;
+}
+
+.kc-answer:hover {
+  background: #16a34a;
+}
+
+@keyframes kc-answer-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgb(34 197 94 / 60%);
+  }
+
+  70% {
+    box-shadow: 0 0 0 16px rgb(34 197 94 / 0%);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgb(34 197 94 / 0%);
+  }
+}
+
+/* The handset rocks while it rings, the way a phone icon always has. */
+.kc-answer svg {
+  animation: kc-handset 0.9s ease-in-out infinite;
+}
+
+@keyframes kc-handset {
+  0%,
+  100% {
+    transform: rotate(-11deg);
+  }
+
+  50% {
+    transform: rotate(11deg);
+  }
+}
+
+/* ------------------------------------------------------------------------ thread */
+
+.kc-thread {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 13px 12px;
+}
+
+.kc-row {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.kc-row--mine {
+  justify-content: flex-end;
+}
+
+.kc-bubble {
+  max-width: 84%;
+  padding: 8px 12px 5px;
+  background: var(--kc-bg-3);
+  border-radius: 16px 16px 16px 5px;
+}
+
+.kc-bubble--mine {
+  background: linear-gradient(150deg, var(--kc-accent) 0%, #5b46d6 100%);
+  border-radius: 16px 16px 5px 16px;
+}
+
+.kc-text {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.42;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.kc-time {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 3px;
+  font-size: 10px;
+  opacity: 0.75;
+}
+
+.kc-badge {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 18%);
+  font-weight: 700;
+}
+
+/* An order the office attached, called out at the top of the bubble it belongs to. */
+.kc-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 5px;
+  padding: 3px 9px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  color: inherit;
+  background: rgb(255 255 255 / 16%);
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.kc-tag:hover {
+  background: rgb(255 255 255 / 26%);
+}
+
+/* A bell that has rung stays in the thread as what it was: an event, not a line. */
+.kc-event {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 3px auto;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--kc-bg-2);
+  color: var(--kc-soft);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.kc-note {
+  margin: 14px auto;
+  font-size: 13px;
+  color: var(--kc-faint);
+  text-align: center;
+}
+
+.kc-note--bad {
+  color: var(--kc-danger);
+}
+
+.kc-typing {
+  display: flex;
+  gap: 4px;
+  align-self: flex-start;
+  padding: 10px 13px;
+  border-radius: 16px 16px 16px 5px;
+  background: var(--kc-bg-3);
+}
+
+.kc-typing span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--kc-soft);
+  animation: kc-dot 1.1s ease-in-out infinite;
+}
+
+.kc-typing span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.kc-typing span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes kc-dot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+
+  30% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+/* ---------------------------------------------------------------------- composer */
+
+.kc-composer {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  padding: 10px 11px;
+  background: var(--kc-bg-2);
+  border-top: 1px solid var(--kc-line);
+  flex-shrink: 0;
+}
+
+.kc-composer textarea {
+  flex: 1;
+  min-width: 0;
+  max-height: 108px;
+  padding: 10px 13px;
+  font: inherit;
+  font-size: 14.5px;
+  color: var(--kc-ink);
+  background: var(--kc-bg);
+  border: 1px solid var(--kc-line);
+  border-radius: 19px;
+  resize: none;
+}
+
+.kc-composer textarea::placeholder {
+  color: var(--kc-faint);
+}
+
+.kc-composer textarea:focus {
+  outline: none;
+  border-color: var(--kc-accent);
+}
+
+.kc-send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  flex: none;
+  color: #fff;
+  background: var(--kc-accent);
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.kc-send:hover:not(:disabled) {
+  background: var(--kc-accent-2);
+}
+
+.kc-send:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* ------------------------------------------------------------------------ resize */
+
+/* Top-left, because the panel is anchored to its bottom-right corner. Larger than the
+   desktop's grip: this one is found with a fingertip. */
+.kc-resize {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 22px;
+  height: 22px;
+  cursor: nwse-resize;
+  touch-action: none;
+  background: linear-gradient(135deg, var(--kc-accent) 0%, var(--kc-accent) 34%, transparent 35%);
+  opacity: 0.4;
+  border-top-left-radius: 16px;
+}
+
+.kc-resize:hover {
+  opacity: 0.9;
+}
+
+/* The chat marker on an order card.
+
+   Always the chat's own violet, never the board's neutral button grey: a ticket that somebody
+   has said something about is a different kind of ticket, and it has to be findable at a
+   glance across a wall of cards. Read messages are the outlined version, unread the solid one
+   — same mark, two weights, so the distinction is loudness rather than presence. */
+.kds-card__chat {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #b9a5ff;
+  background: rgb(124 92 255 / 16%);
+  border: 1px solid #7c5cff;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.kds-card__chat--unread {
+  color: #fff;
+  background: #7c5cff;
+  border-color: #9b7dff;
+  animation: kds-card-chat-pulse 2s ease-in-out infinite;
+}
+
+@keyframes kds-card-chat-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(124 92 255 / 55%);
+  }
+
+  60% {
+    box-shadow: 0 0 0 8px rgb(124 92 255 / 0%);
+  }
+}
+
+.kds-card__chat:hover {
+  filter: brightness(1.15);
+}
+
+/* The card itself carries a violet edge while something on it is unread, so the ticket reads
+   as "there is a note on this" from across the room, before the marker is legible. */
+.kds-card:has(.kds-card__chat--unread) {
+  box-shadow: inset 0 0 0 2px rgb(124 92 255 / 65%);
+}
+
+/* The Indian flag on the auto-Hindi switch: the same mark the language toggle uses, so
+   "Hindi" means one recognisable thing everywhere on this screen. */
+.kc-flag {
+  width: 20px;
+  height: 13px;
+  flex: none;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 25%);
+}
+
+/* ------------------------------------------------------------------ dropped orders
+
+   A counter attaches an order by dragging the card off the wall and onto the conversation,
+   which is faster and less error-prone than reading a ticket number aloud into a text box. */
+
+.kc--drop {
+  outline: 2px dashed var(--kc-accent-2);
+  outline-offset: -4px;
+}
+
+.kc-dropzone {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  /* Pointer-events off, or the overlay would steal the drop it is advertising. */
+  pointer-events: none;
+  background: rgb(23 22 37 / 88%);
+  color: var(--kc-accent-2);
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+  padding: 0 24px;
+}
+
+.kc-attached {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 11px;
+  padding: 7px 11px;
+  border-radius: 10px 10px 0 0;
+  background: rgb(124 92 255 / 20%);
+  color: var(--kc-accent-2);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.kc-attached button {
+  margin-left: auto;
+  display: inline-flex;
+  padding: 2px;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+/* A card being dragged should look picked-up rather than merely moved. */
+.kds-card[draggable='true']:active,
+.kds-done__group[draggable='true']:active {
+  cursor: grabbing;
+}
+
+/* The bubble the counter jumped to from an order card. It flashes rather than staying lit:
+   the point is to catch the eye on arrival, and a permanent highlight would then have to be
+   dismissed by somebody. */
+.kc-bubble--flash {
+  animation: kc-flash 2.2s ease-out;
+}
+
+@keyframes kc-flash {
+  0%,
+  30% {
+    box-shadow: 0 0 0 3px var(--kc-accent-2), 0 0 22px 2px rgb(155 125 255 / 55%);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgb(155 125 255 / 0%);
+  }
+}

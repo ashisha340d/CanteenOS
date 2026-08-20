@@ -91,10 +91,10 @@ const GROUP_HAS_OPEN_LINES = `EXISTS (
 const QUEUE_SELECT = `SELECT po.id AS order_id, po.order_number, po.daily_sequence,
        po.business_date, po.order_type, po.counter_id, c.name AS counter_name,
        po.entity_name, po.placed_at, po.created_at AS order_created_at, po.notes AS order_notes,
-       poi.id AS line_id, poi.item_name, poi.variant_name, poi.custom_item_name, poi.quantity,
+       poi.id AS line_id, poi.menu_item_id, poi.item_name, poi.variant_name, poi.custom_item_name, poi.quantity,
        poi.notes AS line_notes, poi.line_total, poi.kds_status, poi.acknowledged_at, poi.served_at,
        su.name AS served_by_name, pg.id AS printing_group_id, pg.name AS printing_group_name,
-       mi.prep_seconds
+       mi.prep_seconds, mi.name_hi AS item_name_hi
   FROM pos_orders po
   JOIN pos_order_items poi ON poi.pos_order_id = po.id
   LEFT JOIN counters c ON c.id = po.counter_id
@@ -118,6 +118,7 @@ export interface KdsQueueRow extends RowDataPacket {
   order_created_at: string;
   order_notes: string | null;
   line_id: string;
+  menu_item_id: string | null;
   item_name: string;
   variant_name: string | null;
   custom_item_name: string | null;
@@ -131,6 +132,8 @@ export interface KdsQueueRow extends RowDataPacket {
   printing_group_id: string | null;
   printing_group_name: string | null;
   prep_seconds: number | null;
+  /** Null for an ad-hoc line — `poi.menu_item_id` is null, so the join finds nothing. */
+  item_name_hi: string | null;
 }
 
 export interface KdsLineRow extends RowDataPacket {
@@ -148,6 +151,8 @@ export interface KdsRecentActionRow extends RowDataPacket {
   order_id: string;
   order_number: string;
   item_name: string;
+  /** Null for an ad-hoc line, whose `menu_item_id` is null. */
+  item_name_hi: string | null;
   variant_name: string | null;
   quantity: string;
   served_at: string;
@@ -186,6 +191,7 @@ export interface KdsItemStockRow extends RowDataPacket {
 export interface KdsStationMenuRow extends RowDataPacket {
   food_item_id: string;
   name: string;
+  name_hi: string | null;
   category_name: string;
   availability: AvailabilityStatus;
   base_price: string | null;
@@ -317,10 +323,12 @@ export class KdsRepository {
     return selectRows<KdsRecentActionRow>(
       db,
       `SELECT poi.id AS line_id, po.id AS order_id, po.order_number, poi.item_name,
+              mi.name_hi AS item_name_hi,
               poi.variant_name, poi.quantity, poi.served_at, su.name AS served_by_name
          FROM pos_orders po
          JOIN pos_order_items poi ON poi.pos_order_id = po.id
          LEFT JOIN users su ON su.id = poi.served_by
+         LEFT JOIN menu_items mi ON mi.id = poi.menu_item_id
         WHERE po.deleted_at IS NULL
           AND poi.status = 'ACTIVE'
           AND poi.kds_status = 'SERVED'
@@ -612,6 +620,32 @@ export class KdsRepository {
     return fallback?.id ?? null;
   }
 
+  /**
+   * Does this order have any line that belongs to this counter?
+   *
+   * Deliberately the board's own `COUNTER_SCOPE` rather than `pos_orders.counter_id`: an order
+   * reaches a counter because its *items* are routed there, and the column is null on every
+   * order the till writes. Anything checking the column instead would decide that no order is
+   * ever on any counter — which is precisely what tagging a chat message to an order used to
+   * conclude.
+   *
+   * Served lines count. A message about an order the counter has just handed over is still a
+   * message about that counter's order.
+   */
+  async orderTouchesCounter(db: Db, orderId: string, counterId: string): Promise<boolean> {
+    const row = await selectOne<{ hit: number } & RowDataPacket>(
+      db,
+      `SELECT 1 AS hit
+         FROM pos_orders po
+         JOIN pos_order_items poi ON poi.pos_order_id = po.id
+        WHERE po.id = ? AND po.deleted_at IS NULL AND poi.status = 'ACTIVE'
+          AND ${COUNTER_SCOPE}
+        LIMIT 1`,
+      [orderId, counterId, counterId],
+    );
+    return row !== null;
+  }
+
   async listActiveCounters(db: Db): Promise<KdsStationRow[]> {
     return selectRows<KdsStationRow>(
       db,
@@ -646,6 +680,7 @@ export class KdsRepository {
       db,
       `SELECT mia.food_item_id,
               COALESCE(mia.display_name, mi.name) AS name,
+              COALESCE(mia.display_name_hi, mi.name_hi) AS name_hi,
               COALESCE(mca.display_name, mc.name, 'Uncategorized') AS category_name,
               mia.availability,
               mi.base_price,

@@ -29,10 +29,22 @@ describe('capability matrix', () => {
       UserRole.ADMIN,
       UserRole.SUPER_ADMIN,
     ];
+    // Super Admin is the one documented exception to strict nesting: it oversees the roster
+    // rather than carrying personal work on it, so it subtracts the two task grants an Admin
+    // holds. See `without()` in src/permissions. Every other tier is purely additive.
+    const carveOuts: Partial<Record<UserRole, readonly Capability[]>> = {
+      [UserRole.SUPER_ADMIN]: [Capability.TASK_SELF, Capability.TASK_ASSIGN],
+    };
     for (let index = 1; index < ladder.length; index += 1) {
+      const higherRole = ladder[index] as UserRole;
       const lower = ROLE_CAPABILITIES[ladder[index - 1] as UserRole];
-      const higher = ROLE_CAPABILITIES[ladder[index] as UserRole];
+      const higher = ROLE_CAPABILITIES[higherRole];
+      const dropped = carveOuts[higherRole] ?? [];
       for (const capability of lower) {
+        if (dropped.includes(capability)) {
+          expect(higher).not.toContain(capability);
+          continue;
+        }
         expect(higher).toContain(capability);
       }
     }

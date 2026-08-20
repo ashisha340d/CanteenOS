@@ -267,6 +267,103 @@ Two follow-up migrations belong to the same module:
     switched on is not an edit to its configuration, and treating it as one would make every
     row in the portal look freshly changed once a minute.
 
+## Cleaning & Hygiene (001_schema.sql)
+
+See [MENUBOARD_SPEC.md §3e](./MENUBOARD_SPEC.md#3e-cleaning--hygiene-management-extension) for
+the product framing. 24 tables plus four workforce tables shared with the roster:
+
+```
+equipment_areas ─< cleanable_assets >─ cleanable_asset_types
+                        │           └─ equipment            (nullable 1:1 link)
+                        │
+cleaning_procedures ─< cleaning_procedure_versions ─< cleaning_procedure_steps
+                                    ├─< cleaning_procedure_chemicals >─ cleaning_chemicals
+                                    ├─< cleaning_procedure_tools     >─ cleaning_tools
+                                    ├── cleaning_methods
+                                    └── cleaning_standards
+                                    │
+cleaning_rules ─────────────────────┘
+      ├─< cleaning_rule_triggers        (which events make it fall due)
+      └─< cleaning_rule_skills >─ skills
+                        │
+cleaning_events ─────< cleaning_tasks >──┘
+                            ├─< cleaning_task_step_results >─ cleaning_procedure_steps
+                            ├─< cleaning_task_evidence      >─ media_assets
+                            ├─< cleaning_task_assignments
+                            ├─< cleaning_task_state_history
+                            ├─< cleaning_verifications ─< cleaning_verification_results
+                            └─< cleaning_corrective_actions
+
+cleaning_assignment_rules >─ equipment_areas          (per-area engine policy; NULL = global)
+users ─< user_skills >─ skills
+      ─< user_shift_assignments >─ shifts ─< shift_days
+      ─< user_area_responsibilities >─ equipment_areas
+```
+
+Decisions that differ from the rest of the schema, deliberately:
+
+- **`cleanable_assets` is not `equipment`.** A chopping board, a drain and a corridor floor are
+  all cleanable and none is an asset the maintenance module would recognise.
+  `cleanable_assets.equipment_id` is a nullable, UNIQUE FK linking the two where they *are* the
+  same object, so a machine is never entered twice.
+- **Every area's "general" asset is an ordinary row.** A report naming only a place resolves to
+  the area's `AREA`-typed cleanable asset, created on first use by
+  `CleaningAssetService.ensureAreaGeneralAsset`. There is no flag column and no special case in
+  the engine: it is a normal asset that happens to represent the place itself.
+- **`cleaning_tasks` is an occurrence, not a template.**
+  `UNIQUE (rule_id, cleanable_asset_id, occurrence_key)` is the module's idempotency guarantee —
+  the sweep running twice, or a phone retrying a report, cannot produce two identical tasks.
+  Calendar frequencies derive the key from the period (`D-2026-08-20`, `W-2026-W34`,
+  `M-2026-08`, `P7-2984`, `S-2026-08-20-<shift>`); event-driven ones from the event's own id,
+  because a second spill really is more work.
+- **A task pins `procedure_version_id`, never `procedure_id`.** Editing an SOP cannot rewrite
+  what somebody already signed off. Only a `PUBLISHED` version is ever pinned; publishing
+  archives whatever was published before, and `cleaning_procedures.current_version_id` points
+  at the one in force. An `ARCHIVED` version is never deleted while a task still points at it.
+- **The step sheet is snapshotted.** `cleaning_task_step_results` gets one row per step at
+  generation time, so a later edit to the procedure cannot change what an operator was asked to
+  do. `is_mandatory` and `requires_photo` are read from the pinned version's steps on every
+  completion check.
+- **No `revision`/`sync_seq` anywhere.** Like equipment (§3c) and tasks (023), the module is
+  REST-served to both clients and takes no part in the Android delta-sync engine.
+- **No cleaning audit table.** The global `audit_logs` records every mutation.
+  `cleaning_task_state_history` is a *different* table and both exist: it is the operator-facing
+  timeline of one occurrence, carrying `source` and a prose `note`, while `audit_logs` remains
+  the security record.
+- **Files reuse `media_assets` (012)** through `cleaning_task_evidence.media_id` and
+  `cleaning_chemicals.safety_sheet_media_id`. The module adds link columns, not a second blob
+  store.
+- **Derived state is never stored.** There is no `is_overdue`, no cached compliance rate and no
+  stored warranty-style status. Overdue-ness comes from `due_at` and the clock; the asset's
+  open/overdue counters and `last_cleaned_at` are subqueries in
+  `CleanableAssetRepository`'s SELECT rather than columns, because a schedule sweep touches
+  thousands of rows at once and a stored counter would need refreshing in the same breath.
+- **Three CHECK constraints carry rules the service also enforces**, so a bad row cannot exist
+  even if a future code path forgets: `ck_cleaning_rules_scope` (the three scope shapes),
+  `ck_cleaning_rules_periodic` (`PERIODIC` needs `interval_days`) and
+  `ck_cleaning_rules_verification` (`requires_verification` needs a method). The service checks
+  each first so the user gets a sentence rather than a 500.
+- **`cleaning_events.dedupe_key` is UNIQUE**, which is what makes the machine ingest idempotent
+  and lets the sweep write one `SCHEDULE_DUE` row per rule-occurrence. `processed_at`,
+  `tasks_created` and `process_error` record what came of every event, so "why does this task
+  exist?" and "did that report achieve anything?" are both answerable from one table.
+- **Wall-clock columns are local; instants are UTC.** `shifts.starts_at`/`ends_at` and
+  `cleaning_rules.due_time` are TIME values meaning the clock on the wall, compared against the
+  server's local clock. `cleaning_tasks.due_at`, `scheduled_at`, `completed_at` and every other
+  DATETIME(3) are UTC like the rest of the schema. `shifts.crosses_midnight` is derived from
+  the pair on write and never supplied, because an inconsistent value would make "who is on
+  shift" silently wrong.
+- **`notifications.type` was extended in place** with ten cleaning kinds rather than growing a
+  parallel notification system, so there is one inbox and one delivery path (in-app + push).
+  Of those, `CLEANING_TASK_DUE`, `CLEANING_VERIFICATION_FAILED` and `HYGIENE_COMPLIANCE_ALERT`
+  are declared but not yet emitted by any code path.
+- **Seeded reference data**: 33 cleanable asset types, 12 cleaning methods, 6 standards and 7
+  skills ship as ordinary rows — rename or replace them freely. `npm run seed:cleaning`
+  additionally provisions the `CLN-REPORTED` procedure, its published version and the rule that
+  carries reported clean-ups, plus the global assignment policy. **The module cannot raise
+  ad-hoc work without those**, which is why they have their own idempotent seed command as well
+  as being part of `npm run seed`.
+
 ## Digital Menu Board screens (032_menu_board_screens.sql)
 
 One table, `menu_board_screens`: the bilingual menu displays above the counter. Columns are

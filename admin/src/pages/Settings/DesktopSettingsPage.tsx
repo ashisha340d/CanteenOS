@@ -8,7 +8,7 @@ import {
   restoreDesktopSnapshot,
 } from '@/services/desktopState';
 import { ModulePage } from '@/components/ModulePage';
-import { KdsAlarmSoundsCard } from '@/components/KdsAlarmSounds';
+import { ChatSoundsCard, KdsAlarmSoundsCard } from '@/components/KdsAlarmSounds';
 import { KdsAlarmTiming } from '@/components/KdsAlarmTiming';
 import {
   DESKTOP_SKIN_HINT,
@@ -99,6 +99,7 @@ export function DesktopSettingsPage(): JSX.Element {
       tabs={[
         { key: 'appearance', label: 'Appearance', content: <AppearanceTab /> },
         { key: 'kds-sounds', label: 'KDS/CDS Sounds', content: <KdsSoundsTab /> },
+        { key: 'chat', label: 'Chat & Messaging', content: <ChatMessagingTab /> },
       ]}
     />
   );
@@ -221,6 +222,24 @@ function KdsSoundsTab(): JSX.Element {
         description="When the attention and critical alarms fire, how often critical repeats, and how loud every board plays. A line's due time is its order time plus its prep time (per item on the Menu Master File, default below as fallback)."
       >
         <KdsAlarmTiming />
+      </Section>
+    </div>
+  );
+}
+
+/**
+ * The office-to-counter chat. Only the sounds are configurable: who may talk to a counter is
+ * already answered by the POS capability, and the conversation itself has no settings worth
+ * having — a message either reached the wall or it did not.
+ */
+function ChatMessagingTab(): JSX.Element {
+  return (
+    <div className="flex flex-col gap-8">
+      <Section
+        title="Notification sounds"
+        description="What plays when a message lands, and what plays when the office rings a counter's bell. Uploaded once here and used by every Service KDS and by this desktop. With nothing uploaded, both fall back to a built-in tone."
+      >
+        <ChatSoundsCard />
       </Section>
     </div>
   );
