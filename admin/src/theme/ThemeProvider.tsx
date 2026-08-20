@@ -22,9 +22,9 @@ export type TextSize = 'compact' | 'default' | 'large';
  * which paints the page content inside a window. The two are independent on purpose, exactly
  * as a real desktop separates its theme from the applications running on it.
  */
-export type DesktopSkin = 'sandalwood' | 'graphite' | 'azure' | 'beta';
+export type DesktopSkin = 'sandalwood' | 'graphite' | 'azure' | 'meridian';
 
-export const DESKTOP_SKINS: DesktopSkin[] = ['sandalwood', 'graphite', 'azure', 'beta'];
+export const DESKTOP_SKINS: DesktopSkin[] = ['sandalwood', 'graphite', 'azure', 'meridian'];
 
 /** The typeface the entire portal is set in. Stacks live in theme/appearance.css. */
 export type FontChoice =
@@ -37,7 +37,9 @@ export type FontChoice =
   | 'plex'
   | 'source'
   | 'public'
-  | 'outfit';
+  | 'outfit'
+  | 'dmsans'
+  | 'grotesk';
 
 export const FONT_CHOICES: FontChoice[] = [
   'geist',
@@ -50,6 +52,8 @@ export const FONT_CHOICES: FontChoice[] = [
   'source',
   'public',
   'outfit',
+  'dmsans',
+  'grotesk',
 ];
 
 const SKIN_KEY = 'menuboard.admin.theme';
@@ -57,6 +61,7 @@ const TEXT_SIZE_KEY = 'menuboard.admin.textSize';
 const DESKTOP_SKIN_KEY = 'menuboard.admin.desktopSkin';
 const FONT_KEY = 'menuboard.admin.font';
 const ICON_SET_KEY = 'menuboard.admin.iconSet';
+const WALLPAPER_KEY = 'menuboard.admin.wallpaper';
 
 /**
  * `brand` is the high-contrast skin. It carries `dark` as well as `contrast` so that any
@@ -136,6 +141,9 @@ interface ThemeContextValue {
   setIconSet: (set: string) => void;
   /** The sets the current skin offers, for the picker and the context menu. */
   iconSetOptions: IconSetDefinition[];
+  /** The operator's own desktop picture as a data URL, or null for the skin's own wallpaper. */
+  wallpaper: string | null;
+  setWallpaper: (dataUrl: string | null) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -146,6 +154,9 @@ export function ThemeProvider({ children }: { children: ReactNode }): JSX.Elemen
   const [desktopSkin, setDesktopSkinState] = useState<DesktopSkin>(getStoredDesktopSkin);
   const [font, setFontState] = useState<FontChoice>(getStoredFont);
   const [iconSets, setIconSets] = useState<Partial<Record<DesktopSkin, string>>>(getStoredIconSets);
+  const [wallpaper, setWallpaperState] = useState<string | null>(
+    () => localStorage.getItem(WALLPAPER_KEY),
+  );
 
   /* Resolved rather than stored: whatever this skin was last given, falling back to the set
      the skin ships with. This is what makes an incompatible pairing unrepresentable — there
@@ -176,6 +187,14 @@ export function ThemeProvider({ children }: { children: ReactNode }): JSX.Elemen
     document.documentElement.dataset['iconSet'] = iconSet;
   }, [iconSet]);
 
+  /* Published as a custom property rather than an <img>, so the desktop stylesheet keeps full
+     control of layer order — the picture sits under the skin's glows, not over them. */
+  useEffect(() => {
+    const root = document.documentElement;
+    if (wallpaper === null) root.style.removeProperty('--desk-user-image');
+    else root.style.setProperty('--desk-user-image', `url("${wallpaper}")`);
+  }, [wallpaper]);
+
   const setSkin = useCallback((next: ThemeSkin) => {
     setSkinState(next);
     localStorage.setItem(SKIN_KEY, next);
@@ -194,6 +213,12 @@ export function ThemeProvider({ children }: { children: ReactNode }): JSX.Elemen
   const setFont = useCallback((next: FontChoice) => {
     setFontState(next);
     localStorage.setItem(FONT_KEY, next);
+  }, []);
+
+  const setWallpaper = useCallback((next: string | null) => {
+    setWallpaperState(next);
+    if (next === null) localStorage.removeItem(WALLPAPER_KEY);
+    else localStorage.setItem(WALLPAPER_KEY, next);
   }, []);
 
   const setIconSet = useCallback(
@@ -221,6 +246,8 @@ export function ThemeProvider({ children }: { children: ReactNode }): JSX.Elemen
       iconSet,
       setIconSet,
       iconSetOptions,
+      wallpaper,
+      setWallpaper,
     }),
     [
       skin,
@@ -234,6 +261,8 @@ export function ThemeProvider({ children }: { children: ReactNode }): JSX.Elemen
       iconSet,
       setIconSet,
       iconSetOptions,
+      wallpaper,
+      setWallpaper,
     ],
   );
 
@@ -274,6 +303,8 @@ export const FONT_LABEL: Record<FontChoice, string> = {
   source: 'Source Sans 3',
   public: 'Public Sans',
   outfit: 'Outfit',
+  dmsans: 'DM Sans',
+  grotesk: 'Space Grotesk',
 };
 
 export const FONT_HINT: Record<FontChoice, string> = {
@@ -282,18 +313,46 @@ export const FONT_HINT: Record<FontChoice, string> = {
   manrope: 'Semi-rounded and a little warmer. Reads well in headings.',
   jakarta: 'Geometric with tall lowercase. Distinctive without being loud.',
   figtree: 'Friendly geometric sans. Soft, but keeps its shape when dense.',
-  lexend: 'Engineered for reading speed. The easiest of the ten to scan quickly.',
+  lexend: 'Engineered for reading speed. The easiest of the twelve to scan quickly.',
   plex: 'IBM’s corporate face. Slightly technical; excellent numerals.',
   source: 'Adobe’s UI workhorse. Compact, so more fits on a row.',
   public: 'Plain, sturdy, and neutral. Nothing about it draws attention.',
   outfit: 'Pure geometric. Strong at large sizes, best paired with a large text size.',
+  dmsans: 'Low-contrast geometric with a short x-height. Calm in long columns of figures.',
+  grotesk: 'Technical and slightly squared. The most distinctive face here; strong numerals.',
+};
+
+/**
+ * A different specimen per face, rather than one string repeated twelve times.
+ *
+ * A sampler that shows the same words in every font is a test of the reader's memory — by the
+ * fourth card you are comparing a typeface to your recollection of the first. Different strings
+ * make the comparison worse in theory and far better in practice, because each line is chosen to
+ * exercise the thing that face is being judged on: tabular figures, a rupee sign, a time range,
+ * a minus sign, an all-caps run, a batch code with letters and digits adjacent.
+ *
+ * All twelve are drawn from what this portal actually renders. None is lorem ipsum.
+ */
+export const FONT_SAMPLE: Record<FontChoice, string> = {
+  geist: '₹1,24,650.00 · 09:45 · 128 kg',
+  inter: 'Invoice INV-2026-0847 · ₹98,320',
+  manrope: 'Masala Dosa × 24 — Counter 3',
+  jakarta: 'GRN 5512 · 18 crates · 06:30',
+  figtree: 'Paneer Butter Masala ₹280.00',
+  lexend: 'Stock variance −4.5% this week',
+  plex: 'SKU 8842-A · 1,000 g · Batch 07',
+  source: 'Shift B · 14:00–22:00 · 9 staff',
+  public: 'Purchase order ₹3,45,900 cleared',
+  outfit: 'TODAY — 2,481 COVERS',
+  dmsans: 'Wastage 12.75 kg · ₹1,890 lost',
+  grotesk: 'KDS #7 — 03:12 elapsed',
 };
 
 export const DESKTOP_SKIN_LABEL: Record<DesktopSkin, string> = {
   sandalwood: 'Sandalwood',
   graphite: 'Graphite',
   azure: 'Azure',
-  beta: 'Beta',
+  meridian: 'Meridian',
 };
 
 /** The two colours each skin is recognisable by, for the swatch in the compact picker. */
@@ -301,14 +360,15 @@ export const DESKTOP_SKIN_SWATCH: Record<DesktopSkin, [string, string]> = {
   sandalwood: ['#fdf9f4', '#c1440e'],
   graphite: ['#23252b', '#6ea8fe'],
   azure: ['#eef2f7', '#0f6cbd'],
-  beta: ['#111318', '#948dff'],
+  meridian: ['#121821', '#4fd6b8'],
 };
 
 export const DESKTOP_SKIN_HINT: Record<DesktopSkin, string> = {
   sandalwood: 'Warm ivory and terracotta. Easy on the eye over a long shift.',
   graphite: 'Low-light slate. For dim rooms and screens viewed after dark.',
   azure: 'Cool steel. The highest contrast of the three in daylight.',
-  beta: 'Fluent graphite in the brand accent. Flat surfaces, hairline borders, tight 8px frames — the workstation skin. Pair it with the Dark window content theme.',
+  meridian:
+    'Ink-navy lit by a single mint accent. High-contrast text on low-contrast surfaces, so it stays readable late in a shift without any of it shouting. The focused window is the only lit thing on screen. Pair it with the Dark window content theme.',
 };
 
 /**
@@ -354,13 +414,13 @@ export const DESKTOP_SKIN_PREVIEW: Record<DesktopSkin, DesktopSkinPreview> = {
     border: '#9db3cd',
     accent: '#0f6cbd',
   },
-  beta: {
-    bg: '#111318',
-    chromeFrom: '#22252b',
-    chromeTo: '#22252b',
-    body: '#1c1f24',
-    bar: '#15171c',
-    border: '#2e323a',
-    accent: '#948dff',
+  meridian: {
+    bg: '#090d13',
+    chromeFrom: '#1a212b',
+    chromeTo: '#151b24',
+    body: '#10151d',
+    bar: '#0f141c',
+    border: '#2b3543',
+    accent: '#4fd6b8',
   },
 };

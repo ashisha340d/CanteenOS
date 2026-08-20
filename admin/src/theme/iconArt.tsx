@@ -24,6 +24,7 @@ import {
   type IconWeight,
 } from '@phosphor-icons/react';
 import type { DesktopApp } from '@/services/appRegistry';
+import { moduleIcons } from './fluentIcons';
 
 /**
  * How a desktop icon is actually drawn.
@@ -31,6 +32,10 @@ import type { DesktopApp } from '@/services/appRegistry';
  * An icon set is not a shape around a fixed picture — the picture itself changes. Four
  * families, each producing genuinely different artwork for the same module:
  *
+ *  - `fluent`    Microsoft's own system icons, in Regular or Filled. A third independent
+ *                drawing of every module, and the one the rest of the product's toolbars and
+ *                status marks are built from — so a desktop on a Fluent set matches the forms
+ *                that open from it.
  *  - `phosphor`  a second, independently drawn icon family, in one of its six real weights.
  *                Thin and Fill are not the same drawing at different stroke widths; Phosphor
  *                redraws each weight, which is why this gives six distinct-looking sets from
@@ -49,12 +54,14 @@ import type { DesktopApp } from '@/services/appRegistry';
  * drag it into every page load rather than into the desktop chunk that actually draws icons.
  */
 
-export type IconArtFamily = 'phosphor' | 'lucide' | 'lettermark' | 'isometric';
+export type IconArtFamily = 'fluent' | 'phosphor' | 'lucide' | 'lettermark' | 'isometric';
 
 export interface IconArt {
   family: IconArtFamily;
   /** Only meaningful for the `phosphor` family. */
   weight?: IconWeight;
+  /** Only meaningful for the `fluent` family. */
+  variant?: 'regular' | 'filled';
 }
 
 /**
@@ -129,6 +136,14 @@ export function AppMark({ app, art }: { app: DesktopApp; art: IconArt }): JSX.El
       return <span className="os-icon__monogram">{monogram(app.label)}</span>;
     case 'isometric':
       return <IsometricMark app={app} />;
+    case 'fluent': {
+      // The same registry the toolbars and status marks read from, so a module is the same
+      // drawing on the desktop as it is in its own form header.
+      const pair = moduleIcons[app.id];
+      if (!pair) return <app.Icon className="os-icon__glyph" />;
+      const Glyph = pair[art.variant ?? 'regular'];
+      return <Glyph className="os-icon__glyph" />;
+    }
     case 'lucide':
       return <app.Icon className="os-icon__glyph" />;
   }

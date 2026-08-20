@@ -4,12 +4,20 @@
   position: absolute;
   inset: 0;
   overflow: hidden;
-  background: var(--desk-bg);
+  background-color: var(--desk-bg);
   color: var(--desk-fg);
+  /* Layer order, front to back: the operator's own picture, the skin's three accent glows,
+     then the skin's two-tone wash. Each is `none` when unset, so a skin that defines neither
+     falls back to the flat --desk-bg underneath. */
   background-image:
+    var(--desk-user-image, none),
     radial-gradient(ellipse at 8% 92%, var(--desk-glow-a) 0%, transparent 45%),
     radial-gradient(ellipse at 92% 8%, var(--desk-glow-b) 0%, transparent 45%),
-    radial-gradient(ellipse at 50% 50%, var(--desk-glow-c) 0%, transparent 70%);
+    radial-gradient(ellipse at 50% 50%, var(--desk-glow-c) 0%, transparent 70%),
+    var(--desk-wallpaper, none);
+  background-size: cover, auto, auto, auto, auto;
+  background-position: center center, 0 0, 0 0, 0 0, 0 0;
+  background-repeat: no-repeat;
   user-select: none;
 }
 

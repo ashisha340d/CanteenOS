@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useRef } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { Spinner } from '@/components/ui/spinner';
 import { WindowHostProvider } from '@/services/WindowHost';
 import { useWindowManager, type ManagedWindow } from '@/services/WindowManager';
@@ -15,6 +15,10 @@ const TITLE_HEIGHT = 32;
 const MIN_W = 420;
 const MIN_H = 300;
 
+/* How long the maximise/restore tween stays switched on. Comfortably longer than the slowest
+   skin's --desk-motion so the transition is never cut off mid-flight. */
+const TWEEN_MS = 380;
+
 type ResizeEdge = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
 
 const RESIZE_EDGES: ResizeEdge[] = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
@@ -22,6 +26,28 @@ const RESIZE_EDGES: ResizeEdge[] = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
 export function DesktopWindow({ win, isFocused }: DesktopWindowProps): JSX.Element | null {
   const { focus, maximize, move, setBounds } = useWindowManager();
   const winRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * Maximising and restoring should glide; dragging must not.
+   *
+   * Both move the window by the same inline `left`/`top`/`width`/`height`, and a drag rewrites
+   * them on every mousemove — so a standing CSS transition on those properties would leave the
+   * frame rubber-banding a fifth of a second behind the pointer. The transition is therefore
+   * armed only for the moment the maximised state actually flips, and disarmed straight after.
+   */
+  const [tweening, setTweening] = useState(false);
+  const settled = useRef(false);
+  useEffect(() => {
+    // Skip the very first pass: a window opening maximised should play its entrance animation,
+    // not tween in from wherever the browser thinks it was.
+    if (!settled.current) {
+      settled.current = true;
+      return;
+    }
+    setTweening(true);
+    const timer = setTimeout(() => setTweening(false), TWEEN_MS);
+    return () => clearTimeout(timer);
+  }, [win.maximized]);
 
   const handleTitleMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -99,9 +125,15 @@ export function DesktopWindow({ win, isFocused }: DesktopWindowProps): JSX.Eleme
   return (
     <div
       ref={winRef}
-      className={`os-window ${isFocused ? 'os-window--focused' : ''} ${
-        win.maximized ? 'os-window--maximized' : ''
-      }`}
+      className={[
+        'os-window',
+        isFocused ? 'os-window--focused' : '',
+        win.maximized ? 'os-window--maximized' : '',
+        tweening ? 'os-window--tween' : '',
+        win.closing === true ? 'os-window--closing' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
       style={{ ...geometry, zIndex: win.zIndex }}
       onMouseDown={() => focus(win.id)}
     >

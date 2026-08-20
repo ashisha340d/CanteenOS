@@ -13,7 +13,7 @@
   border: 1px solid;
   border-color: var(--desk-bevel-hi) var(--desk-bevel-lo) var(--desk-bevel-lo) var(--desk-bevel-hi);
   background: var(--desk-task-bg);
-  transition: background 0.14s;
+  transition: background var(--desk-motion-fast) var(--desk-ease);
 }
 
 .start-button:hover {
@@ -81,7 +81,7 @@
   text-align: left;
   color: var(--foreground);
   cursor: pointer;
-  transition: background 0.14s;
+  transition: background var(--desk-motion-fast) var(--desk-ease);
 }
 
 .start-menu__item:hover,
@@ -120,9 +120,36 @@
   border-radius: var(--radius-md);
   color: var(--foreground);
   cursor: pointer;
-  transition: background 0.14s;
+  transition: background var(--desk-motion-fast) var(--desk-ease);
 }
 
 .start-menu__signout:hover {
   background: var(--accent);
+}
+
+/* The menu grows out of the button that opened it rather than fading in on the spot — the
+   bottom-left origin is what ties the panel to the Start button and makes the two read as one
+   gesture. Short, because a menu is a response to a click and must not feel like a reveal. */
+.start-menu {
+  transform-origin: bottom left;
+  animation: start-menu-in var(--desk-motion-fast) var(--desk-ease) backwards;
+}
+
+@keyframes start-menu-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .start-menu {
+    animation: none;
+  }
 }

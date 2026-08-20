@@ -9,7 +9,60 @@
   border: 1.5px solid var(--desk-chrome-border);
   background: var(--background);
   box-shadow: var(--desk-window-shadow);
-  transition: box-shadow 0.15s, border-color 0.15s;
+  /* Deliberately narrow. Position and size are driven by inline styles that a drag rewrites on
+     every mousemove, so transitioning them here would make dragging rubber-band — the
+     maximise/restore tween opts into those separately, for the one moment it needs them. */
+  transition:
+    box-shadow var(--desk-motion-fast) var(--desk-ease),
+    border-color var(--desk-motion-fast) var(--desk-ease);
+  /* A window arriving: rises and settles, never overshoots. `backwards` applies the first frame
+     before the animation starts, and — unlike `both` — leaves no transform behind afterwards,
+     which matters because a retained transform would make this a containing block and break any
+     position:fixed a module renders inside it. */
+  animation: os-window-in var(--desk-motion) var(--desk-ease) backwards;
+}
+
+@keyframes os-window-in {
+  from {
+    opacity: 0;
+    transform: scale(0.985) translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Leaving is quicker than arriving and uses the mirrored curve: an exit that decelerates reads
+   as hesitant, so this one accelerates away. The frame is inert while it plays. */
+.os-window--closing {
+  pointer-events: none;
+  animation: os-window-out var(--desk-motion-fast) var(--desk-ease-in) forwards;
+}
+
+@keyframes os-window-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(0.992) translateY(2px);
+  }
+}
+
+/* Armed by DesktopWindow.tsx only while the maximised state is actually flipping. */
+.os-window--tween {
+  transition:
+    left var(--desk-motion) var(--desk-ease),
+    top var(--desk-motion) var(--desk-ease),
+    width var(--desk-motion) var(--desk-ease),
+    height var(--desk-motion) var(--desk-ease),
+    border-radius var(--desk-motion) var(--desk-ease),
+    box-shadow var(--desk-motion) var(--desk-ease),
+    border-color var(--desk-motion-fast) var(--desk-ease);
 }
 
 .os-window--focused {
@@ -195,4 +248,21 @@
   width: 11px;
   height: 11px;
   background: linear-gradient(135deg, transparent 50%, var(--desk-grip) 50%);
+}
+
+/* --------------------------------------------------------------------------- motion */
+
+/* House rule, matched in StatusBar.css, StartMenu.css, CaptionControls.css and the widget
+   stylesheets: motion is decoration, so it goes away entirely when the operating system asks.
+   The window still appears and disappears — it just stops travelling to do it. */
+@media (prefers-reduced-motion: reduce) {
+
+  .os-window,
+  .os-window--closing {
+    animation: none;
+  }
+
+  .os-window--tween {
+    transition: none;
+  }
 }

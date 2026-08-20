@@ -208,9 +208,13 @@ export function Modal({
     }
   }, []);
 
-  if (!open) return null;
-
-  if (minimized) {
+  /* Deliberately no `if (!open) return null` here. Radix only plays a close animation for
+     content it is still rendering, so short-circuiting above the Dialog is what used to make a
+     form vanish on the frame the close was clicked while its opening was smooth. Handing the
+     open flag to Radix instead lets it hold the content for the length of the exit and then
+     unmount it — the minimised bar is what needs the explicit guard now, since it sits outside
+     the Dialog and would otherwise render for a closed form. */
+  if (open && minimized) {
     const barWidth = Math.max(240, Math.min(geometry.width, 320));
     const barX = Math.min(Math.max(0, geometry.x), Math.max(0, window.innerWidth - barWidth - 8));
     const barY = Math.min(Math.max(0, geometry.y), Math.max(0, window.innerHeight - 48));
@@ -247,6 +251,13 @@ export function Modal({
         className={cn(
           'top-auto left-auto flex max-w-none translate-x-0 translate-y-0 flex-col gap-0 p-0',
           'overflow-hidden rounded-2xl sm:max-w-none',
+          /* The base dialog opens in 100ms, which on a full form reads as a flicker rather than
+             a movement. Slowed, and given a few pixels of rise on the way in so the form
+             arrives from somewhere; the exit stays shorter than the entrance, because a
+             dismissal that lingers feels unresponsive. */
+          'duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]',
+          'data-open:slide-in-from-bottom-1 data-closed:duration-100',
+          'motion-reduce:animate-none motion-reduce:transition-none',
         )}
         style={{
           left: geometry.x,

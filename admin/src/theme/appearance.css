@@ -20,6 +20,8 @@
   --font-stack-source: 'Source Sans 3 Variable', 'Segoe UI', Roboto, system-ui, sans-serif;
   --font-stack-public: 'Public Sans Variable', 'Segoe UI', Roboto, system-ui, sans-serif;
   --font-stack-outfit: 'Outfit Variable', 'Segoe UI Variable Display', 'Segoe UI', Roboto, system-ui, sans-serif;
+  --font-stack-dmsans: 'DM Sans Variable', 'Segoe UI Variable Display', 'Segoe UI', Roboto, system-ui, sans-serif;
+  --font-stack-grotesk: 'Space Grotesk Variable', 'Segoe UI Variable Display', 'Segoe UI', Roboto, system-ui, sans-serif;
 
   --app-font-sans: var(--font-stack-geist);
 }
@@ -64,26 +66,42 @@ html[data-font='outfit'] {
   --app-font-sans: var(--font-stack-outfit);
 }
 
+html[data-font='dmsans'] {
+  --app-font-sans: var(--font-stack-dmsans);
+}
+
+html[data-font='grotesk'] {
+  --app-font-sans: var(--font-stack-grotesk);
+}
+
 /* ---------------------------------------------------------------- desktop icon sets */
 
 /*
- * Ten sets, each drawn for particular wallpaper. The *artwork* differs between them, not just
- * the tile: `theme/iconArt.tsx` swaps in a Phosphor weight, a monogram, a projected slab or an
- * embossed lucide glyph, and the tokens below dress whatever it produced.
+ * Eight sets, each drawn for particular wallpaper. The *artwork* differs between them, not just
+ * the tile: `theme/iconArt.tsx` swaps in a Fluent glyph, a Phosphor weight, a monogram, a
+ * projected slab or an embossed lucide glyph, and the tokens below dress whatever it produced.
  *
  * Each app supplies exactly one value — `--icon-accent`, set per icon from the registry — and
  * the set decides what to do with it. Nothing here knows which application it is drawing.
  *
- * Every block is scoped to both `html[data-icon-set='x']` (the live desktop) and `.icon-set--x`
- * (a Settings card previewing a set that is not currently applied), so no token value is ever
- * written twice.
+ * Every block is scoped to the two elements that actually carry `--icon-accent`: the desktop
+ * icon button under `html[data-icon-set='x']`, and the preview tile inside a Settings card
+ * `.icon-set--x` (which previews a set that is not currently applied). It has to be those and
+ * not `html` itself — a `var()` inside a custom property is substituted on the element that
+ * declares it, so `--icon-tile-bg: var(--icon-accent)` written at the root resolved against an
+ * `--icon-accent` that does not exist there, computed to guaranteed-invalid, and inherited down
+ * invalid. Every tile came out transparent and the desktop looked monochrome.
  */
 
-/* Sensible ground state, so a set that omits a token never renders an unresolved value. */
+/* Sensible ground state, so a set that omits a token never renders an unresolved value.
+   Note --icon-tile-bg is a literal here, not var(--icon-accent): a var() inside a custom
+   property resolves on the element that declares it, and --icon-accent does not exist at :root
+   — it arrives inline per icon. Indirecting here computed to guaranteed-invalid and inherited
+   down as such, which is what left every tile transparent. */
 :root {
   --icon-tile-size: 52px;
   --icon-tile-radius: 12px;
-  --icon-tile-bg: var(--icon-accent);
+  --icon-tile-bg: #64748b;
   --icon-tile-overlay: none;
   --icon-tile-border: transparent;
   --icon-tile-border-width: 1px;
@@ -103,8 +121,8 @@ html[data-font='outfit'] {
  * Same drawing and same flat accent tile as `.start-menu__item-icon`, scaled from 22px to
  * desktop size. Nothing here is decorative; it is the brand mark doing its job.
  */
-html[data-icon-set='canteen'],
-.icon-set--canteen {
+html[data-icon-set='canteen'] .os-icon,
+.icon-set--canteen .icon-preview__tile {
   --icon-tile-size: 50px;
   --icon-tile-radius: 12px;
   --icon-tile-bg: var(--icon-accent);
@@ -117,121 +135,82 @@ html[data-icon-set='canteen'],
   --icon-label-weight: 600;
 }
 
-/* ---------------------------------------------------------------------- sandalwood */
+/* ------------------------------------------------------------------------ fluent */
 
 /*
- * Blossom — the colourful one. The module's own accent underneath, with a gold bloom from one
- * corner and a rose one from the other, so no two icons land on the same pair of hues. The
- * duotone glyph then reads as two tones of white against it.
+ * Fluent — Microsoft's own system icons, drawn at even weight on a softly tinted plate. The
+ * glyph carries the module colour rather than the tile, which is what makes this the quietest
+ * set in the product: at a glance the desktop reads as one material with coloured marks on it,
+ * not as twenty coloured tiles. The set to pick when the wallpaper is doing the talking.
  */
-html[data-icon-set='blossom'],
-.icon-set--blossom {
+html[data-icon-set='fluent'] .os-icon,
+.icon-set--fluent .icon-preview__tile {
+  --icon-tile-size: 50px;
+  --icon-tile-radius: 8px;
+  --icon-tile-bg: color-mix(in srgb, var(--icon-accent) 14%, transparent);
+  --icon-tile-overlay: none;
+  --icon-tile-border: color-mix(in srgb, var(--icon-accent) 34%, transparent);
+  --icon-tile-shadow: none;
+  --icon-glyph-color: var(--icon-accent);
+  --icon-glyph-size: 27px;
+  --icon-label-weight: 600;
+}
+
+/* ------------------------------------------------------------------------- vivid */
+
+/*
+ * Vivid — the colourful one, and the answer to "these all look grey".
+ *
+ * A saturated two-stop wash of the module's own colour, a filled Fluent glyph in white on top,
+ * and a coloured shadow underneath so the tile appears to be lit by its own hue. Nothing here
+ * is subtle; that is the point. Twenty modules become twenty distinguishable objects, which is
+ * what a launcher is for.
+ */
+html[data-icon-set='vivid'] .os-icon,
+.icon-set--vivid .icon-preview__tile {
+  --icon-tile-size: 52px;
+  --icon-tile-radius: 14px;
+  --icon-tile-bg: var(--icon-accent);
+  --icon-tile-overlay: linear-gradient(145deg,
+      color-mix(in srgb, #ffffff 34%, transparent) 0%,
+      transparent 46%,
+      color-mix(in srgb, #000000 22%, transparent) 100%);
+  --icon-tile-border: color-mix(in srgb, #ffffff 26%, transparent);
+  --icon-tile-shadow:
+    0 6px 16px -3px color-mix(in srgb, var(--icon-accent) 70%, transparent),
+    0 1px 0 color-mix(in srgb, #ffffff 55%, transparent) inset;
+  --icon-glyph-color: #ffffff;
+  --icon-glyph-size: 28px;
+  --icon-glyph-shadow: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.28));
+  --icon-label-weight: 600;
+}
+
+/* Crystal — glossy 3D. The most dimensional set: a lit dome, a bright rim and a coloured
+   shadow, so each tile reads as an object sitting on the desktop rather than a printed square. */
+html[data-icon-set='crystal'] .os-icon,
+.icon-set--crystal .icon-preview__tile {
   --icon-tile-size: 52px;
   --icon-tile-radius: 16px;
   --icon-tile-bg: var(--icon-accent);
   --icon-tile-overlay:
-    radial-gradient(circle at 15% 12%, rgba(255, 205, 84, 0.95) 0%, rgba(255, 205, 84, 0) 62%),
-    radial-gradient(circle at 88% 90%, rgba(255, 94, 158, 0.85) 0%, rgba(255, 94, 158, 0) 66%),
-    linear-gradient(150deg, rgba(255, 255, 255, 0.34) 0%, rgba(0, 0, 0, 0.16) 100%);
-  --icon-tile-border: transparent;
-  --icon-tile-shadow: 0 4px 12px -3px color-mix(in srgb, var(--icon-accent) 65%, transparent);
-  --icon-glyph-color: #ffffff;
-  --icon-glyph-size: 28px;
-  --icon-glyph-shadow: drop-shadow(0 1px 2px rgba(80, 30, 60, 0.42));
-  --icon-label-weight: 600;
-}
-
-/*
- * Sticker — a die-cut vinyl sticker. Thick white cut line, fully saturated fill and a hard
- * unblurred shadow, which is what makes it read as a physical thing lying on the wallpaper
- * rather than a coloured square drawn on it.
- */
-html[data-icon-set='sticker'],
-.icon-set--sticker {
-  --icon-tile-size: 50px;
-  --icon-tile-radius: 15px;
-  --icon-tile-bg: var(--icon-accent);
-  --icon-tile-overlay: linear-gradient(180deg, rgba(255, 255, 255, 0.28) 0%, transparent 55%);
-  --icon-tile-border: #ffffff;
-  --icon-tile-border-width: 3px;
-  --icon-tile-shadow: 0 3px 0 rgba(0, 0, 0, 0.26);
-  --icon-glyph-color: #ffffff;
-  --icon-glyph-size: 25px;
-  --icon-glyph-shadow: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.3));
-  --icon-label-weight: 700;
-}
-
-/*
- * Relief — carved rather than printed. The same house line glyph as Canteen OS, cut into the
- * surface instead of laid on it: a light edge above, a dark one below. Shared with Graphite,
- * whose bevels are the only other ones deep enough for the carve to read.
- */
-html[data-icon-set='relief'],
-.icon-set--relief {
-  --icon-tile-size: 50px;
-  --icon-tile-radius: 12px;
-  --icon-tile-bg: color-mix(in srgb, var(--icon-accent) 22%, var(--desk-bg));
-  --icon-tile-overlay: none;
-  --icon-tile-border: color-mix(in srgb, var(--icon-accent) 30%, transparent);
-  --icon-tile-shadow: 0 1px 0 rgba(255, 255, 255, 0.28) inset, 0 -1px 0 rgba(0, 0, 0, 0.22) inset;
-  --icon-glyph-color: color-mix(in srgb, var(--icon-accent) 80%, var(--desk-fg));
-  --icon-glyph-size: 24px;
-  --icon-glyph-stroke: 2;
-  --icon-glyph-shadow: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.5)) drop-shadow(0 -1px 0 rgba(0, 0, 0, 0.3));
-  --icon-label-weight: 600;
-}
-
-/* ------------------------------------------------------------------------ graphite */
-
-/* Aurora — lit. Solid glyphs on a gradient tile built to glow off a dark wallpaper. */
-html[data-icon-set='aurora'],
-.icon-set--aurora {
-  --icon-tile-size: 52px;
-  --icon-tile-radius: 13px;
-  --icon-tile-bg: var(--icon-accent);
-  --icon-tile-overlay: linear-gradient(160deg, rgba(255, 255, 255, 0.34) 0%, rgba(0, 0, 0, 0.22) 100%);
-  --icon-tile-border: color-mix(in srgb, var(--icon-accent) 55%, #ffffff);
-  --icon-tile-shadow: 0 3px 12px color-mix(in srgb, var(--icon-accent) 45%, transparent), 0 1px 0 rgba(255, 255, 255, 0.3) inset;
+    radial-gradient(125% 85% at 30% -10%, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0.18) 40%, transparent 62%),
+    linear-gradient(180deg, transparent 0%, transparent 52%, color-mix(in srgb, #000 30%, transparent) 100%);
+  --icon-tile-border: color-mix(in srgb, #fff 42%, transparent);
+  --icon-tile-shadow:
+    0 7px 16px -5px color-mix(in srgb, var(--icon-accent) 65%, transparent),
+    0 2px 0 color-mix(in srgb, #fff 60%, transparent) inset,
+    0 -7px 14px -7px color-mix(in srgb, #000 55%, transparent) inset;
   --icon-glyph-color: #ffffff;
   --icon-glyph-size: 27px;
-  --icon-glyph-shadow: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
+  --icon-glyph-shadow: drop-shadow(0 1.5px 1.5px rgba(0, 0, 0, 0.38));
   --icon-label-weight: 600;
 }
 
-/* Nightfall — frosted glass. Hairline glyphs, almost no fill. */
-html[data-icon-set='nightfall'],
-.icon-set--nightfall {
-  --icon-tile-size: 52px;
-  --icon-tile-radius: 16px;
-  --icon-tile-bg: color-mix(in srgb, var(--icon-accent) 14%, rgba(255, 255, 255, 0.05));
-  --icon-tile-overlay: linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, transparent 60%);
-  --icon-tile-border: color-mix(in srgb, var(--icon-accent) 34%, transparent);
-  --icon-tile-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
-  --icon-tile-blur: blur(10px);
-  --icon-glyph-color: color-mix(in srgb, var(--icon-accent) 60%, #ffffff);
-  --icon-glyph-size: 28px;
-  --icon-label-weight: 500;
-}
-
-/* Halo — no tile. The ring is the only chrome, and the glyph floats inside it. */
-html[data-icon-set='halo'],
-.icon-set--halo {
-  --icon-tile-size: 50px;
-  --icon-tile-radius: 50%;
-  --icon-tile-bg: transparent;
-  --icon-tile-overlay: none;
-  --icon-tile-border: color-mix(in srgb, var(--icon-accent) 70%, transparent);
-  --icon-tile-shadow: 0 0 12px -2px color-mix(in srgb, var(--icon-accent) 55%, transparent);
-  --icon-glyph-color: color-mix(in srgb, var(--icon-accent) 75%, #ffffff);
-  --icon-glyph-size: 25px;
-  --icon-label-weight: 500;
-}
-
-/* ---------------------------------------------------------------------------- azure */
+/* --------------------------------------------------------------------- brushed steel */
 
 /* Chrome — a stamped steel plate. The heaviest glyphs, for reading in daylight. */
-html[data-icon-set='chrome'],
-.icon-set--chrome {
+html[data-icon-set='chrome'] .os-icon,
+.icon-set--chrome .icon-preview__tile {
   --icon-tile-size: 52px;
   --icon-tile-radius: 6px;
   /* The brushed finish is the overlay, not the fill: `--icon-tile-bg` is painted as a colour,
@@ -246,9 +225,44 @@ html[data-icon-set='chrome'],
   --icon-label-weight: 600;
 }
 
+/*
+ * Relief — carved rather than printed. The same house line glyph as Canteen OS, cut into the
+ * surface instead of laid on it: a light edge above, a dark one below. Shared with Graphite,
+ * whose bevels are the only other ones deep enough for the carve to read.
+ */
+html[data-icon-set='relief'] .os-icon,
+.icon-set--relief .icon-preview__tile {
+  --icon-tile-size: 50px;
+  --icon-tile-radius: 12px;
+  --icon-tile-bg: color-mix(in srgb, var(--icon-accent) 22%, var(--desk-bg));
+  --icon-tile-overlay: none;
+  --icon-tile-border: color-mix(in srgb, var(--icon-accent) 30%, transparent);
+  --icon-tile-shadow: 0 1px 0 rgba(255, 255, 255, 0.28) inset, 0 -1px 0 rgba(0, 0, 0, 0.22) inset;
+  --icon-glyph-color: color-mix(in srgb, var(--icon-accent) 80%, var(--desk-fg));
+  --icon-glyph-size: 24px;
+  --icon-glyph-stroke: 2;
+  --icon-glyph-shadow: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.5)) drop-shadow(0 -1px 0 rgba(0, 0, 0, 0.3));
+  --icon-label-weight: 600;
+}
+
+/* Aurora — lit. Solid glyphs on a gradient tile built to glow off a dark wallpaper. */
+html[data-icon-set='aurora'] .os-icon,
+.icon-set--aurora .icon-preview__tile {
+  --icon-tile-size: 52px;
+  --icon-tile-radius: 13px;
+  --icon-tile-bg: var(--icon-accent);
+  --icon-tile-overlay: linear-gradient(160deg, rgba(255, 255, 255, 0.34) 0%, rgba(0, 0, 0, 0.22) 100%);
+  --icon-tile-border: color-mix(in srgb, var(--icon-accent) 55%, #ffffff);
+  --icon-tile-shadow: 0 3px 12px color-mix(in srgb, var(--icon-accent) 45%, transparent), 0 1px 0 rgba(255, 255, 255, 0.3) inset;
+  --icon-glyph-color: #ffffff;
+  --icon-glyph-size: 27px;
+  --icon-glyph-shadow: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
+  --icon-label-weight: 600;
+}
+
 /* Blueprint — projected solids. The tile is the slab itself, so no box is drawn behind it. */
-html[data-icon-set='blueprint'],
-.icon-set--blueprint {
+html[data-icon-set='blueprint'] .os-icon,
+.icon-set--blueprint .icon-preview__tile {
   --icon-tile-size: 54px;
   --icon-tile-radius: 0;
   --icon-tile-bg: transparent;
@@ -261,29 +275,13 @@ html[data-icon-set='blueprint'],
   --icon-label-weight: 600;
 }
 
-/* ----------------------------------------------------------------------------- beta */
-
-/* Fluent — flat and hairlined. Nothing shines and nothing casts a shadow. */
-html[data-icon-set='fluent'],
-.icon-set--fluent {
-  --icon-tile-size: 48px;
-  --icon-tile-radius: 8px;
-  --icon-tile-bg: color-mix(in srgb, var(--icon-accent) 16%, transparent);
-  --icon-tile-overlay: none;
-  --icon-tile-border: color-mix(in srgb, var(--icon-accent) 32%, transparent);
-  --icon-tile-shadow: none;
-  --icon-glyph-color: color-mix(in srgb, var(--icon-accent) 62%, var(--desk-fg));
-  --icon-glyph-size: 25px;
-  --icon-label-weight: 500;
-}
-
 /*
  * Marker — a labelled drawer front. No pictogram at all: once an operator knows the modules,
  * two letters in the module's colour are read faster than any picture of them. The tile is
  * deliberately plain so the letters carry the whole identity.
  */
-html[data-icon-set='marker'],
-.icon-set--marker {
+html[data-icon-set='marker'] .os-icon,
+.icon-set--marker .icon-preview__tile {
   --icon-tile-size: 50px;
   --icon-tile-radius: 8px;
   --icon-tile-bg: color-mix(in srgb, var(--icon-accent) 12%, var(--desk-bg));
@@ -302,6 +300,11 @@ html[data-icon-set='marker'],
  * desktop page because the Settings picker previews every set on a card, and those styles have
  * to be present whether or not the desktop chunk happens to be loaded.
  */
+.os-icon__tile,
+.icon-preview__tile {
+  filter: saturate(var(--icon-vibrance, 1));
+}
+
 .os-icon__glyph {
   width: var(--icon-glyph-size);
   height: var(--icon-glyph-size);
@@ -372,4 +375,11 @@ html[data-icon-set='marker'],
   box-shadow:
     0 6px 0 color-mix(in srgb, var(--icon-accent) 55%, #000000),
     0 9px 14px rgba(0, 0, 0, 0.45);
+}
+
+/* The set blocks above now land on .icon-preview__tile itself, so this override has to match at
+   the same level (and come after) to win. Keeps three tiles inside a narrow settings card. */
+.skin-card .icon-preview__tile {
+  --icon-tile-size: 34px;
+  --icon-glyph-size: 18px;
 }

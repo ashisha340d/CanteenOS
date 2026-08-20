@@ -42,6 +42,10 @@
 }
 
 .os-status__task {
+  transition:
+    background-color var(--desk-motion-fast) var(--desk-ease),
+    color var(--desk-motion-fast) var(--desk-ease),
+    transform var(--desk-motion-instant) var(--desk-ease);
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -139,6 +143,7 @@
 /* The chat tray icon is the one tray slot that is clickable, so it gets a hit target and a
    hover state the passive indicators beside it do not. */
 .os-status__tray-btn {
+  transition: background-color var(--desk-motion-fast) var(--desk-ease);
   position: relative;
   width: 22px;
   padding: 0;
@@ -215,6 +220,9 @@
 /* Show-the-desktop, beside Start. Sized like a task button so the left end of the bar reads
    as one row of controls rather than a button and a stray icon. */
 .os-status__chip {
+  transition:
+    background-color var(--desk-motion-fast) var(--desk-ease),
+    color var(--desk-motion-fast) var(--desk-ease);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -244,6 +252,7 @@
 /* Identity: initial plus name, the whole thing a menu trigger. The name is allowed to
    disappear on a narrow bar — the badge alone is still a target you can find. */
 .os-status__user {
+  transition: background-color var(--desk-motion-fast) var(--desk-ease);
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -288,5 +297,26 @@
 @media (max-width: 900px) {
   .os-status__user-name {
     display: none;
+  }
+}
+
+/* A task button is the one control on the desktop that is pressed all shift, so it answers
+   like a physical key — it takes the push on :active and releases on the shared curve. The
+   travel is a single pixel: enough to feel, too little to make the bar look loose. */
+.os-status__task:active {
+  transform: translateY(1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .os-status__task,
+  .os-status__tray-btn,
+  .os-status__chip,
+  .os-status__user {
+    transition: none;
+  }
+
+  .os-status__task:active {
+    transform: none;
   }
 }

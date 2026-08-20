@@ -21,7 +21,9 @@
   background: transparent;
   color: var(--desk-caption-fg);
   cursor: pointer;
-  transition: background-color 90ms linear, color 90ms linear;
+  transition:
+    background-color var(--desk-motion-instant) var(--desk-ease),
+    color var(--desk-motion-instant) var(--desk-ease);
 }
 
 /* The wash is mixed from the caption ink, so it darkens a light chrome and lightens a dark one

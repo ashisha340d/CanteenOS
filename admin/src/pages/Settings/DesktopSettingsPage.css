@@ -36,11 +36,11 @@
  */
 .icon-preview {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
   justify-content: center;
   width: 100%;
-  padding: 10px 0;
+  padding: 7px 0;
   border-radius: calc(var(--radius-lg) - 4px);
   background: var(--muted);
 }
@@ -67,6 +67,11 @@
 .icon-preview {
   --desk-bg: var(--card);
   --desk-fg: var(--card-foreground);
+  /* Two-thirds scale. The set blocks declare the real desktop tile size on the *card*, and
+     these override it for the preview's subtree — which is what lets three tiles sit in a card
+     narrow enough that all six sets are visible at once. */
+  --icon-tile-size: 34px;
+  --icon-glyph-size: 18px;
 }
 
 /* ------------------------------------------------------------------ miniature desktop */
@@ -76,6 +81,10 @@
   display: block;
   width: 100%;
   aspect-ratio: 16 / 10;
+  /* Every metric inside is a share of the miniature's own width rather than a pixel count, so
+     the desktop it draws stays in proportion whether the card is 76px wide or 200px. Fixed px
+     was what made the preview look coarse the moment the cards were shrunk. */
+  container-type: inline-size;
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: calc(var(--radius-lg) - 4px);
@@ -87,13 +96,13 @@
   left: 4%;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4cqw;
 }
 
 .skin-preview__icon {
-  width: 11px;
-  height: 11px;
-  border-radius: 3px;
+  width: 8cqw;
+  height: 8cqw;
+  border-radius: 2cqw;
 }
 
 .skin-preview__window {
@@ -106,35 +115,35 @@
   flex-direction: column;
   overflow: hidden;
   border: 1px solid;
-  border-radius: 4px;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.22);
+  border-radius: 2cqw;
+  box-shadow: 0 1cqw 3cqw rgba(0, 0, 0, 0.22);
 }
 
 .skin-preview__titlebar {
   display: flex;
   align-items: center;
-  gap: 2.5px;
-  height: 10px;
+  gap: 2cqw;
+  height: 9cqw;
   flex-shrink: 0;
-  padding: 0 4px;
+  padding: 0 3cqw;
   border-bottom: 1px solid;
 }
 
 .skin-preview__light {
-  width: 3.5px;
-  height: 3.5px;
+  width: 3cqw;
+  height: 3cqw;
   border-radius: 50%;
 }
 
 .skin-preview__lines {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 6px;
+  gap: 3cqw;
+  padding: 5cqw;
 }
 
 .skin-preview__lines>span {
-  height: 3px;
+  height: 3cqw;
   width: 100%;
   border-radius: 2px;
   opacity: 0.75;
@@ -151,8 +160,8 @@
   bottom: 0;
   display: flex;
   align-items: center;
-  height: 11%;
-  padding: 0 4px;
+  height: 12%;
+  padding: 0 3cqw;
   border-top: 1px solid;
 }
 
@@ -161,4 +170,62 @@
   height: 45%;
   border-radius: 2px;
   opacity: 0.8;
+}
+
+/* ------------------------------------------------------------------- compact samplers */
+
+/*
+ * The skin and font pickers are galleries, not settings rows: their job is to be scanned. At
+ * the original size four skins and twelve faces filled a screen and a half, so choosing meant
+ * scrolling back and forth between candidates you could no longer see together. Halved, the
+ * whole set lands in one view — which is the only way a comparison actually gets made.
+ *
+ * The miniature's internals were halved in px above rather than scaled with a transform, so the
+ * hairlines stay hairlines instead of blurring to grey.
+ */
+.skin-card--compact {
+  gap: 5px;
+  padding: 7px;
+  border-width: 1px;
+}
+
+.skin-card--compact .skin-card__name {
+  font-size: 0.75rem;
+  line-height: 1.1rem;
+}
+
+/* Two lines, then ellipsis. A hint is an aid to choosing, and a card that grows to fit its
+   longest sentence drags every other card in the row taller with it. */
+.skin-card--compact .skin-card__hint {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  font-size: 0.6875rem;
+  line-height: 0.95rem;
+}
+
+.skin-card--compact .skin-card__specimen {
+  font-size: 0.9375rem;
+  line-height: 1.35rem;
+}
+
+/*
+ * The skin cards go one step smaller again than the font cards. A skin is chosen by looking at
+ * the miniature, not by reading about it, so at this size the hint is dropped to the tooltip
+ * and the card is a picture with a name under it — which is all a wallpaper picker ever was.
+ */
+.skin-card--mini {
+  gap: 4px;
+  padding: 5px;
+}
+
+.skin-card--mini .skin-card__name {
+  font-size: 0.6875rem;
+  line-height: 0.95rem;
+}
+
+.skin-card--mini .skin-card__hint {
+  display: none;
 }

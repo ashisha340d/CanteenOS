@@ -1,27 +1,7 @@
 import { lazy, type ComponentType } from 'react';
-import {
-  Building2Icon,
-  ChefHatIcon,
-  ClipboardListIcon,
-  ContactIcon,
-  FileTextIcon,
-  HistoryIcon,
-  LayoutDashboardIcon,
-  MonitorIcon,
-  MonitorPlayIcon,
-  MonitorSmartphoneIcon,
-  PackageIcon,
-  ReceiptTextIcon,
-  ScanBarcodeIcon,
-  SettingsIcon,
-  SparklesIcon,
-  UsersIcon,
-  UtensilsIcon,
-  WalletIcon,
-  WarehouseIcon,
-  WrenchIcon,
-} from 'lucide-react';
 import type { WindowIcon } from './WindowManager';
+import { moduleIcons } from '../theme/fluentIcons';
+import { moduleColor } from '../theme/moduleColors';
 
 /* Each module is its own chunk, fetched the first time its window is opened — neither the
    desktop nor the Start menu may drag every page in the product into its bundle. */
@@ -92,29 +72,53 @@ const DISPLAY_APP_URL = `${window.location.protocol}//${window.location.hostname
 /**
  * Every entry point in Canteen OS. The single source of truth for the desktop icons, the Start
  * menu and the window that each one opens — a module added here appears in all three.
+ *
+ * Note what a definition does *not* carry: an icon, or a colour. Both used to be written out
+ * per module, which is how the product accumulated four greens and how a module could end up
+ * drawn with whatever glyph its author happened to import. They are now derived below, from the
+ * registries — so adding a module is choosing a category and a Fluent glyph in one place each,
+ * and a colour that disagrees with its category is not expressible.
  */
-export const APPS: DesktopApp[] = [
-  { id: 'menu-master', label: 'Menus', accent: '#5b4ff5', group: 'Menu', Icon: UtensilsIcon, Component: MenuMasterPage },
-  { id: 'menu-boards', label: 'Digital Menu Boards', accent: '#2570da', group: 'Menu', Icon: MonitorIcon, Component: MenuBoardsPage },
-  { id: 'kiosks', label: 'Kiosk', accent: '#0e9f6e', group: 'Menu', Icon: MonitorSmartphoneIcon, Component: KiosksPage },
-  { id: 'organization', label: 'Organization', accent: '#d08511', group: 'Administration', Icon: Building2Icon, Component: OrganizationPage },
-  { id: 'pos', label: 'POS', accent: '#dc3545', group: 'Operations', Icon: ScanBarcodeIcon, Component: PosDashboardPage, alwaysMaximized: true },
-  { id: 'kds', label: 'KDS', accent: '#7c3aed', group: 'Operations', Icon: ChefHatIcon, Component: KDSPage, externalUrl: DISPLAY_APP_URL },
-  { id: 'cds', label: 'CDS', accent: '#0891b2', group: 'Operations', Icon: MonitorPlayIcon, Component: CDSPage, externalUrl: `${DISPLAY_APP_URL}/?mode=cds` },
-  { id: 'entities', label: 'Entities', accent: '#6366f1', group: 'Operations', Icon: ContactIcon, Component: EntitiesPage },
-  { id: 'purchase-masters', label: 'Purchase Masters', accent: '#0f766e', group: 'Operations', Icon: PackageIcon, Component: PurchaseMastersPage },
-  { id: 'purchase-entry', label: 'Purchase Entry', accent: '#0f766e', group: 'Operations', Icon: ReceiptTextIcon, Component: PurchaseMargEntryPage, alwaysMaximized: true },
-  { id: 'purchase-register', label: 'Purchase Register', accent: '#0f766e', group: 'Operations', Icon: HistoryIcon, Component: PurchaseRegisterPage },
-  { id: 'vendor-accounting', label: 'Vendor Accounting', accent: '#0f766e', group: 'Operations', Icon: WalletIcon, Component: VendorAccountingPage },
-  { id: 'purchase-documents', label: 'Purchase Documents', accent: '#0f766e', group: 'Operations', Icon: FileTextIcon, Component: PurchaseDocumentsPage },
-  { id: 'stock', label: 'Stock & Inventory', accent: '#0891b2', group: 'Operations', Icon: WarehouseIcon, Component: StockPage },
-  { id: 'sop-formulation', label: 'SOP', accent: '#0a7048', group: 'Kitchen', Icon: ClipboardListIcon, Component: SopFormulationPage },
-  { id: 'equipment-maintenance', label: 'Equipment & Maintenance', accent: '#b45309', group: 'Facilities', Icon: WrenchIcon, Component: EquipmentMaintenancePage },
-  { id: 'cleaning', label: 'Cleaning', accent: '#16a34a', group: 'Facilities', Icon: SparklesIcon, Component: CleaningPage },
-  { id: 'people', label: 'People', accent: '#db2777', group: 'People', Icon: UsersIcon, Component: PeoplePage },
-  { id: 'boards-hub', label: 'Board Hub', accent: '#e11d48', group: 'People', Icon: LayoutDashboardIcon, Component: BoardsHubPage },
-  { id: 'settings', label: 'Settings', accent: '#52606d', group: 'Administration', Icon: SettingsIcon, Component: DesktopSettingsPage },
+interface AppDefinition {
+  id: string;
+  label: string;
+  group: AppGroup;
+  Component: ComponentType;
+  alwaysMaximized?: boolean;
+  externalUrl?: string;
+}
+
+const APP_DEFINITIONS: AppDefinition[] = [
+  { id: 'menu-master', label: 'Menus', group: 'Menu', Component: MenuMasterPage },
+  { id: 'menu-boards', label: 'Digital Menu Boards', group: 'Menu', Component: MenuBoardsPage },
+  { id: 'kiosks', label: 'Kiosk', group: 'Menu', Component: KiosksPage },
+  { id: 'organization', label: 'Organization', group: 'Administration', Component: OrganizationPage },
+  { id: 'pos', label: 'POS', group: 'Operations', Component: PosDashboardPage, alwaysMaximized: true },
+  { id: 'kds', label: 'KDS', group: 'Operations', Component: KDSPage, externalUrl: DISPLAY_APP_URL },
+  { id: 'cds', label: 'CDS', group: 'Operations', Component: CDSPage, externalUrl: `${DISPLAY_APP_URL}/?mode=cds` },
+  { id: 'entities', label: 'Entities', group: 'Operations', Component: EntitiesPage },
+  { id: 'purchase-masters', label: 'Purchase Masters', group: 'Operations', Component: PurchaseMastersPage },
+  { id: 'purchase-entry', label: 'Purchase Entry', group: 'Operations', Component: PurchaseMargEntryPage, alwaysMaximized: true },
+  { id: 'purchase-register', label: 'Purchase Register', group: 'Operations', Component: PurchaseRegisterPage },
+  { id: 'vendor-accounting', label: 'Vendor Accounting', group: 'Operations', Component: VendorAccountingPage },
+  { id: 'purchase-documents', label: 'Purchase Documents', group: 'Operations', Component: PurchaseDocumentsPage },
+  { id: 'stock', label: 'Stock & Inventory', group: 'Operations', Component: StockPage },
+  { id: 'sop-formulation', label: 'SOP', group: 'Kitchen', Component: SopFormulationPage },
+  { id: 'equipment-maintenance', label: 'Equipment & Maintenance', group: 'Facilities', Component: EquipmentMaintenancePage },
+  { id: 'cleaning', label: 'Cleaning', group: 'Facilities', Component: CleaningPage },
+  { id: 'people', label: 'People', group: 'People', Component: PeoplePage },
+  { id: 'boards-hub', label: 'Board Hub', group: 'People', Component: BoardsHubPage },
+  { id: 'settings', label: 'Settings', group: 'Administration', Component: DesktopSettingsPage },
 ];
+
+/** The neutral cog, used for a module whose id is missing from the icon registry. */
+const FALLBACK_ICON: WindowIcon = moduleIcons.settings?.regular ?? (() => null);
+
+export const APPS: DesktopApp[] = APP_DEFINITIONS.map((definition) => ({
+  ...definition,
+  Icon: moduleIcons[definition.id]?.regular ?? FALLBACK_ICON,
+  accent: moduleColor(definition.id),
+}));
 
 export const SETTINGS_APP_ID = 'settings';
 

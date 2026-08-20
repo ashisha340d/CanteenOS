@@ -44,6 +44,12 @@ export interface ManagedWindow {
   alwaysMaximized: boolean;
   /** Geometry to restore to when un-maximising. */
   restore?: { x: number; y: number; w: number; h: number };
+  /**
+   * Set for the handful of milliseconds between "close was clicked" and the window actually
+   * leaving the array, so the frame can play its exit animation on the way out. A closing
+   * window is inert: it takes no focus, no pointer events, and is left out of the saved layout.
+   */
+  closing?: boolean;
 }
 
 export interface OpenWindowRequest {
@@ -93,6 +99,19 @@ const WindowManagerContext = createContext<WindowManagerState | null>(null);
 const Z_BASE = 100;
 
 const CASCADE_STEP = 28;
+
+/* Must stay in step with the exit animation in DesktopWindow.css, which is driven by
+   --desk-motion-fast. Kept a little longer than the longest skin's value so the frame is never
+   yanked out from under a still-running animation. */
+const CLOSE_ANIMATION_MS = 150;
+
+/* The stylesheet drops the exit animation under `prefers-reduced-motion`, but the delay lives
+   here — and a delay without an animation is just a window sitting inert and unclickable for a
+   fifth of a second before it pops out, which is worse than the instant close it replaced. So
+   the wait is skipped too. Read per call rather than cached: the setting can change mid-session. */
+function prefersReducedMotion(): boolean {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
 
 /**
  * The saved desktop, turned back into live windows.
@@ -185,6 +204,14 @@ export function WindowManagerProvider({ children }: { children: ReactNode }): JS
   const windowsRef = useRef(windows);
   windowsRef.current = windows;
 
+  /* Pending removals, keyed by window id, so reopening a module mid-exit can cancel its own
+     teardown rather than having the window vanish a moment after it came back. */
+  const closeTimers = useRef(new Map<string, number>());
+  useEffect(() => {
+    const timers = closeTimers.current;
+    return () => timers.forEach((t) => clearTimeout(t));
+  }, []);
+
   const focus = useCallback(
     (id: string) => {
       const z = nextZ();
@@ -199,11 +226,20 @@ export function WindowManagerProvider({ children }: { children: ReactNode }): JS
   const open = useCallback(
     (request: OpenWindowRequest) => {
       const z = nextZ();
+      // Relaunching a module that is still playing its exit: cancel the removal so it comes
+      // back rather than disappearing a frame after the operator asked for it.
+      const pending = closeTimers.current.get(request.id);
+      if (pending !== undefined) {
+        clearTimeout(pending);
+        closeTimers.current.delete(request.id);
+      }
       setWindows((prev) => {
         // One window per module: launching an already-open app raises it rather than stacking
         // a second copy of the same page on top of itself.
         if (prev.some((w) => w.id === request.id)) {
-          return prev.map((w) => (w.id === request.id ? { ...w, zIndex: z, minimized: false } : w));
+          return prev.map((w) =>
+            w.id === request.id ? { ...w, zIndex: z, minimized: false, closing: false } : w,
+          );
         }
         return [
           ...prev,
@@ -230,8 +266,21 @@ export function WindowManagerProvider({ children }: { children: ReactNode }): JS
      or the module comes back at the default cascade position however carefully it was placed. */
   const close = useCallback((id: string) => {
     const target = windowsRef.current.find((w) => w.id === id);
-    if (target) rememberAppGeometry({ [id]: remembered(target) });
-    setWindows((prev) => prev.filter((w) => w.id !== id));
+    // Already on its way out — a second click must not restart the timer or re-record geometry.
+    if (!target || target.closing === true) return;
+    // Recorded here, before the exit begins, so the remembered shape is the one the operator
+    // actually left the window at rather than anything the animation is about to do to it.
+    rememberAppGeometry({ [id]: remembered(target) });
+    if (prefersReducedMotion()) {
+      setWindows((prev) => prev.filter((w) => w.id !== id));
+      return;
+    }
+    setWindows((prev) => prev.map((w) => (w.id === id ? { ...w, closing: true } : w)));
+    const timer = window.setTimeout(() => {
+      closeTimers.current.delete(id);
+      setWindows((prev) => prev.filter((w) => w.id !== id));
+    }, CLOSE_ANIMATION_MS);
+    closeTimers.current.set(id, timer);
   }, []);
 
   const minimize = useCallback((id: string) => {
@@ -272,12 +321,14 @@ export function WindowManagerProvider({ children }: { children: ReactNode }): JS
     setWindows((prev) => prev.map((w) => ({ ...w, minimized: true })));
   }, []);
 
+  /* Delegated one window at a time rather than batched. A single shared timer keyed under every
+     id looks tidier, but `open` cancels a pending removal *by id* — so relaunching one module
+     during the exit would cancel the removal of all the others and strand them at opacity 0,
+     unfocusable and un-closable. Per-window timers make that impossible, and the geometry write
+     merges, so N calls are as correct as one. */
   const closeAll = useCallback(() => {
-    rememberAppGeometry(
-      Object.fromEntries(windowsRef.current.map((w) => [w.id, remembered(w)])),
-    );
-    setWindows([]);
-  }, []);
+    windowsRef.current.forEach((w) => close(w.id));
+  }, [close]);
 
   /** Fan every open window out from the top-left, restoring anything minimised or maximised. */
   const cascade = useCallback(() => {
@@ -301,9 +352,9 @@ export function WindowManagerProvider({ children }: { children: ReactNode }): JS
   // now on top, so Esc and the task bar never point at a window that is gone. It is also what
   // gives a freshly restored desktop its focused window, without the restore having to choose.
   useEffect(() => {
-    if (focusedId && windows.some((w) => w.id === focusedId && !w.minimized)) return;
+    if (focusedId && windows.some((w) => w.id === focusedId && !w.minimized && !w.closing)) return;
     const top = windows
-      .filter((w) => !w.minimized)
+      .filter((w) => !w.minimized && w.closing !== true)
       .reduce<ManagedWindow | null>((best, w) => (!best || w.zIndex > best.zIndex ? w : best), null);
     setFocusedId(top?.id ?? null);
   }, [windows, focusedId]);
@@ -330,17 +381,21 @@ export function WindowManagerProvider({ children }: { children: ReactNode }): JS
      when the page is being hidden or torn down. */
   const snapshot = useCallback(
     (): PersistedWindowLayout[] =>
-      windows.map((w) => ({
-        id: w.id,
-        x: w.x,
-        y: w.y,
-        w: w.w,
-        h: w.h,
-        zIndex: w.zIndex,
-        minimized: w.minimized,
-        maximized: w.maximized,
-        ...(w.restore !== undefined ? { restore: w.restore } : {}),
-      })),
+      // A window mid-exit is already gone as far as the operator is concerned; persisting it
+      // would bring it back on the next reload.
+      windows
+        .filter((w) => w.closing !== true)
+        .map((w) => ({
+          id: w.id,
+          x: w.x,
+          y: w.y,
+          w: w.w,
+          h: w.h,
+          zIndex: w.zIndex,
+          minimized: w.minimized,
+          maximized: w.maximized,
+          ...(w.restore !== undefined ? { restore: w.restore } : {}),
+        })),
     [windows],
   );
 

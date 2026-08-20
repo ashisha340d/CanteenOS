@@ -36,6 +36,7 @@ import {
   FONT_CHOICES,
   FONT_HINT,
   FONT_LABEL,
+  FONT_SAMPLE,
   SKIN_LABEL,
   TEXT_SIZE_LABEL,
   useTheme,
@@ -156,7 +157,7 @@ function AppearanceTab(): JSX.Element {
         title="Desktop skin"
         description="The wallpaper, window frames and status bar. Independent of what a window shows inside."
       >
-        <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr))]">
+        <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(min(76px,100%),1fr))]">
           {DESKTOP_SKINS.map((option) => {
             const active = option === desktopSkin;
             return (
@@ -165,14 +166,21 @@ function AppearanceTab(): JSX.Element {
                 type="button"
                 onClick={() => setDesktopSkin(option)}
                 aria-pressed={active}
-                className={`skin-card ${active ? 'skin-card--active' : ''}`}
+                className={`skin-card skin-card--compact skin-card--mini ${
+                  active ? 'skin-card--active' : ''
+                }`}
+                // The hint is still available in full to anyone hovering or using a
+                // screen reader, so shortening the card costs no information.
+                title={DESKTOP_SKIN_HINT[option]}
               >
                 <SkinPreview skin={option} />
                 <span className="flex items-center gap-1.5">
-                  <span className="text-sm font-semibold">{DESKTOP_SKIN_LABEL[option]}</span>
-                  {active && <CheckIcon className="text-primary size-3.5" />}
+                  <span className="skin-card__name font-semibold">
+                    {DESKTOP_SKIN_LABEL[option]}
+                  </span>
+                  {active && <CheckIcon className="text-primary size-3 shrink-0" />}
                 </span>
-                <span className="text-muted-foreground text-xs leading-snug">
+                <span className="skin-card__hint text-muted-foreground">
                   {DESKTOP_SKIN_HINT[option]}
                 </span>
               </button>
@@ -180,6 +188,12 @@ function AppearanceTab(): JSX.Element {
           })}
         </div>
       </Section>
+
+      {/* Directly beneath the skin cards on purpose: which icons are offered depends on the
+          skin selected immediately above, so the two belong in one glance rather than with a
+          typeface picker in between. */}
+      <IconSetSection />
+      <WallpaperSection />
 
       <Section
         title="Window content"
@@ -224,7 +238,6 @@ function AppearanceTab(): JSX.Element {
       </Section>
 
       <TypefaceSection />
-      <IconSetSection />
       <WidgetSection />
       <StateSection />
     </div>
@@ -313,9 +326,9 @@ function TypefaceSection(): JSX.Element {
   return (
     <Section
       title="Font"
-      description="Applies to every screen, window, table and form in the portal. Ten faces chosen for long shifts and dense figures."
+      description="Applies to every screen, window, table and form in the portal. Twelve faces chosen for long shifts and dense figures, each shown in a specimen of its own."
     >
-      <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr))]">
+      <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(min(148px,100%),1fr))]">
         {FONT_CHOICES.map((option) => {
           const active = option === font;
           return (
@@ -324,21 +337,82 @@ function TypefaceSection(): JSX.Element {
               type="button"
               onClick={() => setFont(option as FontChoice)}
               aria-pressed={active}
-              className={`skin-card ${active ? 'skin-card--active' : ''}`}
+              className={`skin-card skin-card--compact ${active ? 'skin-card--active' : ''}`}
               style={{ fontFamily: `var(--font-stack-${option})` }}
+              title={FONT_HINT[option]}
             >
               <span className="flex w-full items-center justify-between gap-2">
-                <span className="text-sm font-semibold">{FONT_LABEL[option]}</span>
-                {active && <CheckIcon className="text-primary size-3.5 shrink-0" />}
+                <span className="skin-card__name font-semibold">{FONT_LABEL[option]}</span>
+                {active && <CheckIcon className="text-primary size-3 shrink-0" />}
               </span>
-              {/* Digits and a rupee sign, because that is what this portal mostly renders. */}
-              <span className="text-base tabular-nums">₹1,24,650.00 · 09:45 · 128 kg</span>
-              <span className="text-muted-foreground text-xs leading-snug">
-                {FONT_HINT[option]}
-              </span>
+              {/* One specimen per face rather than the same line twelve times — see FONT_SAMPLE.
+                  Every string is something this portal actually renders. */}
+              <span className="skin-card__specimen tabular-nums">{FONT_SAMPLE[option]}</span>
+              <span className="skin-card__hint text-muted-foreground">{FONT_HINT[option]}</span>
             </button>
           );
         })}
+      </div>
+    </Section>
+  );
+}
+
+/** Desktop background: the operator's own picture, layered under the skin's glows. */
+function WallpaperSection(): JSX.Element {
+  const { wallpaper, setWallpaper } = useTheme();
+
+  function onPick(event: React.ChangeEvent<HTMLInputElement>): void {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      notify.error('That file is not an image.');
+      return;
+    }
+    // 4MB. It is held as a data URL in localStorage, which is small and synchronous — a phone
+    // photo dropped in raw would blow the quota and take the rest of the desktop's state with it.
+    if (file.size > 4 * 1024 * 1024) {
+      notify.error('Pick an image under 4 MB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        setWallpaper(String(reader.result));
+        notify.success('Desktop background updated.');
+      } catch {
+        notify.error('That image is too large to store. Try a smaller one.');
+      }
+    };
+    reader.onerror = () => notify.error('That image could not be read.');
+    reader.readAsDataURL(file);
+  }
+
+  return (
+    <Section
+      title="Desktop background"
+      description="Your own picture, behind the icons. It sits under the skin's lighting, so the desktop still matches whichever skin is selected."
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <Button asChild variant="outline" size="sm">
+          <label className="cursor-pointer">
+            <input type="file" accept="image/*" className="sr-only" onChange={onPick} />
+            {wallpaper === null ? 'Choose image…' : 'Replace image…'}
+          </label>
+        </Button>
+        {wallpaper !== null && (
+          <>
+            <Button variant="ghost" size="sm" onClick={() => setWallpaper(null)}>
+              Remove
+            </Button>
+            <span
+              className="border-border h-10 w-16 shrink-0 rounded border bg-cover bg-center"
+              style={{ backgroundImage: `url("${wallpaper}")` }}
+              aria-label="Current desktop background"
+              role="img"
+            />
+          </>
+        )}
       </div>
     </Section>
   );
@@ -365,7 +439,7 @@ function IconSetSection(): JSX.Element {
       title="Desktop icons"
       description={`The ${iconSetOptions.length} sets drawn for the ${DESKTOP_SKIN_LABEL[desktopSkin]} desktop. Each set changes the icon artwork itself, not just the tile behind it — switch skins to see a different range.`}
     >
-      <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(min(170px,100%),1fr))]">
+      <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(min(124px,100%),1fr))]">
         {iconSetOptions.map((option) => {
           const active = option.id === iconSet;
           return (
@@ -374,7 +448,10 @@ function IconSetSection(): JSX.Element {
               type="button"
               onClick={() => setIconSet(option.id)}
               aria-pressed={active}
-              className={`skin-card icon-set--${option.id} ${active ? 'skin-card--active' : ''}`}
+              className={`skin-card skin-card--compact icon-set--${option.id} ${
+                active ? 'skin-card--active' : ''
+              }`}
+              title={option.hint}
             >
               <span className="icon-preview" aria-hidden>
                 {PREVIEW_APPS.map((app) => (
@@ -388,10 +465,10 @@ function IconSetSection(): JSX.Element {
                 ))}
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="text-sm font-semibold">{option.label}</span>
-                {active && <CheckIcon className="text-primary size-3.5 shrink-0" />}
+                <span className="skin-card__name font-semibold">{option.label}</span>
+                {active && <CheckIcon className="text-primary size-3 shrink-0" />}
               </span>
-              <span className="text-muted-foreground text-xs leading-snug">{option.hint}</span>
+              <span className="skin-card__hint text-muted-foreground">{option.hint}</span>
             </button>
           );
         })}

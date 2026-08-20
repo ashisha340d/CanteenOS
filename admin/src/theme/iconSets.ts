@@ -6,13 +6,15 @@ import type { DesktopSkin } from './ThemeProvider';
 /**
  * The icon sets, and which desktop skins each one belongs to.
  *
- * A set is not skin-agnostic decoration. Aurora's glossy accent tiles are drawn for a dark
- * slate wallpaper and look like a mistake on Sandalwood's warm ivory; Terracotta's clay
- * bevels look equally wrong on Graphite. So each set declares the skins it was drawn for,
- * and the picker only ever offers the ones that belong to the wallpaper in front of you.
+ * A set is not skin-agnostic decoration. Aurora's lit tiles are drawn to glow against a dark
+ * wallpaper and look like a mistake on Sandalwood's warm ivory; Chrome's steel plate looks
+ * equally wrong on a near-black desktop. So each set declares the skins it was drawn for, and
+ * the picker only ever offers the ones that belong to the wallpaper in front of you.
  *
- * Every skin has four to choose from, so "at least six sets" holds across the product while
- * no single skin is ever offered a set that does not suit it.
+ * Three of the eight draw genuinely different *pictures* rather than different finishes:
+ * `fluent` and `vivid` use Microsoft's system icons (the same registry the toolbars read from),
+ * `chrome` and `aurora` use Phosphor at two very different weights, and `marker` draws no
+ * pictogram at all. Every skin is offered six.
  */
 
 export interface IconSetDefinition {
@@ -26,27 +28,48 @@ export interface IconSetDefinition {
 
 export const ICON_SET_DEFINITIONS: IconSetDefinition[] = [
   /* The house style, and the first entry deliberately: `defaultIconSetFor` takes the first set
-     a skin offers, so this is what every wallpaper starts on. Same drawing and same accent
-     tile as the Start menu and the task bar, scaled up — one product, one icon. */
+     a skin offers, so this is what every wallpaper starts on. Same drawing and same accent tile
+     as the Start menu and the task bar, scaled up — one product, one icon. */
   {
     id: 'canteen',
     label: 'Canteen OS',
-    hint: 'The house icon. The same mark the Start menu and task bar use, at desktop size.',
+    hint: 'The house icon. A white glyph on the module’s own colour — the mark the Start menu and task bar use.',
     art: { family: 'lucide' },
-    skins: ['sandalwood', 'graphite', 'azure', 'beta'],
+    skins: ['sandalwood', 'graphite', 'azure', 'meridian'],
   },
   {
-    id: 'blossom',
-    label: 'Blossom',
-    hint: 'Two-tone glyphs over a gold-and-rose bloom. The most colourful set in the product.',
-    art: { family: 'phosphor', weight: 'duotone' },
-    skins: ['sandalwood'],
+    id: 'vivid',
+    label: 'Vivid',
+    hint: 'The most colourful set. A lit wash of the module’s colour, a solid Fluent glyph, and a shadow in the same hue.',
+    art: { family: 'fluent', variant: 'filled' },
+    skins: ['sandalwood', 'graphite', 'azure', 'meridian'],
   },
   {
-    id: 'sticker',
-    label: 'Sticker',
-    hint: 'Saturated pictograms cut out with a thick white border and a hard drop shadow.',
-    art: { family: 'phosphor', weight: 'fill' },
+    id: 'crystal',
+    label: 'Crystal',
+    hint: 'Glossy 3D tiles — a lit dome, a bright rim and a shadow in the module’s own colour.',
+    art: { family: 'fluent', variant: 'filled' },
+    skins: ['sandalwood', 'graphite', 'azure', 'meridian'],
+  },
+  {
+    id: 'fluent',
+    label: 'Fluent',
+    hint: 'Microsoft’s system icons on a softly tinted plate. The colour is in the glyph, not the tile — the quietest set here.',
+    art: { family: 'fluent', variant: 'regular' },
+    skins: ['sandalwood', 'graphite', 'azure', 'meridian'],
+  },
+  {
+    id: 'marker',
+    label: 'Marker',
+    hint: 'No pictogram at all — a two-letter monogram, the way a drawer front is labelled.',
+    art: { family: 'lettermark' },
+    skins: ['sandalwood', 'graphite', 'azure', 'meridian'],
+  },
+  {
+    id: 'chrome',
+    label: 'Chrome',
+    hint: 'Heavy glyphs on a brushed steel plate. The most legible set in daylight.',
+    art: { family: 'phosphor', weight: 'bold' },
     skins: ['sandalwood', 'azure'],
   },
   {
@@ -61,49 +84,14 @@ export const ICON_SET_DEFINITIONS: IconSetDefinition[] = [
     label: 'Aurora',
     hint: 'Solid glyphs on a lit gradient tile. Built for a dark wallpaper to glow against.',
     art: { family: 'phosphor', weight: 'fill' },
-    skins: ['graphite', 'beta'],
-  },
-  {
-    id: 'nightfall',
-    label: 'Nightfall',
-    hint: 'Hairline glyphs on frosted glass. The lightest touch of the dark sets.',
-    art: { family: 'phosphor', weight: 'thin' },
-    skins: ['graphite'],
-  },
-  {
-    id: 'halo',
-    label: 'Halo',
-    hint: 'Light glyphs with no tile behind them, ringed in the module colour.',
-    art: { family: 'phosphor', weight: 'light' },
-    skins: ['graphite', 'beta'],
-  },
-  {
-    id: 'chrome',
-    label: 'Chrome',
-    hint: 'Heavy glyphs on a brushed steel plate. The most legible set in daylight.',
-    art: { family: 'phosphor', weight: 'bold' },
-    skins: ['azure'],
+    skins: ['graphite', 'meridian'],
   },
   {
     id: 'blueprint',
     label: 'Blueprint',
     hint: 'Projected 3D slabs with the glyph on the top face. Reads as objects, not labels.',
     art: { family: 'isometric' },
-    skins: ['azure', 'beta'],
-  },
-  {
-    id: 'fluent',
-    label: 'Fluent',
-    hint: 'Even-weight glyphs on a flat hairline square. Nothing shines, nothing casts.',
-    art: { family: 'phosphor', weight: 'regular' },
-    skins: ['azure', 'beta'],
-  },
-  {
-    id: 'marker',
-    label: 'Marker',
-    hint: 'No pictogram at all — a two-letter monogram, the way a drawer front is labelled.',
-    art: { family: 'lettermark' },
-    skins: ['azure', 'beta'],
+    skins: ['azure', 'meridian'],
   },
 ];
 

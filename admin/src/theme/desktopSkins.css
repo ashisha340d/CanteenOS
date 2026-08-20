@@ -7,9 +7,33 @@
  * Selected with `data-desktop-skin` on <html>. Nothing outside this file hard-codes a value.
  */
 
+/*
+ * Motion. One scale for the whole shell, so a window, a dialog, a task button and a menu all
+ * decelerate on the same curve — the thing that separates an interface that feels engineered
+ * from one that merely animates. Declared on :root rather than per skin: every skin gets the
+ * same timing unless it deliberately retunes it, and the values are read by DesktopWindow.css,
+ * CaptionControls.css, StatusBar.css and StartMenu.css alike.
+ *
+ * The curve is a decelerate-only ease — fast off the mark, long settle, no overshoot. Overshoot
+ * reads as playful, and this is a till that runs for twelve hours.
+ */
+:root {
+  --desk-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  /* For things leaving: the mirror of the above, so an exit starts slow and accelerates away. */
+  --desk-ease-in: cubic-bezier(0.6, 0, 0.85, 0.35);
+  --desk-motion-instant: 80ms;
+  --desk-motion-fast: 110ms;
+  --desk-motion: 150ms;
+  --desk-motion-slow: 210ms;
+}
+
 :root,
 [data-desktop-skin='sandalwood'] {
   --desk-window-radius: 12px;
+  /* Two-tone wallpaper: a mild diagonal wash so the desktop has a light source
+     instead of reading as one flat fill. */
+  --desk-wallpaper: linear-gradient(158deg, #fffdf9 0%, #f7efe3 52%, #ead9c4 100%);
+  --icon-vibrance: 1.06;
   --desk-bg: #fdf9f4;
   --desk-fg: #1a1a1a;
   --desk-accent: #c1440e;
@@ -49,6 +73,10 @@
 /* Graphite — low-light rooms and long shifts; the wallpaper stops competing with the content. */
 [data-desktop-skin='graphite'] {
   --desk-window-radius: 12px;
+  /* Two-tone wallpaper: a mild diagonal wash so the desktop has a light source
+     instead of reading as one flat fill. */
+  --desk-wallpaper: linear-gradient(158deg, #1e2128 0%, #17181d 52%, #101116 100%);
+  --icon-vibrance: 1.16;
   --desk-bg: #17181d;
   --desk-fg: #e6e9f0;
   --desk-accent: #6ea8fe;
@@ -88,6 +116,10 @@
 /* Azure — cool steel, the closest to a familiar workstation; highest contrast in daylight. */
 [data-desktop-skin='azure'] {
   --desk-window-radius: 12px;
+  /* Two-tone wallpaper: a mild diagonal wash so the desktop has a light source
+     instead of reading as one flat fill. */
+  --desk-wallpaper: linear-gradient(158deg, #f8fbfe 0%, #e7eff9 52%, #d2e1f2 100%);
+  --icon-vibrance: 1.06;
   --desk-bg: #eef2f7;
   --desk-fg: #16202e;
   --desk-accent: #0f6cbd;
@@ -124,47 +156,85 @@
   --desk-task-fg: #1d3350;
 }
 
+
 /*
- * Beta — Fluent-inspired graphite. The workstation skin: flat surfaces instead of gradients,
- * hairline borders instead of bevels, an 8px window radius and the Canteen OS brand accent
- * (#948dff) rather than a new colour. Built for density and long operational shifts.
+ * Meridian — the flagship. A near-black ink-navy desktop lit by a single mint-teal accent.
+ *
+ * The brief was "sophisticated yet easy on the eyes", and those pull in opposite directions:
+ * sophistication tempts you toward low contrast and grey-on-grey, which is exactly what fails
+ * at hour nine of a shift. So the contrast is spent asymmetrically — the *ink* is high contrast
+ * (the focused caption, task labels and body text all clear 7:1; the deliberately faded inactive
+ * caption sits near 5.3:1, still well past AA) while the *surfaces* are low contrast, a
+ * three-step ramp of near-blacks separated by hairlines rather than by shading. Nothing glows
+ * except the thing you are working in: the focused window carries a faint accent bloom in its
+ * shadow, and it is the only accent-coloured light on the screen.
+ *
+ * Chosen against the other four: Graphite is a neutral slate, Beta is graphite in the brand
+ * violet. Meridian is blue-black with a green-cyan accent, so it is the one skin whose accent
+ * is not on the blue-violet axis — the reason it reads as a different product rather than a
+ * darker version of the same one.
  */
-[data-desktop-skin='beta'] {
-  --desk-window-radius: 8px;
-  --desk-bg: #111318;
-  --desk-fg: #e8eaed;
-  --desk-accent: #948dff;
+[data-desktop-skin='meridian'] {
+  --desk-window-radius: 10px;
+  /* Two-tone wallpaper: a mild diagonal wash so the desktop has a light source
+     instead of reading as one flat fill. */
+  --desk-wallpaper: linear-gradient(158deg, #0e141d 0%, #090d13 52%, #05080c 100%);
+  --icon-vibrance: 1.20;
+  --desk-bg: #090d13;
+  --desk-fg: #e6ecf3;
+  --desk-accent: #4fd6b8;
 
-  /* Barely-there depth: a Fluent desktop is a surface, not a painting. */
-  --desk-glow-a: color-mix(in srgb, var(--desk-accent) 6%, transparent);
-  --desk-glow-b: rgba(120, 140, 200, 0.04);
-  --desk-glow-c: rgba(255, 255, 255, 0.015);
+  /* A wide, slow aurora rather than three discrete lights — teal against an indigo
+     counterpoint, with the white barely present to keep the black from going flat. */
+  --desk-glow-a: color-mix(in srgb, var(--desk-accent) 9%, transparent);
+  --desk-glow-b: rgba(84, 128, 255, 0.06);
+  --desk-glow-c: rgba(255, 255, 255, 0.02);
 
-  --desk-icon-hover-bg: rgba(255, 255, 255, 0.06);
-  --desk-icon-hover-border: rgba(255, 255, 255, 0.1);
+  --desk-icon-hover-bg: rgba(79, 214, 184, 0.1);
+  --desk-icon-hover-border: rgba(79, 214, 184, 0.26);
 
-  /* Flat header, no gradient — the inactive state differs by ink, not by shading. */
-  --desk-chrome-from: #22252b;
-  --desk-chrome-to: #22252b;
-  --desk-chrome-idle-from: #1c1f24;
-  --desk-chrome-idle-to: #1c1f24;
-  --desk-chrome-border: #2e323a;
-  --desk-caption-fg: rgba(232, 234, 237, 0.92);
+  /* Step two of the ramp. The active/idle difference is one notch of lightness plus the ink
+     fade the stylesheet already applies — enough to find the focused window without the
+     inactive ones reading as disabled. */
+  --desk-chrome-from: #1a212b;
+  --desk-chrome-to: #151b24;
+  --desk-chrome-idle-from: #131922;
+  --desk-chrome-idle-to: #11161e;
+  --desk-chrome-border: #2b3543;
+  --desk-caption-fg: rgba(232, 239, 246, 0.94);
 
-  --desk-window-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
-  --desk-window-shadow-focus: 0 12px 32px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.35);
-  --desk-grip: rgba(190, 198, 212, 0.3);
+  /* Contact shadow, ambient shadow, inner hairline — the three layers that make a panel sit
+     *on* a surface instead of floating over a photograph of one. */
+  --desk-window-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.5),
+    0 8px 24px -6px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+  /* Focus adds a fourth: a low accent bloom. It is deliberately under 20% opacity — the eye
+     picks it up as "this one is live" without ever resolving it as a coloured edge. */
+  --desk-window-shadow-focus:
+    0 2px 6px rgba(0, 0, 0, 0.45),
+    0 18px 48px -12px rgba(0, 0, 0, 0.7),
+    0 0 32px -8px rgba(79, 214, 184, 0.16),
+    0 0 0 1px rgba(79, 214, 184, 0.1) inset;
+  --desk-grip: rgba(150, 172, 196, 0.32);
 
-  --desk-bar-from: #15171c;
-  --desk-bar-to: #111318;
-  --desk-bar-border: #2a2e36;
-  --desk-bar-fg: #b9bec7;
-  /* Hairlines, not bevels: both "edges" are the same low-contrast line. */
-  --desk-bevel-hi: #2a2e36;
-  --desk-bevel-lo: #2a2e36;
-  --desk-cell-bg: rgba(255, 255, 255, 0.03);
-  --desk-task-bg: rgba(255, 255, 255, 0.04);
-  --desk-task-hover-bg: rgba(255, 255, 255, 0.09);
-  --desk-task-active-bg: color-mix(in srgb, var(--desk-accent) 20%, transparent);
-  --desk-task-fg: #dfe2e8;
+  /* Step one: the bar is the darkest surface, so the desktop reads as lit from the middle. */
+  --desk-bar-from: #0f141c;
+  --desk-bar-to: #0a0f16;
+  --desk-bar-border: #232d3a;
+  --desk-bar-fg: #b3c0cf;
+  --desk-bevel-hi: #2a3644;
+  --desk-bevel-lo: #05080c;
+  --desk-cell-bg: rgba(255, 255, 255, 0.035);
+  --desk-task-bg: rgba(255, 255, 255, 0.05);
+  --desk-task-hover-bg: rgba(255, 255, 255, 0.1);
+  --desk-task-active-bg: color-mix(in srgb, var(--desk-accent) 22%, transparent);
+  --desk-task-fg: #dbe4ee;
+
+  /* A touch longer than the house default. On a dark skin the eye tracks a moving edge for
+     longer before it loses it, so the same 200ms that reads as crisp on Azure reads as abrupt
+     here. This is the only skin that retunes the scale. */
+  --desk-motion-fast: 125ms;
+  --desk-motion: 170ms;
+  --desk-motion-slow: 240ms;
 }

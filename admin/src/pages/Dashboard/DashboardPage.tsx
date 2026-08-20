@@ -109,7 +109,9 @@ export function DashboardPage(): JSX.Element {
 
   /* The set is guaranteed to suit the current skin by the theme provider, so the fallback
      here only ever covers a set retired between releases. */
-  const art: IconArt = findIconSet(iconSet)?.art ?? { family: 'phosphor', weight: 'regular' };
+  // Falls back to the house drawing, not a Phosphor weight: a stored set id that no longer
+  // ships should land on the icon every skin starts on.
+  const art: IconArt = findIconSet(iconSet)?.art ?? { family: 'lucide' };
 
   const [positions, setPositions] = useState<IconPositions>(loadIconPositions);
   const [groups, setGroups] = useState<DesktopGroup[]>(loadGroups);

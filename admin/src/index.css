@@ -14,6 +14,8 @@
 @import '@fontsource-variable/source-sans-3';
 @import '@fontsource-variable/public-sans';
 @import '@fontsource-variable/outfit';
+@import '@fontsource-variable/dm-sans';
+@import '@fontsource-variable/space-grotesk';
 
 @import './theme/desktopSkins.css';
 @import './theme/appearance.css';
