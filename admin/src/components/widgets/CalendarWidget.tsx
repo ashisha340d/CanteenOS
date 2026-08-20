@@ -42,10 +42,15 @@ export function CalendarWidget(): JSX.Element {
   const launch = useLaunchApp();
   const [offset, setOffset] = useState(0);
 
-  const today = new Date();
-  const todayIso = localIsoDate(today);
-  const viewed = new Date(today.getFullYear(), today.getMonth() + offset, 1);
-  const year = viewed.getFullYear();
+  const todayIso = localIsoDate(new Date());
+
+  // Derived from the offset alone, and as plain numbers: a `Date` rebuilt on every render is
+  // a new object every render, which would make every memo below it useless.
+  const { year, month } = useMemo(() => {
+    const base = new Date();
+    const viewed = new Date(base.getFullYear(), base.getMonth() + offset, 1);
+    return { year: viewed.getFullYear(), month: viewed.getMonth() };
+  }, [offset]);
 
   const holidays = usePublicHolidays(location, year);
 
@@ -55,10 +60,12 @@ export function CalendarWidget(): JSX.Element {
     return map;
   }, [holidays.data]);
 
-  const cells = useMemo(() => monthCells(year, viewed.getMonth()), [year, viewed]);
+  const cells = useMemo(() => monthCells(year, month), [year, month]);
+  const title = MONTH_TITLE.format(new Date(year, month, 1));
+  const monthPrefix = `${year}-${String(month + 1).padStart(2, '0')}`;
 
   const inMonth = (holidays.data ?? [])
-    .filter((holiday) => holiday.date.startsWith(localIsoDate(viewed).slice(0, 7)))
+    .filter((holiday) => holiday.date.startsWith(monthPrefix))
     .sort((a, b) => a.date.localeCompare(b.date));
 
   if (location === null) {
@@ -89,7 +96,7 @@ export function CalendarWidget(): JSX.Element {
           onClick={() => setOffset(0)}
           title="Back to this month"
         >
-          {MONTH_TITLE.format(viewed)}
+          {title}
         </button>
         <button
           type="button"
@@ -101,7 +108,7 @@ export function CalendarWidget(): JSX.Element {
         </button>
       </div>
 
-      <div className="widget-calendar" role="grid" aria-label={MONTH_TITLE.format(viewed)}>
+      <div className="widget-calendar" role="grid" aria-label={title}>
         {WEEKDAYS.map((initial, index) => (
           <span key={index} className="widget-calendar__weekday" aria-hidden>
             {initial}

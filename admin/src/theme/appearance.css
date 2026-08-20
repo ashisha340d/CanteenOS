@@ -45,7 +45,8 @@ html[data-font='outfit'] { --app-font-sans: var(--font-stack-outfit); }
  */
 
 :root,
-html[data-icon-set='aurora'] {
+html[data-icon-set='aurora'],
+.icon-set--aurora {
   --icon-tile-size: 52px;
   --icon-tile-radius: 13px;
   --icon-tile-bg: var(--icon-accent);
@@ -61,7 +62,8 @@ html[data-icon-set='aurora'] {
 }
 
 /* Slate — the same tile with the gloss and the contact shadow taken off. */
-html[data-icon-set='slate'] {
+html[data-icon-set='slate'],
+.icon-set--slate {
   --icon-tile-size: 50px;
   --icon-tile-radius: 10px;
   --icon-tile-bg: var(--icon-accent);
@@ -77,7 +79,8 @@ html[data-icon-set='slate'] {
 }
 
 /* Frost — a tinted pane over the wallpaper; the accent moves from the fill to the glyph. */
-html[data-icon-set='frost'] {
+html[data-icon-set='frost'],
+.icon-set--frost {
   --icon-tile-size: 52px;
   --icon-tile-radius: 15px;
   --icon-tile-bg: color-mix(in srgb, var(--icon-accent) 18%, transparent);
@@ -93,7 +96,8 @@ html[data-icon-set='frost'] {
 }
 
 /* Outline — no fill at all. The quietest set over a busy wallpaper. */
-html[data-icon-set='outline'] {
+html[data-icon-set='outline'],
+.icon-set--outline {
   --icon-tile-size: 50px;
   --icon-tile-radius: 12px;
   --icon-tile-bg: transparent;
@@ -109,7 +113,8 @@ html[data-icon-set='outline'] {
 }
 
 /* Mono — one surface for every application. Shape carries the identity, not colour. */
-html[data-icon-set='mono'] {
+html[data-icon-set='mono'],
+.icon-set--mono {
   --icon-tile-size: 50px;
   --icon-tile-radius: 11px;
   --icon-tile-bg: var(--desk-cell-bg);
@@ -125,7 +130,8 @@ html[data-icon-set='mono'] {
 }
 
 /* Classic — no tile. A large drawn glyph, the way a file manager shows a document. */
-html[data-icon-set='classic'] {
+html[data-icon-set='classic'],
+.icon-set--classic {
   --icon-tile-size: 48px;
   --icon-tile-radius: 0px;
   --icon-tile-bg: transparent;

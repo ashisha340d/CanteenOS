@@ -26,6 +26,44 @@
   box-shadow: 0 0 0 1px var(--primary);
 }
 
+/* --------------------------------------------------------------------- icon set preview */
+
+/*
+ * Three tiles drawn with the *same* custom properties the desktop uses, under an
+ * `.icon-set--*` class rather than the `data-icon-set` attribute. That is why no token value
+ * is repeated here: a card previews a set that is not currently applied simply by scoping
+ * that set's block to itself.
+ */
+.icon-preview {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 10px 0;
+  border-radius: calc(var(--radius-lg) - 4px);
+  background: var(--muted);
+}
+
+.icon-preview__tile {
+  width: var(--icon-tile-size);
+  height: var(--icon-tile-size);
+  border: 1px solid var(--icon-tile-border);
+  border-radius: var(--icon-tile-radius);
+  background-color: var(--icon-tile-bg);
+  background-image: var(--icon-tile-overlay);
+  box-shadow: var(--icon-tile-shadow);
+}
+
+/* Classic has no tile at all, so an empty box would preview as nothing. Its swatch shows the
+   glyph colour it hands straight to the icon instead. */
+.icon-set--classic .icon-preview__tile {
+  width: calc(var(--icon-tile-size) * 0.55);
+  height: calc(var(--icon-tile-size) * 0.55);
+  border-radius: 4px;
+  background-color: var(--icon-glyph-color);
+}
+
 /* ------------------------------------------------------------------ miniature desktop */
 
 .skin-preview {
@@ -90,14 +128,14 @@
   padding: 6px;
 }
 
-.skin-preview__lines > span {
+.skin-preview__lines>span {
   height: 3px;
   width: 100%;
   border-radius: 2px;
   opacity: 0.75;
 }
 
-.skin-preview__lines > span:first-child {
+.skin-preview__lines>span:first-child {
   width: 38%;
   opacity: 1;
 }

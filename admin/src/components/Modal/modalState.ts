@@ -61,7 +61,12 @@ export function useModalGeometry(modalId: string): {
           return {
             geometry: parsed.geometry,
             maximized: Boolean(parsed.maximized),
-            minimized: Boolean(parsed.minimized),
+            /* Deliberately not restored, unlike position, size and maximised. Opening a form is a
+               launch, not a restore: a dialog closed while minimised would otherwise come back as
+               the collapsed title bar, so clicking Edit appears to open nothing and the operator
+               has to hunt for a strip on the desktop to get their form back. `WindowManager.open`
+               draws the same distinction for windows. */
+            minimized: false,
           };
         }
       }

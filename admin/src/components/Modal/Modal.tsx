@@ -91,6 +91,15 @@ export function Modal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, minimized, maximized]);
 
+  /* Closing a modal leaves it mounted (it renders null), so React state alone would bring a
+     minimised dialog back minimised the next time it is opened — the same "clicking Edit opens
+     nothing" the persisted flag caused across sessions. Reopening is a launch, so it un-minimises. */
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (open && !wasOpen.current && minimized) setMinimized(false);
+    wasOpen.current = open;
+  }, [open, minimized, setMinimized]);
+
   const onDragStart = useCallback(
     (e: React.MouseEvent) => {
       if (maximized || minimized) return;

@@ -1,0 +1,214 @@
+/*
+ * The surface itself is invisible and click-through — a page hosting widgets must go on
+ * working underneath them. Only the widget cards claim the pointer.
+ */
+
+.widget-surface {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------ controls used inside widgets */
+
+/* The compact chip a widget uses for its range and metric pickers. Sized to sit beside a
+   figure without competing with it, which a full Button cannot do at this scale. */
+.widget-chip {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 2px;
+  height: 20px;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font-size: 0.625rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.widget-chip:hover {
+  background: var(--accent);
+  border-color: var(--border-strong);
+  color: var(--accent-foreground);
+}
+
+.widget-chip:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+
+.widget-nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.widget-nav:hover {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+.widget-nav:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+
+.widget-link {
+  margin-top: 2px;
+  border: 0;
+  background: none;
+  color: var(--primary);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.widget-link:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* ------------------------------------------------------------------------ calendar */
+
+.widget-calendar {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
+  flex-shrink: 0;
+}
+
+.widget-calendar__weekday {
+  padding-bottom: 2px;
+  color: var(--muted-foreground);
+  font-size: 0.5625rem;
+  font-weight: 600;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.widget-calendar__day {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  border-radius: var(--radius-sm);
+  font-size: 0.625rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+/* A holiday is tinted, not dotted: at this cell size a 3px dot is invisible across a desk. */
+.widget-calendar__day--holiday {
+  background: var(--tone-danger-bg);
+  color: var(--tone-danger);
+  font-weight: 600;
+}
+
+/* Today wins over a holiday when the two coincide — it is the more urgent fact. */
+.widget-calendar__day--today {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-weight: 700;
+}
+
+/* --------------------------------------------------------------------- bar chart */
+
+.widget-bars {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: 1fr auto;
+  gap: 2px 4px;
+  min-height: 0;
+  flex: 1;
+  margin: 0;
+}
+
+/* The only y-axis label there is: the peak. A widget this size has no room for a scale, and
+   the bars are read against each other rather than against gridlines. */
+.widget-bars__axis {
+  grid-row: 1;
+  align-self: start;
+  color: var(--muted-foreground);
+  font-size: 0.5625rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.widget-bars__plot {
+  grid-row: 1;
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  min-height: 24px;
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.widget-bars__slot {
+  display: flex;
+  flex: 1;
+  align-items: flex-end;
+  height: 100%;
+  min-width: 0;
+}
+
+.widget-bars__bar {
+  width: 100%;
+  min-height: 1px;
+  border-radius: 1.5px 1.5px 0 0;
+  background: var(--chart-1);
+  opacity: 0.55;
+  transition: opacity 0.12s;
+}
+
+.widget-bars__slot:hover .widget-bars__bar {
+  opacity: 1;
+}
+
+/* The hour being staffed for. Full strength so it is found without reading any numbers. */
+.widget-bars__slot--peak .widget-bars__bar {
+  background: var(--chart-4);
+  opacity: 1;
+}
+
+.widget-bars__ticks {
+  grid-row: 2;
+  grid-column: 2;
+  display: flex;
+  gap: 1px;
+}
+
+.widget-bars__tick {
+  flex: 1;
+  min-width: 0;
+  color: var(--muted-foreground);
+  font-size: 0.5rem;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .widget-chip,
+  .widget-nav,
+  .widget-bars__bar {
+    transition: none;
+  }
+}

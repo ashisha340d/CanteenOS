@@ -13,6 +13,12 @@
   user-select: none;
 }
 
+.os-desktop--drawing {
+  cursor: crosshair;
+}
+
+/* ---------------------------------------------------------------------------- icons */
+
 .os-icon {
   position: absolute;
   display: flex;
@@ -48,6 +54,8 @@
 .os-icon--dragging {
   opacity: 0.75;
   cursor: grabbing;
+  /* Above the group boxes, so an icon being dragged over one is never painted behind it. */
+  z-index: 3;
 }
 
 .os-icon--open .os-icon__tile::after {
@@ -62,27 +70,29 @@
   background: var(--desk-accent);
 }
 
+/*
+ * Every value here comes from the active icon set (theme/appearance.css), and the app's own
+ * colour arrives as `--icon-accent` on the button. That is what lets six sets share one
+ * element: the markup never changes, only the tokens it resolves.
+ */
 .os-icon__tile {
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 52px;
-  height: 52px;
-  border-radius: 13px;
-  /* A soft top highlight over the flat accent reads as a physical key rather than a swatch. */
-  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(0, 0, 0, 0.08) 100%);
-  box-shadow:
-    0 1px 6px rgba(0, 0, 0, 0.12),
-    0 1px 0 rgba(255, 255, 255, 0.35) inset;
+  width: var(--icon-tile-size);
+  height: var(--icon-tile-size);
+  border: 1px solid var(--icon-tile-border);
+  border-radius: var(--icon-tile-radius);
+  background-color: var(--icon-tile-bg);
+  background-image: var(--icon-tile-overlay);
+  box-shadow: var(--icon-tile-shadow);
+  backdrop-filter: var(--icon-tile-blur);
   transition: transform 0.12s, box-shadow 0.12s;
 }
 
 .os-icon:hover .os-icon__tile {
   transform: translateY(-1px);
-  box-shadow:
-    0 3px 10px rgba(0, 0, 0, 0.18),
-    0 1px 0 rgba(255, 255, 255, 0.4) inset;
 }
 
 .os-icon:active .os-icon__tile {
@@ -90,18 +100,161 @@
 }
 
 .os-icon__glyph {
-  width: 26px;
-  height: 26px;
-  color: #fff;
-  stroke-width: 1.9;
-  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.25));
+  width: var(--icon-glyph-size);
+  height: var(--icon-glyph-size);
+  color: var(--icon-glyph-color);
+  stroke-width: var(--icon-glyph-stroke);
+  filter: var(--icon-glyph-shadow);
 }
 
 .os-icon__label {
   max-width: 86px;
   font-size: 10.5px;
-  font-weight: 600;
+  font-weight: var(--icon-label-weight);
   line-height: 1.2;
   text-align: center;
   word-break: break-word;
+}
+
+/* ----------------------------------------------------------------------- group boxes */
+
+/*
+ * A drawn container. Painted from the desktop-skin tokens rather than the content ones, so it
+ * belongs to the wallpaper it sits on rather than looking like a window that lost its frame.
+ * Icons are painted by the desktop *after* the boxes, so they always land on top of one.
+ */
+.os-group {
+  position: absolute;
+  z-index: 1;
+  border: 1px solid var(--desk-icon-hover-border);
+  border-radius: 10px;
+  background: var(--desk-cell-bg);
+  backdrop-filter: blur(2px);
+}
+
+.os-group__header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px 0 8px;
+  border-bottom: 1px solid var(--desk-icon-hover-border);
+  border-radius: 9px 9px 0 0;
+  background: var(--desk-icon-hover-bg);
+  cursor: grab;
+}
+
+.os-group__header:active {
+  cursor: grabbing;
+}
+
+.os-group__title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--desk-fg);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.os-group__rename {
+  flex: 1;
+  min-width: 0;
+  height: 20px;
+  padding: 0 4px;
+  border: 1px solid var(--desk-accent);
+  border-radius: 4px;
+  background: var(--desk-bg);
+  color: var(--desk-fg);
+  font-size: 11px;
+  font-weight: 600;
+  outline: none;
+}
+
+.os-group__menu {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--desk-fg);
+  opacity: 0.55;
+  cursor: pointer;
+  transition: opacity 0.12s, background 0.12s;
+}
+
+.os-group__menu:hover {
+  background: var(--desk-icon-hover-bg);
+  opacity: 1;
+}
+
+.os-group__menu:focus-visible {
+  outline: 2px solid var(--desk-accent);
+  outline-offset: -1px;
+  opacity: 1;
+}
+
+.os-group__resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+}
+
+.os-group__resize::after {
+  content: '';
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid var(--desk-fg);
+  border-bottom: 1.5px solid var(--desk-fg);
+  opacity: 0.3;
+}
+
+.os-group:hover .os-group__resize::after {
+  opacity: 0.6;
+}
+
+/* -------------------------------------------------------------------- drawing a box */
+
+/* The live outline while a box is being dragged out. Dashed, because it is not a thing yet. */
+.os-draft {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px dashed var(--desk-accent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--desk-accent) 8%, transparent);
+  pointer-events: none;
+}
+
+.os-draft__hint {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--desk-accent);
+  color: var(--desk-bg);
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .os-icon,
+  .os-icon__tile,
+  .os-group__menu {
+    transition: none;
+  }
 }

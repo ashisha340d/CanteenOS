@@ -34,6 +34,9 @@ export interface WidgetPlacement {
 export const WIDGET_PLACEMENT_KEY = 'canteenos_widget_placement_v1';
 export const WIDGET_MEMBERSHIP_KEY = 'canteenos_widgets_v1';
 
+/** The desktop's own surface id. Named so Settings and the desktop cannot disagree on it. */
+export const DESKTOP_HOST = 'desktop';
+
 /** Fired whenever a surface's widget set changes, so every mounted surface re-reads. */
 export const WIDGETS_CHANGED_EVENT = 'canteenos:widgets-changed';
 

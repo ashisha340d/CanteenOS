@@ -84,6 +84,52 @@ export function setModuleTab(moduleId: string, tab: string): void {
   writeBlob({ moduleTabs: { ...readBlob().moduleTabs, [moduleId]: tab } });
 }
 
+/* --------------------------------------------------------------- remembered windows */
+
+/** What a window remembers between being closed and being launched again. */
+export interface RememberedGeometry {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  maximized: boolean;
+  /** Where to un-maximise to, kept so a window closed maximised still knows its floating size. */
+  restore?: { x: number; y: number; w: number; h: number };
+}
+
+/* Deliberately its own key rather than a third field on the blob. `snapshotDesktopState()`
+   skips STATE_KEY and reads the blob only through `windows`, and `restoreDesktopSnapshot()`
+   clears storage before writing that one field back — so any other blob field is dropped on
+   export and wiped on import. A `menuboard.admin.` key is already matched by STORAGE_PREFIXES,
+   so this rides along in a snapshot verbatim with no changes to the code below. */
+const APP_GEOMETRY_KEY = 'menuboard.admin.desktop.app-geometry.v1';
+
+function readAppGeometry(): Record<string, RememberedGeometry> {
+  try {
+    const raw = localStorage.getItem(APP_GEOMETRY_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, RememberedGeometry>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * The size and position an app was last seen at, or undefined if it has never been opened.
+ *
+ * The saved layout only covers windows that are *open*: closing one drops it from that list,
+ * which is why a module used to come back at the default cascade position however carefully it
+ * had been placed. This outlives the window itself.
+ */
+export function getAppGeometry(appId: string): RememberedGeometry | undefined {
+  return readAppGeometry()[appId];
+}
+
+/** Merged, not replaced, so remembering one window never forgets the others. */
+export function rememberAppGeometry(entries: Record<string, RememberedGeometry>): void {
+  if (Object.keys(entries).length === 0) return;
+  localStorage.setItem(APP_GEOMETRY_KEY, JSON.stringify({ ...readAppGeometry(), ...entries }));
+}
+
 /* ------------------------------------------------------------------------ snapshot */
 
 /** Everything, in one call. */

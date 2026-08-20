@@ -12,9 +12,11 @@ import {
 import { findApp } from './appRegistry';
 import {
   loadWindowLayout,
+  rememberAppGeometry,
   saveWindowLayout,
   STATE_RESTORED_EVENT,
   type PersistedWindowLayout,
+  type RememberedGeometry,
 } from './desktopState';
 
 /** Any icon that accepts a className — in practice a lucide glyph. */
@@ -133,6 +135,18 @@ function hydrate(): ManagedWindow[] {
     });
 }
 
+/** What a closing window hands to the next launch of the same module. */
+function remembered(w: ManagedWindow): RememberedGeometry {
+  return {
+    x: w.x,
+    y: w.y,
+    w: w.w,
+    h: w.h,
+    maximized: w.maximized,
+    ...(w.restore !== undefined ? { restore: w.restore } : {}),
+  };
+}
+
 /** The next z above everything restored, so a newly raised window still lands on top. */
 function topZ(windows: ManagedWindow[]): number {
   return windows.reduce((best, w) => Math.max(best, w.zIndex), Z_BASE);
@@ -164,6 +178,12 @@ export function WindowManagerProvider({ children }: { children: ReactNode }): JS
     zRef.current += 1;
     return zRef.current;
   }, []);
+
+  // Read by close/closeAll so the geometry write happens *outside* the state updater — writing
+  // to storage from inside one is the same side effect the zRef comment above warns about, and
+  // StrictMode would run it twice.
+  const windowsRef = useRef(windows);
+  windowsRef.current = windows;
 
   const focus = useCallback(
     (id: string) => {
@@ -205,7 +225,12 @@ export function WindowManagerProvider({ children }: { children: ReactNode }): JS
     [nextZ],
   );
 
+  /* Closing is the moment the saved layout forgets a window — it is dropped from the array the
+     layout persists. So it is also the moment its shape has to be handed to the per-app memory,
+     or the module comes back at the default cascade position however carefully it was placed. */
   const close = useCallback((id: string) => {
+    const target = windowsRef.current.find((w) => w.id === id);
+    if (target) rememberAppGeometry({ [id]: remembered(target) });
     setWindows((prev) => prev.filter((w) => w.id !== id));
   }, []);
 
@@ -248,6 +273,9 @@ export function WindowManagerProvider({ children }: { children: ReactNode }): JS
   }, []);
 
   const closeAll = useCallback(() => {
+    rememberAppGeometry(
+      Object.fromEntries(windowsRef.current.map((w) => [w.id, remembered(w)])),
+    );
     setWindows([]);
   }, []);
 

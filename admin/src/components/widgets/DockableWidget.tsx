@@ -203,7 +203,9 @@ export function DockableWidget({
           width: Math.max(minWidth, Math.min(host.w - start.left, start.width + ev.clientX - origin.x)),
           height: Math.max(minHeight, Math.min(host.h - start.top, start.height + ev.clientY - origin.y)),
         };
-        setPlacement((prev) => toPlacement(latest, host.w, host.h, false, latest.height));
+        // A resize always lands expanded and always adopts the new height, so unlike a drag
+        // it has nothing to carry over from the previous placement.
+        setPlacement(toPlacement(latest, host.w, host.h, false, latest.height));
       };
 
       const onUp = (): void => {
